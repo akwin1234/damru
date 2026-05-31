@@ -1,0 +1,7 @@
+playwright>=1.40
+requests>=2.28
+pysocks>=1.7
+
+[dev]
+pytest
+pytest-asyncio

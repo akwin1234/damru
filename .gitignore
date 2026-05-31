@@ -1,0 +1,30 @@
+# Python / Project Cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual Environments
+venv/
+env/
+ENV/
+.env
+
+# Massive OS Images & Binaries
+*.tar
+*.iso
+
+# Logs and local results
+logs/
+results/
+*.log
+
+# IDEs
+.idea/
+.vscode/
+
+*.apk
+chrome-apks/*
+!chrome-apks/README.md

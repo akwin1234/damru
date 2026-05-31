@@ -1,0 +1,10 @@
+LIBC {
+    global:
+        sysconf;
+        __sysconf;
+        sysinfo;
+        get_phys_pages;
+        __get_phys_pages;
+        get_avphys_pages;
+        __get_avphys_pages;
+};

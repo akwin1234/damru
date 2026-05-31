@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools<60.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "damru"
+version = "0.1.0"
+description = "Stealth browser automation on Android via ADB + root-level system prop spoofing"
+requires-python = ">=3.10"
+dependencies = [
+    "playwright>=1.40",
+    "requests>=2.28",
+    "pysocks>=1.7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio"]
+
+[project.scripts]
+damru-benchmark = "damru.benchmark:main"
+
+[tool.setuptools.packages.find]
+include = ["damru*"]

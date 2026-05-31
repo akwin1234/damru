@@ -1,0 +1,59 @@
+"""Damru Windows Configuration Example
+
+Rename this file to `config.py` and replace the existing one 
+if you are running Damru on Windows via WSL2 or MuMu Player.
+"""
+
+# Pool Defaults
+# "auto" = spin up redroid Docker containers inside WSL2
+# "mumu" = auto-manage MuMu instances natively on Windows
+MODE = "auto"
+
+# Number of concurrent browser instances
+NUM_DEVICES = 1
+DEVICE = None
+
+# Proxy Configuration
+PROXY = None                   
+HTTP_PROXY = None              
+
+# WSL2 Configuration (Crucial for Windows Docker/Redroid)
+WSL_DISTRO = "Ubuntu"
+WSL_USERNAME = "YOUR_WSL_USERNAME_HERE"     # e.g., "johndoe"
+WS_PASSWORD = "YOUR_WSL_PASSWORD_HERE"      # Required to bypass sudo prompts in WSL
+
+# MuMu Configuration (Only used if MODE = "mumu")
+MUMU_MANAGER_PATH = "C:\\Program Files\\Netease\\MuMu Player 12\\shell\\MuMuManager.exe"
+MUMU_INSTANCE_INDICES = None
+MUMU_AUTO_CREATE = False
+MUMU_CPU = 2
+MUMU_MEMORY_GB = 1
+MUMU_STRICT_RESOURCE_LIMIT = True
+MUMU_BOOT_FALLBACK_CPU = 2
+MUMU_BOOT_FALLBACK_MEMORY_GB = 2
+MUMU_SYSTEM_DISK_WRITABLE = True
+
+# Chrome APK Path
+# Example absolute Windows/WSL path to your custom APK directory
+# CHROME_APK = "/mnt/c/Users/YourName/Downloads/damru/chrome-apks/145.0.7632.75"
+CHROME_APK = None
+
+# Redroid Container Settings
+REDROID_IMAGE = "damru-redroid:latest"
+REDROID_BASE_PORT = 5600
+REDROID_CONTAINER_PREFIX = "damru-worker-"
+REDROID_CPUS = 2.0
+REDROID_MEMORY = "2g"
+REDROID_GPU_MODE = "guest"
+REDROID_SETUPWIZARD_DISABLED = True
+
+# Timeouts & Debug
+CONTAINER_BOOT_TIMEOUT = 90
+MUMU_BOOT_TIMEOUT = 240
+DOCKER_CMD_TIMEOUT = 30
+APK_INSTALL_TIMEOUT = 120
+SESSION_SETUP_TIMEOUT = 120
+MAX_SESSION_RETRIES = 2
+HEALTH_CHECK_INTERVAL = 30
+MAX_SLOT_FAILURES = 3
+DEBUG = False
