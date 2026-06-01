@@ -20,7 +20,7 @@ HTTP_PROXY = None
 # WSL2 Configuration (Crucial for Windows Docker/Redroid)
 WSL_DISTRO = "Ubuntu"
 WSL_USERNAME = "YOUR_WSL_USERNAME_HERE"     # e.g., "johndoe"
-WS_PASSWORD = "YOUR_WSL_PASSWORD_HERE"      # Required to bypass sudo prompts in WSL
+WSL_PASSWORD = "YOUR_WSL_PASSWORD_HERE"      # Required to bypass sudo prompts in WSL
 
 # MuMu Configuration (Only used if MODE = "mumu")
 MUMU_MANAGER_PATH = "C:\\Program Files\\Netease\\MuMu Player 12\\shell\\MuMuManager.exe"

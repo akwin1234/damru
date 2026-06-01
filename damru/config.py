@@ -33,7 +33,7 @@ CHROME_APK = None
 # WSL2 Configuration (Windows only, for redroid auto mode)
 WSL_DISTRO = "Ubuntu"
 WSL_USERNAME = "YOUR_WSL_USERNAME_HERE"
-WS_PASSWORD = "YOUR_WSL_PASSWORD_HERE"
+WSL_PASSWORD = "YOUR_WSL_PASSWORD_HERE"
 
 # MuMu Configuration (Windows only, for mode="mumu")
 # Path to MuMuManager.exe. None = auto-detect common paths.

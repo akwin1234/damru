@@ -20,7 +20,7 @@ HTTP_PROXY = None
 # These are ignored when running natively, but must be present.
 WSL_DISTRO = "Ubuntu"
 WSL_USERNAME = ""
-WS_PASSWORD = ""
+WSL_PASSWORD = ""
 
 # MuMu Configuration (NOT SUPPORTED ON LINUX)
 # MuMu Player is a Windows-only emulator. These settings are ignored.
