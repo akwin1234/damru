@@ -59,6 +59,9 @@ MUMU_PHONE_MIIT = None
 
 # Redroid Container Settings
 REDROID_IMAGE = "damru-redroid:latest"
+# Upstream base image, pulled automatically when the baked image is absent
+# (see RedroidManager.ensure_image).
+REDROID_BASE_IMAGE = "redroid/redroid:14.0.0_64only-latest"
 REDROID_BASE_PORT = 5600
 REDROID_CONTAINER_PREFIX = "damru-worker-"
 # Resources per container (2 cores + 2 GB for heavy SPAs at high resolution)

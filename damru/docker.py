@@ -28,6 +28,7 @@ from .config import (
     CONTAINER_BOOT_TIMEOUT,
     DOCKER_CMD_TIMEOUT,
     APK_INSTALL_TIMEOUT,
+    REDROID_BASE_IMAGE,
     REDROID_BASE_PORT,
     REDROID_CONTAINER_PREFIX,
     REDROID_CPUS,
@@ -326,6 +327,60 @@ class RedroidManager:
 
         logger.info("Docker auto-installed and running!")
 
+    # ── Image management ──
+
+    async def _image_exists(self, image: str) -> bool:
+        """Return True if a Docker image is present locally."""
+        out = await self._run_cmd(
+            self._docker_cmd("images", "-q", image),
+            timeout=10, allow_failure=True,
+        )
+        return bool(out.strip())
+
+    async def ensure_image(self, image: str) -> None:
+        """Ensure a Docker image is available locally, pulling if missing.
+
+        The launch image (REDROID_IMAGE) is normally baked by
+        scripts/bake_image.py. When it is missing, fall back to pulling
+        REDROID_BASE_IMAGE and tagging it as the launch image — unbaked but
+        functional (cold starts stay slow until baked). For any other image,
+        pull it and raise DamruError on failure rather than letting the later
+        `docker run` crash with an opaque "No such image".
+        """
+        if await self._image_exists(image):
+            logger.debug("Image %s present", image)
+            return
+
+        if image == REDROID_IMAGE:
+            logger.warning(
+                "Baked image %s missing — pulling base %s as unbaked fallback",
+                image, REDROID_BASE_IMAGE,
+            )
+            await self._run_cmd(
+                self._docker_cmd("pull", REDROID_BASE_IMAGE),
+                timeout=600,
+            )
+            await self._run_cmd(
+                self._docker_cmd("tag", REDROID_BASE_IMAGE, image),
+                timeout=10,
+            )
+            logger.warning(
+                "Using unbaked %s. For faster cold starts: python scripts/bake_image.py",
+                image,
+            )
+            return
+
+        logger.info("Pulling image %s...", image)
+        try:
+            await self._run_cmd(
+                self._docker_cmd("pull", image),
+                timeout=600,
+            )
+        except DamruError as e:
+            raise DamruError(
+                f"Image {image} is missing and could not be pulled.\n{e}"
+            )
+
     # ── Container lifecycle ──
 
     async def _get_container_state(self, name: str) -> str:
@@ -404,6 +459,9 @@ class RedroidManager:
         """Start one redroid container and return its ADB serial."""
         name = f"{REDROID_CONTAINER_PREFIX}{index}"
         port = REDROID_BASE_PORT + index
+
+        # Ensure the launch image exists before docker run (auto-pull/tag)
+        await self.ensure_image(REDROID_IMAGE)
 
         # Remove leftover container with same name
         await self._run_cmd(
