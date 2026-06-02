@@ -616,6 +616,7 @@ def _write_config(updates: dict[str, object]) -> Path:
 
 def _check_env(args: argparse.Namespace) -> int:
     failures = 0
+    asset_failures = 0
 
     if _is_windows():
         wsl = shutil.which("wsl") is not None
@@ -732,6 +733,7 @@ def _check_env(args: argparse.Namespace) -> int:
         _warn("Chrome APKs", "not required when the loaded Damru image already contains Chrome")
     else:
         failures += 1
+        asset_failures += 1
         _status(False, "Chrome APKs", chrome_detail)
 
     if args.adb:
@@ -739,7 +741,9 @@ def _check_env(args: argparse.Namespace) -> int:
         failures += not _status(adb_ok, "Online ADB device")
 
     if failures:
-        print("\nRun 'python -m damru install-deps' for common Linux/WSL dependencies.")
+        if asset_failures:
+            print("\nLoad the baked Damru Redroid image or place Chrome APKs under ./chrome-apks/<version>/.")
+        print("Run 'python -m damru install-deps' for common Linux/WSL dependencies.")
         if _is_windows() and not docker_ok:
             print("Run 'python -m damru fix-wsl' to retry safe WSL Docker/binderfs fixes and print kernel guidance.")
         return 1
