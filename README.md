@@ -247,10 +247,12 @@ Once downloaded, follow **Step 3** in the Deployment Guide below to load it into
 
 ## First-Time User Deployment Guide (WSL2 / Linux)
 
-Ready to start? Damru uses **Redroid** (Android in Docker) to spin up headless mobile devices instantly. Follow this step-by-step guide to deploy Damru from scratch on Ubuntu/Debian or WSL2 (Windows Subsystem for Linux).
+Ready to start? Damru uses **Redroid** (Android in Docker) to spin up headless mobile devices instantly. Follow this step-by-step guide to deploy Damru from scratch on the tested Ubuntu paths: native Ubuntu VPS/Linux, or Ubuntu inside WSL2 with Damru's bundled WSL kernel.
 
 > [!IMPORTANT]
 > Redroid is Linux-only. On Windows, Docker and Redroid must run inside WSL2; native Windows Docker is not a supported Redroid target.
+>
+> Current supported/tested host paths are **Ubuntu native Linux** and **Ubuntu WSL2 with Damru's bundled custom WSL kernel**. We did not patch or replace the kernel on the native Ubuntu VPS; it worked with the provider's normal Ubuntu kernel. Debian 13 VPS kernels tested so far ship with `CONFIG_ANDROID_BINDERFS` disabled, so they are not supported for Redroid multi-container pools.
 
 ### Minimum System Requirements
 
@@ -268,9 +270,9 @@ For large pools, start with `max_devices=1`, run `python -m damru check-env`, th
 
 `DamruPool(max_devices > 1, mode="auto")` requires real binderfs support, not only `/dev/binder`, `/dev/hwbinder`, and `/dev/vndbinder` device nodes. If the kernel has `CONFIG_ANDROID_BINDERFS` disabled, one Redroid container may boot while a second container appears in ADB but fails Android userspace (`zygote`, `system_server`, WebView/CDP). Current Damru checks this before starting a multi-worker pool and tells the user to run `max_devices=1` or boot a binderfs-enabled kernel.
 
-### Step 1: System Preparation (Linux / WSL2)
+### Step 1: System Preparation (Ubuntu Linux / Ubuntu WSL2)
 
-You need a Linux environment. If you are on Windows, install WSL2 (Ubuntu). Ensure your system is up to date and install `adb`:
+You need a tested Ubuntu Linux environment. If you are on Windows, install Ubuntu in WSL2 and let Damru apply its bundled WSL kernel when setup asks for confirmation. Ensure your system is up to date and install `adb`:
 
 ```bash
 sudo apt update && sudo apt upgrade -y
@@ -284,7 +286,7 @@ python -m damru install-deps
 python -m damru check-env
 ```
 
-`install-deps` is idempotent: on a fresh WSL/Linux install it installs ADB, Docker, iptables, curl/wget/git/jq, mounts binderfs, and starts Docker. On later runs it reuses installed packages and rehydrates Docker/binderfs after WSL restarts.
+`install-deps` is idempotent: on a fresh Ubuntu WSL/Linux install it installs ADB, Docker, iptables, curl/wget/git/jq, mounts binderfs, and starts Docker. On later runs it reuses installed packages and rehydrates Docker/binderfs after WSL restarts.
 
 On Windows/WSL2, Damru runs Docker and Redroid inside WSL and routes Redroid ADB through WSL. When Docker-published ADB ports are unreliable, Damru uses host networking and remaps each Redroid worker's `adbd` to a unique port (`5600`, `5601`, ...), so multi-worker pools can still run without native Windows Docker. Native Linux uses Docker bridge/NAT and Damru selects the nft iptables backend to match modern Docker daemons; WSL prefers legacy iptables where available because some WSL kernels reject Docker's `addrtype` NAT rule through nft. See [WSL kernel notes](docs/WSL_KERNEL.md) and the latest [WSL fallback test results](docs/WSL_FALLBACK_TEST_RESULTS.md).
 
@@ -292,7 +294,8 @@ Current validation on June 2, 2026. Full sanitized notes are in [Verification Pr
 
 - WSL2 fresh-loop distro: `install-deps -y`, `fix-wsl`, `install-viewer -y`, `check-env --viewer`, single-worker browser smoke, and two-worker `DamruPool(mode="auto", max_devices=2)` passed.
 - Native Ubuntu VPS reset loop: Docker packages/state removed, fresh venv created, `install-deps -y`, `check-env --viewer`, unit tests, single-worker browser smoke, and two-worker pool smoke passed.
-- Both WSL and native Linux verified `https://example.com` in two concurrent Redroid workers with `navigator.hardwareConcurrency == 8`.
+- Both Ubuntu WSL2 and native Ubuntu verified `https://example.com` in two concurrent Redroid workers with `navigator.hardwareConcurrency == 8`.
+- Debian 13 Trixie VPS was tested with kernel `6.12.86+deb13-amd64`; Docker worked, but Redroid multi-container support failed because the kernel reported `# CONFIG_ANDROID_BINDERFS is not set`.
 
 ### Step 2: Install Docker & Enable Binderfs (Crucial for Redroid)
 

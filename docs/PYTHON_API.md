@@ -36,7 +36,7 @@ async with AsyncDamru(device="pixel_8_pro", proxy="socks5://...") as context:
     await page.goto("https://creepjs.com")
 ```
 
-Damru expects Redroid to run inside Linux or WSL2. On Windows, Docker/Redroid is managed inside WSL2; native Windows Docker is not a supported Redroid backend.
+Damru expects Redroid to run inside Ubuntu Linux or Ubuntu WSL2. On Windows, Docker/Redroid is managed inside WSL2; native Windows Docker is not a supported Redroid backend. The tested production paths are native Ubuntu VPS/Linux and Ubuntu WSL2 with Damru's bundled WSL kernel. Debian 13 VPS kernels tested so far have `CONFIG_ANDROID_BINDERFS` disabled, so they are not supported for Redroid multi-container pools.
 
 #### `__init__` Parameters
 | Parameter | Type | Default | Description |
