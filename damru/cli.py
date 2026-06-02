@@ -498,6 +498,7 @@ def _start_docker_lines(sudo: str = "", attempts: int = 60) -> list[str]:
     docker_info = f"{prefix}docker info"
     return [
         *_preferred_iptables_backend_lines(sudo),
+        f"if ! {docker_info} >/dev/null 2>/dev/null; then {prefix}pkill dockerd 2>/dev/null || true; {prefix}pkill containerd 2>/dev/null || true; {prefix}rm -f /var/run/docker.pid /var/run/docker.sock; fi",
         "if command -v systemctl >/dev/null 2>&1 && [ \"$(ps -p 1 -o comm= 2>/dev/null)\" = systemd ]; then "
         f"{prefix}systemctl start docker 2>/dev/null || true; fi",
         f"if ! {docker_info} >/dev/null 2>/dev/null; then {prefix}service docker start 2>/dev/null || true; fi",
@@ -511,7 +512,7 @@ def _start_docker_lines(sudo: str = "", attempts: int = 60) -> list[str]:
         f"if ! {docker_info} >/dev/null 2>/dev/null; then",
         f"  {prefix}pkill dockerd 2>/dev/null || true",
         f"  {prefix}pkill containerd 2>/dev/null || true",
-        f"  {prefix}rm -f /var/run/docker.sock",
+        f"  {prefix}rm -f /var/run/docker.pid /var/run/docker.sock",
         f"  {prefix}nohup dockerd --iptables=false --ip6tables=false --bridge=none --host=unix:///var/run/docker.sock >/tmp/damru-dockerd-noiptables.log 2>/tmp/damru-dockerd-noiptables.err &",
         f"  for i in {{1..{attempts}}}; do",
         f"    {docker_info} >/dev/null 2>/dev/null && break",
@@ -1170,7 +1171,7 @@ def _install_deps(args: argparse.Namespace) -> int:
             "if ! sudo_cmd docker info >/dev/null 2>/dev/null; then",
             "  sudo_cmd pkill dockerd 2>/dev/null || true",
             "  sudo_cmd pkill containerd 2>/dev/null || true",
-            "  sudo_cmd rm -f /var/run/docker.sock",
+            "  sudo_cmd rm -f /var/run/docker.pid /var/run/docker.sock",
             "  printf '%s\\n' \"$DAMRU_SUDO_PASSWORD\" | sudo -S nohup dockerd --iptables=false --ip6tables=false --bridge=none --host=unix:///var/run/docker.sock >/tmp/damru-dockerd-noiptables.log 2>/tmp/damru-dockerd-noiptables.err &",
             "  for i in {1..60}; do",
             "    sudo_cmd docker info >/dev/null 2>/dev/null && break",
