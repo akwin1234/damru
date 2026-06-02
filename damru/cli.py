@@ -711,9 +711,6 @@ def _check_env(args: argparse.Namespace) -> int:
     multi_ok, multi_detail = _redroid_multi_container_status(binderfs_ok)
     failures += not _status(multi_ok, "Redroid multi-container binderfs support", multi_detail)
 
-    chrome_ok, chrome_detail = _chrome_apks_available()
-    failures += not _status(chrome_ok, "Chrome APKs", chrome_detail)
-
     try:
         from .config import REDROID_IMAGE
     except Exception:
@@ -727,6 +724,15 @@ def _check_env(args: argparse.Namespace) -> int:
         _status(True, f"Redroid image: {REDROID_IMAGE}")
     else:
         _warn(f"Redroid image: {REDROID_IMAGE}", "missing is OK if auto-pull is intended")
+
+    chrome_ok, chrome_detail = _chrome_apks_available()
+    if chrome_ok:
+        _status(True, "Chrome APKs", chrome_detail)
+    elif image_ok:
+        _warn("Chrome APKs", "not required when the loaded Damru image already contains Chrome")
+    else:
+        failures += 1
+        _status(False, "Chrome APKs", chrome_detail)
 
     if args.adb:
         adb_ok = _linux_run("adb devices | awk 'NR>1 && $2 == \"device\" {found=1} END {exit !found}'").returncode == 0

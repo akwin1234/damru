@@ -271,10 +271,16 @@ class DamruPool:
         await self._docker.check_docker()
         await self._docker.validate_redroid_multi_container_support(count)
 
-        # Validate that at least one Chrome APK exists (fail fast)
-        apk_path = self._docker.find_chrome_apk(self._chrome_apk)
-        self._chrome_apk_path = apk_path
-        logger.info("Chrome APKs available (will randomize per container)")
+        # APKs are only required for raw Redroid images without Chrome. Baked
+        # Damru images already contain Chrome, so pip-install users can load the
+        # image tarball without also checking APK files into their project.
+        try:
+            apk_path = self._docker.find_chrome_apk(self._chrome_apk)
+            self._chrome_apk_path = apk_path
+            logger.info("Chrome APKs available for raw Redroid images")
+        except DamruError as exc:
+            self._chrome_apk_path = None
+            logger.info("Chrome APKs not found; baked image Chrome will be reused if present (%s)", exc)
 
         # Ensure containers (reuse existing) + cleanup extras
         serials = await self._docker.ensure_all(count)
@@ -296,7 +302,7 @@ class DamruPool:
                 )
             else:
                 # Not installed at all -> pick a random version & install
-                slot_apk_path = self._docker.find_chrome_apk(self._chrome_apk)
+                slot_apk_path = self._chrome_apk_path or self._docker.find_chrome_apk(self._chrome_apk)
                 from pathlib import Path
                 desired_version = Path(slot_apk_path).name
                 logger.info(
