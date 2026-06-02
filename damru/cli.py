@@ -1088,7 +1088,7 @@ def _install_deps(args: argparse.Namespace) -> int:
     distro_note = f" in WSL distro '{wsl_distro}'" if _is_windows() else ""
     display_commands = [
         "sudo apt-get update -y",
-        "sudo apt-get install -y android-tools-adb docker.io curl wget git jq cpio gcc iptables kmod ca-certificates",
+        "sudo apt-get install -y android-tools-adb docker.io curl wget git jq cpio gcc iptables kmod ca-certificates acl",
         "sudo modprobe binder_linux devices=binder,hwbinder,vndbinder 2>/dev/null || true",
         "sudo modprobe xt_addrtype 2>/dev/null || true",
         "sudo systemctl/service/dockerd start fallback",
@@ -1132,7 +1132,7 @@ def _install_deps(args: argparse.Namespace) -> int:
             "set -e",
             *_wsl_dns_repair_lines(),
             "apt_update",
-            "apt-get install -y android-tools-adb docker.io curl wget git jq cpio gcc iptables kmod ca-certificates python3-venv",
+            "apt-get install -y android-tools-adb docker.io curl wget git jq cpio gcc iptables kmod ca-certificates acl python3-venv",
             *backend_lines,
             *_restart_docker_lines(),
             "modprobe binder_linux devices=binder,hwbinder,vndbinder 2>/dev/null || true",
@@ -1147,7 +1147,7 @@ def _install_deps(args: argparse.Namespace) -> int:
             "IFS= read -r DAMRU_SUDO_PASSWORD",
             "sudo_cmd(){ printf '%s\\n' \"$DAMRU_SUDO_PASSWORD\" | sudo -S \"$@\"; }",
             "sudo_cmd apt-get update -y",
-            "sudo_cmd apt-get install -y android-tools-adb docker.io curl wget git jq cpio gcc iptables kmod ca-certificates python3-venv",
+            "sudo_cmd apt-get install -y android-tools-adb docker.io curl wget git jq cpio gcc iptables kmod ca-certificates acl python3-venv",
             "if [ -n \"${USER:-}\" ]; then sudo_cmd usermod -aG docker \"$USER\" 2>/dev/null || true; fi",
             *sudo_cmd_backend_lines,
             *_restart_docker_lines("sudo_cmd"),
@@ -1171,6 +1171,7 @@ def _install_deps(args: argparse.Namespace) -> int:
             "    sleep 2",
             "  done",
             "fi",
+            "if [ -n \"${USER:-}\" ] && [ -S /var/run/docker.sock ]; then sudo_cmd setfacl -m u:${USER}:rw /var/run/docker.sock 2>/dev/null || sudo_cmd chmod 666 /var/run/docker.sock 2>/dev/null || true; fi",
             "sudo_cmd mkdir -p /dev/binderfs",
             "mount | grep -q ' /dev/binderfs ' || sudo_cmd mount -t binder binder /dev/binderfs",
         ]
@@ -1178,13 +1179,14 @@ def _install_deps(args: argparse.Namespace) -> int:
         script_lines = [
             "set -e",
             "sudo apt-get update -y",
-            "sudo apt-get install -y android-tools-adb docker.io curl wget git jq cpio gcc iptables kmod ca-certificates python3-venv",
+            "sudo apt-get install -y android-tools-adb docker.io curl wget git jq cpio gcc iptables kmod ca-certificates acl python3-venv",
             "if [ -n \"${USER:-}\" ]; then sudo usermod -aG docker \"$USER\" 2>/dev/null || true; fi",
             *sudo_backend_lines,
             *_restart_docker_lines("sudo"),
             "sudo modprobe binder_linux devices=binder,hwbinder,vndbinder 2>/dev/null || true",
             "sudo modprobe xt_addrtype 2>/dev/null || true",
             *_start_docker_lines("sudo"),
+            "if [ -n \"${USER:-}\" ] && [ -S /var/run/docker.sock ]; then sudo setfacl -m u:${USER}:rw /var/run/docker.sock 2>/dev/null || sudo chmod 666 /var/run/docker.sock 2>/dev/null || true; fi",
             "sudo mkdir -p /dev/binderfs",
             "mount | grep -q ' /dev/binderfs ' || sudo mount -t binder binder /dev/binderfs",
         ]

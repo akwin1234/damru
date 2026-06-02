@@ -257,7 +257,7 @@ Ready to start? Damru uses **Redroid** (Android in Docker) to spin up headless m
 ### Minimum System Requirements
 
 > [!WARNING]
-> **Supported Linux host today: Ubuntu only.** Damru Redroid auto mode is currently supported on native Ubuntu VPS/Linux and Ubuntu WSL2 with Damru's bundled WSL kernel. Other Linux distributions are not supported yet, even if Docker itself works, because Redroid multi-container reliability depends on kernel binderfs support.
+> **Supported Linux host today: Ubuntu 24.04 LTS only.** Damru Redroid auto mode is currently supported on native Ubuntu 24.04 VPS/Linux and Ubuntu 24.04 WSL2 with Damru's bundled WSL kernel. Other Linux distributions are not supported yet, even if Docker itself works, because Redroid multi-container reliability depends on kernel binderfs support. Ubuntu 25.xx/26.xx are not part of the supported public path yet; Playwright's browser installer may reject those newer OS labels even though Damru normally connects to Android Chrome inside Redroid.
 
 Damru runs one full Android container per worker. The default Redroid worker limit is `2` CPU cores and `2g` memory per container (`REDROID_CPUS = 2.0`, `REDROID_MEMORY = "2g"`). Use these numbers for capacity planning:
 
