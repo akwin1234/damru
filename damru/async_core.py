@@ -124,10 +124,16 @@ class AsyncDamru:
 
         docker = RedroidManager()
         await docker.check_docker()
-        apk_path = docker.find_chrome_apk(None)
+        apk_path = None
+        try:
+            apk_path = docker.find_chrome_apk(None)
+        except DamruError:
+            pass
         serial = await docker.ensure_container(0)
         installed = await docker.get_installed_chrome_version(serial)
         if not installed:
+            if apk_path is None:
+                apk_path = docker.find_chrome_apk(None)
             await docker.install_chrome(serial, apk_path)
         return serial
 
