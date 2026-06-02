@@ -467,6 +467,46 @@ printf '%s\n' 'your-sudo-password' | python -m damru install-deps -y --sudo-pass
 
 For visual inspection or manual browser operation, see [Viewer, Screenshots, and Video](docs/VIEWER.md). Viewer support is optional and never starts automatically during `AsyncDamru`, `Damru`, or pool sessions.
 
+### Use Redroid Like an Emulator Window
+
+Damru normally runs headless, but you can open a live Android window with `scrcpy` when you want to inspect or manually operate the browser like an emulator.
+
+Install and verify the optional viewer tooling:
+
+```bash
+python -m damru install-viewer
+python -m damru check-env --viewer
+```
+
+Start or reuse a Redroid worker, then list ADB devices:
+
+```bash
+python -m damru devices
+```
+
+Open a live viewer for one worker:
+
+```bash
+python -m damru view --serial wsl:127.0.0.1:5600
+```
+
+If `--serial` is omitted, Damru uses the first online ADB device. On Windows/WSL, Redroid workers usually appear as `wsl:127.0.0.1:5600`, `wsl:127.0.0.1:5601`, and so on. On native Linux they usually appear as `127.0.0.1:5600`, `127.0.0.1:5601`, and so on.
+
+Use watch-only mode when you do not want keyboard/mouse/touch input to change the Android session:
+
+```bash
+python -m damru view --serial wsl:127.0.0.1:5600 --no-control
+```
+
+Capture the full Android display for debugging or proof assets:
+
+```bash
+python -m damru screenshot --serial wsl:127.0.0.1:5600 --output screen.png
+python -m damru record --serial wsl:127.0.0.1:5600 --time-limit 30 --output clip.mp4
+```
+
+Manual viewer control can click pages, type text, change Android settings, or alter browser state. Keep manual viewer sessions separate from benchmark/proof runs when you need clean automation results.
+
 ---
 
 ## Global Configuration
