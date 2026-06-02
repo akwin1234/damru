@@ -942,9 +942,12 @@ def _install_bundled_wsl_kernel(args: argparse.Namespace) -> int:
         "kernel",
         _windows_path_for_wslconfig(kernel_dest),
     )
+    updated = _set_wslconfig_value(updated, "wsl2", "dnsTunneling", "true")
+    updated = _set_wslconfig_value(updated, "wsl2", "networkingMode", "NAT")
     wslconfig.write_text(updated, encoding="utf-8")
 
     print("Bundled WSL kernel installed and .wslconfig updated.")
+    print("Enabled WSL DNS tunneling for reliable apt, pip, and Docker container DNS.")
     print("Restart WSL before testing the new kernel:")
     print("  wsl --shutdown")
     print("Then run:")

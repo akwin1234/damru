@@ -79,7 +79,7 @@ Damru ships the locally verified WSL2 Redroid/NAT kernel artifact in `damru/wsl_
 - `SHA256SUMS`
 - `source_metadata/` with the WSL build `.config`, `.config.old`, embedded `kernel/config_data`, and source tree info
 
-The installer is backup-first. It verifies the bundled checksums, copies the kernel and config to `%USERPROFILE%\.damru\wsl-kernels\`, backs up any existing `%USERPROFILE%\.wslconfig`, preserves unrelated `.wslconfig` settings, and writes the `[wsl2] kernel=...` entry.
+The installer is backup-first. It verifies the bundled checksums, copies the kernel and config to `%USERPROFILE%\.damru\wsl-kernels\`, backs up any existing `%USERPROFILE%\.wslconfig`, preserves unrelated `.wslconfig` settings, and writes the `[wsl2] kernel=...` entry. It also writes `dnsTunneling=true` and `networkingMode=NAT`; this fixes the common WSL state where the distro can ping public IPs but `apt`, `pip`, or Docker containers cannot resolve DNS names.
 
 
 ### Fresh WSL Recommendation

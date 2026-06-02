@@ -293,6 +293,8 @@ python -m damru check-env
 
 On Windows/WSL2, Damru runs Docker and Redroid inside WSL and routes Redroid ADB through WSL. When Docker-published ADB ports are unreliable, Damru uses host networking and remaps each Redroid worker's `adbd` to a unique port (`5600`, `5601`, ...), so multi-worker pools can still run without native Windows Docker. Native Linux uses Docker bridge/NAT and Damru selects the nft iptables backend to match modern Docker daemons; WSL prefers legacy iptables where available because some WSL kernels reject Docker's `addrtype` NAT rule through nft. See [WSL kernel notes](docs/WSL_KERNEL.md) and the latest [WSL fallback test results](docs/WSL_FALLBACK_TEST_RESULTS.md).
 
+Damru's WSL kernel installer also writes `dnsTunneling=true` and `networkingMode=NAT` into `%USERPROFILE%\.wslconfig`. This avoids a common WSL failure where the distro can ping public IPs but `apt`, `pip`, or Docker containers cannot resolve DNS names. Run `wsl --shutdown` after kernel/DNS changes, then reopen Ubuntu.
+
 Current validation on June 2, 2026. Full sanitized notes are in [Verification Proof](docs/PROOF.md):
 
 - WSL2 fresh-loop distro: `install-deps -y`, `fix-wsl`, `install-viewer -y`, `check-env --viewer`, single-worker browser smoke, and two-worker `DamruPool(mode="auto", max_devices=2)` passed.
