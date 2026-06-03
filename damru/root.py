@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+from importlib import resources
 import os
 import random
 import subprocess
@@ -1623,15 +1624,30 @@ class RootOps:
         Uses gcc in WSL2 (Windows) or native gcc (Linux).
         Result is cached - only compiles once.
         """
-        native_dir = os.path.join(
+        repo_native_dir = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "native"
         )
-        so_path = os.path.join(native_dir, "libfakemem_x86_64.so")
+        c_path = os.path.join(repo_native_dir, "libfakemem.c")
+        build_dir = repo_native_dir
+
+        if not os.path.isfile(c_path):
+            try:
+                asset = resources.files("damru.assets").joinpath("libfakemem.c")
+                data = asset.read_bytes()
+                build_dir = os.path.join(tempfile.gettempdir(), "damru-native")
+                os.makedirs(build_dir, exist_ok=True)
+                c_path = os.path.join(build_dir, "libfakemem.c")
+                with open(c_path, "wb") as f:
+                    f.write(data)
+            except Exception:
+                pass
+
+        os.makedirs(build_dir, exist_ok=True)
+        so_path = os.path.join(build_dir, "libfakemem_x86_64.so")
 
         if os.path.isfile(so_path):
             return so_path
 
-        c_path = os.path.join(native_dir, "libfakemem.c")
         if not os.path.isfile(c_path):
             raise RootError(f"libfakemem.c not found at {c_path}")
 
