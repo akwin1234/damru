@@ -1,4 +1,4 @@
-﻿<div align="center">
+<div align="center">
   <img src="logo.svg" alt="Damru Logo" width="200" height="200">
   <h1>Damru</h1>
   <p><strong>The Apex Predator of Android Browser Automation</strong></p>
@@ -540,10 +540,12 @@ python -m damru wsl-kernel status # inspect bundled/active WSL kernel state
 python -m damru benchmark       # run the benchmark command
 python -m damru bake-image      # bake a warm Redroid image
 python -m damru devices         # list ADB devices from Linux/WSL
+python -m damru worker start    # start or reuse a Redroid worker
 python -m damru screenshot      # capture Android display PNG through ADB
 python -m damru record          # capture Android display MP4 through ADB
 python -m damru view            # open optional scrcpy live viewer
 python -m damru install-viewer  # check/install optional scrcpy tooling
+python -m damru ui              # open the local Damru control panel
 ```
 
 For testing a separate WSL distro without changing `config.py`, set `DAMRU_WSL_DISTRO`, for example: `$env:DAMRU_WSL_DISTRO="DamruFreshKernelTest"`. Do not run host-network Redroid workers in multiple WSL distros at the same time; `check-env` reports this conflict.
@@ -557,7 +559,7 @@ printf '%s\n' 'your-sudo-password' | python -m damru setup -y --sudo-password-st
 printf '%s\n' 'your-sudo-password' | python -m damru install-deps -y --sudo-password-stdin
 ```
 
-For visual inspection or manual browser operation, see [Viewer, Screenshots, and Video](docs/VIEWER.md). Viewer support is optional and never starts automatically during `AsyncDamru`, `Damru`, or pool sessions.
+For a local dashboard, run `python -m damru ui`; see [Damru UI](docs/UI.md). For visual inspection or manual browser operation, see [Viewer, Screenshots, and Video](docs/VIEWER.md). Viewer support is optional and never starts automatically during `AsyncDamru`, `Damru`, or pool sessions.
 
 ### Use Redroid Like an Emulator Window
 

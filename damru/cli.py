@@ -1949,6 +1949,24 @@ def build_parser() -> argparse.ArgumentParser:
     devices = sub.add_parser("devices", help="list ADB devices from Linux/WSL")
     devices.set_defaults(func=_devices)
 
+    worker = sub.add_parser("worker", help="manage Redroid worker containers")
+    worker_sub = worker.add_subparsers(dest="worker_command", required=True)
+    worker_start = worker_sub.add_parser("start", help="start or reuse one Redroid worker")
+    worker_start.add_argument("--index", type=int, default=0, help="worker index")
+    worker_start.add_argument("--wsl-distro", default=None, help="WSL distro to use on Windows")
+    worker_start.set_defaults(func=_worker)
+    worker_stop = worker_sub.add_parser("stop", help="stop one Redroid worker")
+    worker_stop.add_argument("--index", type=int, default=0, help="worker index")
+    worker_stop.add_argument("--wsl-distro", default=None, help="WSL distro to use on Windows")
+    worker_stop.set_defaults(func=_worker)
+    worker_reset = worker_sub.add_parser("reset", help="recreate one Redroid worker")
+    worker_reset.add_argument("--index", type=int, default=0, help="worker index")
+    worker_reset.add_argument("--wsl-distro", default=None, help="WSL distro to use on Windows")
+    worker_reset.set_defaults(func=_worker)
+    worker_stop_all = worker_sub.add_parser("stop-all", help="stop all damru-worker-* containers")
+    worker_stop_all.add_argument("--wsl-distro", default=None, help="WSL distro to use on Windows")
+    worker_stop_all.set_defaults(func=_worker)
+
     shot = sub.add_parser("screenshot", help="capture a PNG screenshot from an ADB device")
     shot.add_argument("--serial", "-s", default=None, help="ADB serial; defaults to the first online device")
     shot.add_argument("--output", "-o", default="damru-screenshot.png", help="output PNG path")
@@ -1979,7 +1997,44 @@ def build_parser() -> argparse.ArgumentParser:
     viewer.add_argument("-y", "--yes", action="store_true", help="accepted for non-interactive install scripts")
     viewer.set_defaults(func=_install_viewer)
 
+    ui = sub.add_parser("ui", help="open the local Damru control panel")
+    ui.add_argument("--host", default="127.0.0.1", help="bind host; defaults to localhost")
+    ui.add_argument("--port", type=int, default=8765, help="bind port")
+    ui.add_argument("--no-open", action="store_true", help="do not open the browser automatically")
+    ui.add_argument("--wsl-distro", default=None, help="WSL distro to use on Windows")
+    ui.set_defaults(func=_ui)
+
     return parser
+def _worker(args: argparse.Namespace) -> int:
+    import asyncio
+    from .docker import RedroidManager
+
+    async def _run() -> int:
+        manager = RedroidManager(wsl_distro=getattr(args, "wsl_distro", None))
+        index = int(getattr(args, "index", 0) or 0)
+        if args.worker_command == "start":
+            serial = await manager.ensure_container(index)
+            print(f"worker {index} ready: {serial}")
+        elif args.worker_command == "stop":
+            await manager.stop_container(index)
+            print(f"worker {index} stopped")
+        elif args.worker_command == "reset":
+            serial = await manager.restart_container(index)
+            print(f"worker {index} reset: {serial}")
+        elif args.worker_command == "stop-all":
+            await manager.cleanup_orphans()
+            print("all Damru workers stopped")
+        else:
+            raise SystemExit(f"unknown worker command: {args.worker_command}")
+        return 0
+
+    return asyncio.run(_run())
+
+
+def _ui(args: argparse.Namespace) -> int:
+    from .ui import run
+
+    return run(host=args.host, port=args.port, no_open=args.no_open, wsl_distro=args.wsl_distro)
 
 
 def main(argv: list[str] | None = None) -> int:
