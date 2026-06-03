@@ -67,7 +67,6 @@ Browser smoke:
 
 Proof assets from the native Ubuntu VPS run with a US proxy are stored in [`docs/assets/proof/`](assets/proof/):
 
-- [Summary screenshot](assets/proof/ubuntu-proof-summary.png)
 - [Example.com screenshot](assets/proof/ubuntu-example-page.png)
 - [Android screen recording](assets/proof/ubuntu-redroid-proof.mp4)
 - [Sanitized proof metadata](assets/proof/ubuntu-proof.json)

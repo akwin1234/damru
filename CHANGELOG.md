@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Fixed README shields.io badge URLs that lost the `?style=` query separator.
+- Removed the old `ubuntu-proof-summary.png` proof asset and all references to it.
+- Fixed Google Drive manual-download links that lost `?usp=sharing` during text cleanup.
+- Made setup choose a Chrome APK version that passes raw Redroid TTS voice smoke tests instead of configuring Chrome 145 by default.
+- Made Redroid auto Chrome selection skip Chrome `145.0.7632.75` until its raw Redroid TTS voice behavior is stable; manual `CHROME_APK` selection still works.
+- Shipped `damru/assets/magisk.apk` and `damru/assets/libfakemem.c` in the Python package so pip installs no longer need third-party runtime APK downloads or a source checkout for memory spoofing.
+- Removed runtime APK downloads from Magisk, F-Droid eSpeak, NikGapps GoogleTTS, and RHVoice paths; runtime APK use now comes from Damru's bundle/package assets.
+- Fixed the Playwright `crPage.js` Runtime patch syntax and added regression tests for corrupted patch repair.
+- Restored ternary operators in JS/C snippets that were damaged by mojibake cleanup.
+- Verified fresh Ubuntu 24 VPS reset flow from GitHub `main`: setup, check-env, single Redroid smoke, and two-worker pool smoke all pass with Android UA, `hardwareConcurrency == 8`, `deviceMemory == 8`, `speechSynthesis` voices, and `webdriver == false`.
 - Added pytest markers for unit, ADB, Docker, network, end-to-end, and GPU tests.
 - Added automatic test marker assignment in `tests/conftest.py`.
 - Made default `pytest` skip environment-heavy probes unless `--run-damru-probes` is passed.

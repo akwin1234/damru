@@ -9,8 +9,7 @@
   "proxy_country": "US",
   "proxy_timezone": "America/New_York",
   "screenshots": [
-    "ubuntu-example-page.png",
-    "ubuntu-proof-summary.png"
+    "ubuntu-example-page.png"
   ],
   "video": "ubuntu-redroid-proof.mp4"
 }

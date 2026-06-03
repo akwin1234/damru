@@ -5,10 +5,10 @@
   <p><em>The world's first open-source framework for natively modded Android browser automation.</em></p>
   <p>High-performance, ultra-stealth browser automation framework designed for web scraping and botting at scale.</p>
 
-  [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svgstyle=for-the-badge&logo=python&logoColor=white)](https://python.org)
-  [![Playwright](https://img.shields.io/badge/playwright-1.40--1.59-green.svgstyle=for-the-badge&logo=playwright&logoColor=white)](https://playwright.dev/python/)
-  [![Platform](https://img.shields.io/badge/Platform-WSL2%20%7C%20Linux-lightgrey.svgstyle=for-the-badge&logo=linux&logoColor=white)]()
-  [![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-red.svgstyle=for-the-badge)](https://polyformproject.org/licenses/noncommercial/1.0.0)
+  [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+  [![Playwright](https://img.shields.io/badge/playwright-1.40--1.59-green.svg?style=for-the-badge&logo=playwright&logoColor=white)](https://playwright.dev/python/)
+  [![Platform](https://img.shields.io/badge/Platform-WSL2%20%7C%20Linux-lightgrey.svg?style=for-the-badge&logo=linux&logoColor=white)](#minimum-system-requirements)
+  [![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-red.svg?style=for-the-badge)](https://polyformproject.org/licenses/noncommercial/1.0.0)
 
   <p>
     <strong>Community:</strong>
@@ -110,14 +110,9 @@ We regularly test Damru against the hardest anti-bot systems in the industry. Th
 
 Fresh Ubuntu/WSL verification proof is tracked in [docs/PROOF.md](docs/PROOF.md). The current sanitized Ubuntu VPS proof assets include:
 
-- [Summary screenshot](docs/assets/proof/ubuntu-proof-summary.png)
 - [Android screen recording](docs/assets/proof/ubuntu-redroid-proof.mp4)
 - Individual site proof screenshots: [Amazon](docs/assets/proof/sites/amazon.png), [Foot Locker / DataDome target](docs/assets/proof/sites/datadome-footlocker.png), [Fingerprint Pro](docs/assets/proof/sites/fingerprint-pro.png), [Sannysoft](docs/assets/proof/sites/sannysoft.png), and [CreepJS](docs/assets/proof/sites/creepjs.png)
 - [Sanitized site proof metadata](docs/assets/proof/sites/proof-sites.json)
-
-<p align="center">
-  <img src="docs/assets/proof/ubuntu-proof-summary.png" alt="Damru Ubuntu VPS proof" width="720">
-</p>
 
 #### Screenshot Proof Gallery
 
