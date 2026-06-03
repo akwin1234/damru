@@ -176,7 +176,7 @@ python -m damru check-env
 python -m damru fix-wsl
 ```
 
-`install-image` auto-detects and loads `damru-redroid-latest.tar`; use `python -m damru install-image --download` if the tarball is not local. The baked image already contains Chrome, WebView/TTS assets, fonts, and warm preferences, so users do not need separate Chrome APKs unless they intentionally run an unbaked raw Redroid image.
+`install-image` auto-detects and loads `damru-redroid-latest.tar`; use `python -m damru install-image --download` if the tarball is not local. The baked image already contains Chrome, WebView/TTS assets, fonts, and warm preferences, so users do not need separate Chrome APKs unless they intentionally run an unbaked raw Redroid image. For raw image baking, run `python -m damru install-apks --download`; it downloads from `https://cosmicresidential.com/chrome-apks.zip`, falls back to the [Google Drive APK bundle](https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing), extracts to `chrome-apks/`, then sets `CHROME_APK` only when needed. Manual Linux/WSL extraction is also valid: `mkdir -p chrome-apks && unzip chrome-apks.zip -d chrome-apks`. On Windows, extract with File Explorer/7-Zip and use the WSL path such as `/mnt/c/Users/you/Downloads/damru/chrome-apks/145.0.7632.75`.
 
 `check-env` verifies Linux/WSL tools, Docker, binderfs, baked image/Chrome asset discovery, and the Damru Playwright `crPage.js` patch. `fix-wsl` retries safe Docker, binderfs, routing, and netfilter repairs. On Windows, Docker/Redroid is always managed inside WSL2; native Windows Docker is not used. Redroid auto mode routes ADB through WSL and can use host networking with per-worker ADB port remapping (`wsl:127.0.0.1:5600`, `wsl:127.0.0.1:5601`, ...) when Docker-published ADB ports are unreliable. Host-network containers are started with Android DNS boot parameters, and Damru repairs WSL policy routing/default routes after setup so no-proxy HTTPS navigation works in fresh WSL sessions. Native Linux uses Docker bridge/NAT and Damru selects the nft iptables backend to match modern Docker daemons; WSL uses legacy iptables where available because several WSL kernels reject Docker's `addrtype` NAT rule through nft.
 
@@ -190,7 +190,7 @@ damru.config.WSL_DISTRO = "Ubuntu-22.04"
 damru.config.WSL_USERNAME = "my-wsl-user"
 damru.config.WSL_PASSWORD = ""  # compatibility only; setup asks for sudo when needed
 
-# Path to local Chrome APKs if not in the default folder
+# Path to local Chrome APKs if using raw/unbaked Redroid instead of the baked image
 damru.config.CHROME_APK = "/custom/path/to/chrome.apk"
 ```
 

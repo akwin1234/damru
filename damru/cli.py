@@ -13,12 +13,16 @@ import shlex
 import subprocess
 import sys
 import time
+import zipfile
 from pathlib import Path
 from pathlib import PureWindowsPath
 
 _DAMRU_IMAGE_TAR = "damru-redroid-latest.tar"
 _DAMRU_IMAGE_SHA256 = "19bfe988e58d41fa031b7df3ebd3a1cb8213cf376b5972c0749a40b42df9feb2"
 _DAMRU_IMAGE_URL = "https://drive.google.com/file/d/1AzSTOlGpSfqHB-F-Yty2JqbOEMlgFT5F/view?usp=sharing"
+_DAMRU_APKS_ZIP = "chrome-apks.zip"
+_DAMRU_APKS_URL = "https://cosmicresidential.com/chrome-apks.zip"
+_DAMRU_APKS_MIRROR_URL = "https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing"
 
 
 def _is_windows() -> bool:
@@ -761,7 +765,7 @@ def _check_env(args: argparse.Namespace) -> int:
     if failures:
         if asset_failures:
             print("\nLoad the baked Damru Redroid image with: python -m damru install-image")
-            print("Or place Chrome APKs under ./chrome-apks/<version>/ for raw Redroid images.")
+            print("Or install raw Chrome APK assets with: python -m damru install-apks --download")
         print("Run 'python -m damru install-deps' for common Linux/WSL dependencies.")
         if _is_windows() and not docker_ok:
             print("Run 'python -m damru fix-wsl' to retry safe WSL Docker/binderfs fixes and print kernel guidance.")
@@ -1354,6 +1358,21 @@ def _install_deps(args: argparse.Namespace) -> int:
         image_code = _install_image(argparse.Namespace(tar=None, download=False, url=_DAMRU_IMAGE_URL, output=None))
         if image_code != 0:
             return image_code
+        image_ok = True
+    if not image_ok:
+        chrome_ok, _ = _chrome_apks_available()
+        if not chrome_ok:
+            print("No baked image or Chrome APKs found; downloading raw Chrome APK bundle...")
+            apk_code = _install_apks(argparse.Namespace(
+                zip=None,
+                download=True,
+                url=_DAMRU_APKS_URL,
+                mirror_url=_DAMRU_APKS_MIRROR_URL,
+                output=None,
+                force=False,
+            ))
+            if apk_code != 0:
+                return apk_code
 
     print("Dependencies installed. Run 'python -m damru check-env' to verify.")
     return 0
@@ -1511,6 +1530,28 @@ def _download_google_drive_file(url: str, target: Path) -> None:
                 print(f"Downloaded {downloaded // (1024 * 1024)} MB...")
     tmp.replace(target)
 
+def _download_file(url: str, target: Path) -> None:
+    if "drive.google.com" in url:
+        _download_google_drive_file(url, target)
+        return
+
+    import requests
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_suffix(target.suffix + ".part")
+    response = requests.get(url, stream=True, timeout=60)
+    response.raise_for_status()
+    downloaded = 0
+    with tmp.open("wb") as fh:
+        for chunk in response.iter_content(chunk_size=1024 * 1024):
+            if not chunk:
+                continue
+            fh.write(chunk)
+            downloaded += len(chunk)
+            if downloaded and downloaded % (100 * 1024 * 1024) < 1024 * 1024:
+                print(f"Downloaded {downloaded // (1024 * 1024)} MB...")
+    tmp.replace(target)
+
 def _install_image(args: argparse.Namespace) -> int:
     try:
         from .config import REDROID_IMAGE
@@ -1558,6 +1599,100 @@ def _install_image(args: argparse.Namespace) -> int:
         print(f"Docker loaded the tarball, but {REDROID_IMAGE} was not found.", file=sys.stderr)
         return 1
     print(f"Redroid image ready: {REDROID_IMAGE}")
+    return 0
+
+def _candidate_apk_zips(explicit: str | None = None) -> list[Path]:
+    names = [_DAMRU_APKS_ZIP, "damru-chrome-apks-latest.zip"]
+    candidates: list[Path] = []
+    if explicit:
+        candidates.append(Path(explicit).expanduser())
+    for root in (Path.cwd(), Path.cwd().parent, _repo_root(), _repo_root().parent, Path.home(), Path.home() / "Downloads"):
+        for name in names:
+            candidates.append(root / name)
+    seen: set[str] = set()
+    unique: list[Path] = []
+    for path in candidates:
+        key = str(path.resolve()) if path.exists() else str(path.absolute())
+        if key not in seen:
+            seen.add(key)
+            unique.append(path)
+    return unique
+
+def _find_apk_zip(explicit: str | None = None) -> Path | None:
+    for path in _candidate_apk_zips(explicit):
+        if path.is_file():
+            return path.resolve()
+    return None
+
+def _chrome_apk_version_dirs(root: Path) -> list[Path]:
+    if not root.is_dir():
+        return []
+    return [p for p in sorted(root.iterdir()) if p.is_dir() and any(p.glob("*.apk"))]
+
+def _safe_extract_zip(zf: zipfile.ZipFile, target: Path) -> None:
+    target = target.resolve()
+    for member in zf.infolist():
+        destination = (target / member.filename).resolve()
+        if destination != target and target not in destination.parents:
+            raise ValueError(f"ZIP entry escapes extract directory: {member.filename}")
+    zf.extractall(target)
+
+def _install_apks(args: argparse.Namespace) -> int:
+    ok, detail = _chrome_apks_available()
+    if ok and not getattr(args, "force", False):
+        print(f"Chrome APKs already available: {detail}")
+        return 0
+
+    zip_path = _find_apk_zip(args.zip)
+    if zip_path is None:
+        if not args.download:
+            searched = "\n  ".join(str(p) for p in _candidate_apk_zips(args.zip))
+            print(f"Could not find {_DAMRU_APKS_ZIP}. Searched:\n  {searched}", file=sys.stderr)
+            print("Run: python -m damru install-apks --download", file=sys.stderr)
+            return 1
+        target_zip = Path(args.zip or (Path.cwd() / _DAMRU_APKS_ZIP)).expanduser().resolve()
+        for url in (args.url, args.mirror_url):
+            print(f"Downloading Chrome APK bundle from {url}")
+            try:
+                _download_file(url, target_zip)
+                zip_path = target_zip
+                break
+            except Exception as exc:
+                print(f"Download failed: {exc}", file=sys.stderr)
+        if zip_path is None:
+            return 1
+
+    if not zipfile.is_zipfile(zip_path):
+        print(f"Not a valid ZIP archive: {zip_path}", file=sys.stderr)
+        return 1
+
+    output_root = Path(args.output or (Path.cwd() / "chrome-apks")).expanduser().resolve()
+    with zipfile.ZipFile(zip_path) as zf:
+        names = [n for n in zf.namelist() if n and not n.endswith("/")]
+        if not any(n.lower().endswith(".apk") for n in names):
+            print(f"ZIP does not contain APK files: {zip_path}", file=sys.stderr)
+            return 1
+        top_levels = {n.split("/", 1)[0] for n in names if "/" in n}
+        extract_dir = output_root.parent if top_levels == {"chrome-apks"} else output_root
+        extract_dir.mkdir(parents=True, exist_ok=True)
+        _safe_extract_zip(zf, extract_dir)
+
+    apk_root = output_root
+    if not apk_root.is_dir() and (output_root.parent / "chrome-apks").is_dir():
+        apk_root = output_root.parent / "chrome-apks"
+    version_dirs = _chrome_apk_version_dirs(apk_root)
+    if not version_dirs and not any(apk_root.glob("*.apk")):
+        print(f"No APK files found after extraction under {apk_root}", file=sys.stderr)
+        return 1
+
+    auto_roots = {_repo_root() / "chrome-apks", Path.cwd() / "chrome-apks", Path.cwd().parent / "chrome-apks"}
+    if apk_root.resolve() not in {p.resolve() for p in auto_roots}:
+        config_target = version_dirs[-1] if version_dirs else apk_root
+        config_value = _to_wsl_path(str(config_target)) if _is_windows() else str(config_target)
+        _write_config({"CHROME_APK": config_value})
+        print(f"Config updated: CHROME_APK = {config_value}")
+
+    print(f"Chrome APKs ready: {apk_root}")
     return 0
 
 
@@ -1757,6 +1892,15 @@ def build_parser() -> argparse.ArgumentParser:
     install_image.add_argument("--url", default=_DAMRU_IMAGE_URL, help="Google Drive image URL used with --download")
     install_image.add_argument("--output", default=None, help="download target path; default is ./damru-redroid-latest.tar")
     install_image.set_defaults(func=_install_image)
+
+    install_apks = sub.add_parser("install-apks", help="download and extract raw Chrome/WebView/TTS APK assets")
+    install_apks.add_argument("--zip", default=None, help="path to chrome-apks.zip; auto-detected when omitted")
+    install_apks.add_argument("--download", action="store_true", help="download the APK bundle if it is not found locally")
+    install_apks.add_argument("--url", default=_DAMRU_APKS_URL, help="primary APK bundle URL")
+    install_apks.add_argument("--mirror-url", default=_DAMRU_APKS_MIRROR_URL, help="fallback Google Drive APK bundle URL")
+    install_apks.add_argument("--output", default=None, help="extract target directory; default is ./chrome-apks")
+    install_apks.add_argument("--force", action="store_true", help="re-extract even if Chrome APKs are already available")
+    install_apks.set_defaults(func=_install_apks)
 
     devices = sub.add_parser("devices", help="list ADB devices from Linux/WSL")
     devices.set_defaults(func=_devices)

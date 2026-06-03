@@ -249,6 +249,76 @@ sha256sum damru-redroid-latest.tar > damru-redroid-latest.tar.sha256
 
 Once downloaded, follow **Step 3** in the Deployment Guide below to load it into Docker.
 
+### Optional Raw APK Asset Bundle
+
+Normal users should prefer `python -m damru install-image`; the baked image already contains Chrome, WebView/TTS assets, fonts, and warm preferences. Use the raw APK bundle only when you want to bake your own image or run unbaked raw Redroid containers.
+
+Primary direct download: [chrome-apks.zip](https://cosmicresidential.com/chrome-apks.zip)
+
+Google Drive mirror: [Chrome/WebView/TTS APK bundle](https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing)
+
+Automatic install:
+
+```bash
+python -m damru install-apks --download
+```
+
+`install-apks` downloads from `cosmicresidential.com/chrome-apks.zip`, falls back to the Google Drive mirror if needed, extracts to `./chrome-apks`, validates that APK files exist, and updates `CHROME_APK` only when the extraction path is outside Damru's normal auto-search locations. `install-deps` also runs this automatically when no baked image and no local APKs are available.
+
+Extract/copy the bundle so the project contains this layout:
+
+```text
+chrome-apks/
+  143.0.7499.52/*.apk
+  144.0.7559.132/*.apk
+  145.0.7632.75/*.apk
+  espeak.apk
+  google_tts.apk
+  rhvoice.apk
+```
+
+Manual Linux/WSL extraction, from the directory where you downloaded the bundle:
+
+```bash
+mkdir -p chrome-apks
+unzip damru-chrome-apks-latest.zip -d chrome-apks
+# If the archive already contains a top-level chrome-apks/ folder, extract beside your project instead:
+# unzip damru-chrome-apks-latest.zip
+find chrome-apks -maxdepth 2 -name '*.apk' | head
+```
+
+On Windows, extract the archive with File Explorer or 7-Zip, then copy the resulting `chrome-apks` folder into your Damru project folder. If Damru runs inside WSL, the same folder is visible as a `/mnt/c/...` path.
+
+Then either let Damru auto-detect it from the project root:
+
+```bash
+python -m damru check-env
+python -m damru bake-image --image damru-redroid:latest
+```
+
+Or point config/code at a specific split-APK directory:
+
+```python
+CHROME_APK = "/path/to/damru/chrome-apks/145.0.7632.75"
+```
+
+For WSL paths, convert the Windows path to `/mnt/c/...`:
+
+```python
+CHROME_APK = "/mnt/c/Users/you/Downloads/damru/chrome-apks/145.0.7632.75"
+```
+
+Or pass it directly in Python:
+
+```python
+from damru import AsyncDamru
+
+async with AsyncDamru(chrome_apk="/path/to/damru/chrome-apks/145.0.7632.75") as browser:
+    page = await browser.new_page()
+```
+
+`tools/magisk.apk` is also kept out of Git because it is a third-party APK. The normal baked-image flow does not need users to provide it. Raw/manual flows may use it as a fallback source for `resetprop` if the Android image does not already provide `resetprop`.
+
 ---
 
 ## First-Time User Deployment Guide (WSL2 / Linux)
@@ -555,7 +625,21 @@ Damru uses a centralized configuration file located at `damru/config.py`. If you
    Existing WSL installs are covered by `damru setup`: set `WSL_DISTRO` and `WSL_USERNAME`, then run `python -m damru check-env`. Damru's current Windows setup/runtime path uses `wsl -u root` for privileged WSL commands, so it does not need to store a sudo password in `config.py`.
 
 2. **Chrome APK Path**:
-   When not using the pre-baked `.tar` image, Damru will dynamically install Chrome onto raw Redroid instances. Point it to your APK directory.
+   When not using the pre-baked `.tar` image, Damru will dynamically install Chrome onto raw Redroid instances. Use the automatic APK installer:
+
+   ```bash
+   python -m damru install-apks --download
+   ```
+
+   It downloads from `https://cosmicresidential.com/chrome-apks.zip`, falls back to the [Google Drive APK bundle](https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing), extracts to `chrome-apks/`, and configures `CHROME_APK` only when needed.
+
+   Manual Linux/WSL extraction example:
+   ```bash
+   mkdir -p chrome-apks
+   unzip damru-chrome-apks-latest.zip -d chrome-apks
+   find chrome-apks -maxdepth 2 -name '*.apk' | head
+   ```
+
    ```python
    # None = auto-searches the 'chrome-apks/' directory in the project root
    CHROME_APK = None  
