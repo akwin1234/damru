@@ -276,6 +276,8 @@ chrome-apks/
   magisk.apk
 ```
 
+Damru auto-selects only Chrome versions that pass the current raw Redroid voice/fingerprint smoke tests. Chrome `145.0.7632.75` can still be selected manually with `CHROME_APK` or `chrome_apk=`, but auto mode skips it until its Android TTS voice behavior is stable.
+
 Manual Linux/WSL extraction, from the directory where you downloaded the bundle:
 
 ```bash

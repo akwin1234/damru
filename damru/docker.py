@@ -47,6 +47,12 @@ from .config import (
 )
 from .utils import logger
 
+_CHROME_APK_AUTO_SKIP_VERSIONS = {
+    # Chrome 145 currently boots/navigates, but returns zero speechSynthesis
+    # voices with the bundled Android TTS engines on raw Redroid.
+    "145.0.7632.75",
+}
+
 
 def _kernel_config_enabled(config_text: str, option: str) -> Optional[bool]:
     """Return kernel config state for an option when it is visible."""
@@ -1274,10 +1280,14 @@ class RedroidManager:
                     f"Available: {[v.name for v in versions]}"
                 )
 
-            picked = _random.choice(versions)
+            auto_versions = [v for v in versions if v.name not in _CHROME_APK_AUTO_SKIP_VERSIONS]
+            if not auto_versions:
+                auto_versions = versions
+
+            picked = _random.choice(auto_versions)
             logger.info(
-                "Chrome APK: v%s (random from %d available)",
-                picked.name, len(versions),
+                "Chrome APK: v%s (random from %d auto-compatible available)",
+                picked.name, len(auto_versions),
             )
             return str(picked.resolve())
 
