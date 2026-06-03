@@ -253,9 +253,7 @@ Once downloaded, follow **Step 3** in the Deployment Guide below to load it into
 
 Normal users should prefer `python -m damru install-image`; the baked image already contains Chrome, WebView/TTS assets, fonts, and warm preferences. Use the raw APK bundle only when you want to bake your own image or run unbaked raw Redroid containers.
 
-Primary direct download: [chrome-apks.zip](https://cosmicresidential.com/chrome-apks.zip)
-
-Google Drive mirror: [Chrome/WebView/TTS APK bundle](https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing)
+Google Drive bundle: [Chrome/WebView/TTS APK assets](https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing)
 
 Automatic install:
 
@@ -263,9 +261,9 @@ Automatic install:
 python -m damru install-apks --download
 ```
 
-`install-apks` downloads from `cosmicresidential.com/chrome-apks.zip`, falls back to the Google Drive mirror if needed, extracts to `./chrome-apks`, validates that APK files exist, and updates `CHROME_APK` only when the extraction path is outside Damru's normal auto-search locations. `install-deps` also runs this automatically when no baked image and no local APKs are available.
+`install-apks` downloads the APK asset bundle, extracts to `./chrome-apks`, validates that APK files exist, and updates `CHROME_APK` only when the extraction path is outside Damru's normal auto-search locations. `install-deps` and `setup` also run this automatically when no baked image and no local APKs are available.
 
-Extract/copy the bundle so the project contains this layout:
+Extract/copy the bundle so the project contains this layout. The bundle is not only Chrome; it also includes Trichrome WebView and TTS voice APKs used by raw/unbaked Redroid flows:
 
 ```text
 chrome-apks/
@@ -296,7 +294,7 @@ python -m damru check-env
 python -m damru bake-image --image damru-redroid:latest
 ```
 
-Or point config/code at a specific split-APK directory:
+If automatic detection fails, keep the full `chrome-apks/` bundle together and point config/code at the specific Chrome split-APK version directory:
 
 ```python
 CHROME_APK = "/path/to/damru/chrome-apks/145.0.7632.75"
@@ -492,7 +490,7 @@ python -m damru install-image
 python -m damru check-env
 ```
 
-`setup` runs dependency setup by default. If no baked image is loaded and no local Chrome APK assets exist, Damru downloads and extracts the APK bundle automatically from `https://cosmicresidential.com/chrome-apks.zip` with the Google Drive mirror as fallback. Users should not need to run `install-apks` manually unless they are baking/customizing raw Redroid images.
+`setup` runs dependency setup by default. If no baked image is loaded and no local Chrome/WebView/TTS APK assets exist, Damru downloads and extracts the APK bundle automatically. Users should not need to run `install-apks` manually unless they are baking/customizing raw Redroid images or recovering from an APK asset error.
 
 If Docker still fails inside WSL, run the safe repair/diagnostic pass:
 
@@ -634,7 +632,13 @@ Damru uses a centralized configuration file located at `damru/config.py`. If you
    python -m damru install-apks --download
    ```
 
-   It downloads from `https://cosmicresidential.com/chrome-apks.zip`, falls back to the [Google Drive APK bundle](https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing), extracts to `chrome-apks/`, and configures `CHROME_APK` only when needed.
+   It downloads the [Chrome/WebView/TTS APK bundle](https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing), extracts to `chrome-apks/`, and configures `CHROME_APK` only when needed.
+
+   If you still see an APK asset error, download the same Google Drive bundle manually, extract it as `chrome-apks/`, keep the WebView/TTS APKs beside the Chrome version folders, then set `CHROME_APK` to a Chrome split-APK version directory, for example:
+
+   ```python
+   CHROME_APK = "/home/ubuntu/chrome-apks/145.0.7632.75"
+   ```
 
    Manual Linux/WSL extraction example:
    ```bash

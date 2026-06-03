@@ -10,11 +10,9 @@ The APK payloads are large and are not committed to Git. Install the release bun
 python -m damru install-apks --download
 ```
 
-Primary direct download: [chrome-apks.zip](https://cosmicresidential.com/chrome-apks.zip)
+Google Drive bundle: [Chrome/WebView/TTS APK assets](https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing)
 
-Google Drive mirror: [Chrome/WebView/TTS APK bundle](https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing)
-
-Extract/copy it so this folder contains version directories such as `145.0.7632.75/` with `base.apk`, `google_trichrome_library.apk`, and Chrome split APKs.
+Extract/copy it so this folder contains version directories such as `145.0.7632.75/` with `base.apk`, `google_trichrome_library.apk`, and Chrome split APKs. Keep the top-level WebView/TTS APKs in this same bundle folder too, for example `TrichromeWebView.apk`, `google_tts.apk`, `espeak.apk`, and `rhvoice.apk`.
 
 Manual Linux/WSL example from the project root:
 

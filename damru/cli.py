@@ -21,8 +21,8 @@ _DAMRU_IMAGE_TAR = "damru-redroid-latest.tar"
 _DAMRU_IMAGE_SHA256 = "19bfe988e58d41fa031b7df3ebd3a1cb8213cf376b5972c0749a40b42df9feb2"
 _DAMRU_IMAGE_URL = "https://drive.google.com/file/d/1AzSTOlGpSfqHB-F-Yty2JqbOEMlgFT5F/view?usp=sharing"
 _DAMRU_APKS_ZIP = "chrome-apks.zip"
-_DAMRU_APKS_URL = "https://cosmicresidential.com/chrome-apks.zip"
-_DAMRU_APKS_MIRROR_URL = "https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing"
+_DAMRU_APKS_URL = "https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing"
+_DAMRU_APKS_MIRROR_URL = ""
 
 
 def _is_windows() -> bool:
@@ -1655,6 +1655,8 @@ def _install_apks(args: argparse.Namespace) -> int:
             return 1
         target_zip = Path(args.zip or (Path.cwd() / _DAMRU_APKS_ZIP)).expanduser().resolve()
         for url in (args.url, args.mirror_url):
+            if not url:
+                continue
             print(f"Downloading Chrome APK bundle from {url}")
             try:
                 _download_file(url, target_zip)
