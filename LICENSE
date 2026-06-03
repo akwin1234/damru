@@ -2,6 +2,8 @@
 
 <https://polyformproject.org/licenses/noncommercial/1.0.0>
 
+Copyright (c) 2026 akwin1234 / Damru maintainers. All rights reserved except as licensed below.
+
 ## Commercial Licensing
 
 For commercial use licenses, custom engineering, or enterprise support, use the project's published contact channel.
@@ -35,6 +37,8 @@ Commercial purposes are any purposes intended for or directed toward commercial 
 You must give the licensor credit by including a copy of this license and any copyright notice from the licensor with the software.
 
 For public repositories, mirrors, source copies, README copies, package copies, release copies, asset copies, or substantial reposts, attribution must be visible near the top of the README or repository description and must link to the official Damru repository. Unofficial public copies must clearly identify themselves as unofficial. These requirements apply to copied or derived source code, native code, Python modules, CLI code, documentation, examples, tests, configs, package metadata, release artifacts, screenshots, videos, and proof assets.
+
+You may not remove copyright notices, claim original authorship of Damru-derived material, relicense Damru-derived material under different terms, or publish confusing official-looking copies that hide the Damru origin.
 
 ## No Other Rights
 

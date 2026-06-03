@@ -14,6 +14,7 @@
     <strong>Community:</strong>
     <a href="https://discord.gg/GsxFdjdrT">Discord server</a> recommended
   </p>
+  <p><strong>Official repository:</strong> <a href=https://github.com/akwin1234/damru>github.com/akwin1234/damru</a></p>
 </div>
 
 <br/>
@@ -846,6 +847,8 @@ Damru is built on the shoulders of giants. We would like to credit the following
 Damru is distributed under the **PolyForm Noncommercial License 1.0.0**. Personal, educational, and noncommercial research use is allowed. Commercial use, hosted services, paid automation, paid scraping, paid botting, managed traffic operations, and SaaS use require a separate written commercial license.
 
 This policy applies to the whole Damru project: source code, native code, Python modules, CLI code, docs, examples, tests, configs, package metadata, release artifacts, screenshots, videos, and substantial derived work. Public forks, mirrors, source copies, README copies, package copies, release copies, asset copies, and substantial reposts must preserve the license, credits, and attribution. GitHub copies should use GitHub's fork feature where possible. Separate repositories must put clear top-level attribution (`Based on Damru by akwin1234`) and an `Unofficial fork/mirror` notice near the top of the README. Rebranding Damru source, hiding Damru origin, removing attribution, or using the `damru` name in a confusing official-looking copy is not allowed by the project policy. See [LEGAL.md](LEGAL.md) for the full fork, copy, attribution, and commercial-use policy.
+
+Damru is public source code, not public domain. Copied or modified code, documentation, examples, tests, package metadata, proof assets, or releases remain subject to Damru's license and attribution requirements.
 
 ---
 
