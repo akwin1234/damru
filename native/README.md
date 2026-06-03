@@ -1,21 +1,25 @@
-# Native Layer
+# Native Binaries (`native/`)
 
-This directory contains native C sources and compiled shared objects used by Damru's lower-level fingerprint controls.
+Welcome to the deepest layer of Damru's stealth architecture. This folder contains the **C source code and compiled shared objects (`.so`)** used for **Layer 2 (Binary)** spoofing.
 
-## Components
+> **Why native patching?**
+> Anti-bot scripts like *CreepJS* and *BrowserScan* can ask the browser directly what GPU it is using. Relying on JavaScript wrappers to fake this response leaves trace evidence. Damru bypasses this entirely by physically altering the underlying Vulkan and OpenGL drivers of the Android OS.
 
-| File | Purpose |
-| --- | --- |
-| `vulkan_layer.c` / `libVkLayer_damru.so` | Vulkan layer used to replace emulator GPU/vendor strings with profile-matched mobile GPU strings. |
-| `libfakemem.c` / `libfakemem.so` | Intercepts Android runtime memory queries so Chrome sees the profile's RAM size. |
-| `test_mem.c`, `test_sysconf.c` | Small local probes for validating native memory interception behavior. |
+---
 
-## Deployment
+## What's Inside
 
-Raw/unbaked Redroid: Damru pushes the shared objects through ADB and configures the Android environment for Chrome.
+| File / Component | Description |
+| :--- | :--- |
+| **`vulkan_layer.c` / `libVkLayer_damru.so`** | A Vulkan explicit layer. When the Chromium rendering engine requests Vulkan properties, this binary intercepts the C++ system call and replaces emulator driver strings (like "SwiftShader") with real smartphone GPU strings (like "Adreno (TM) 640"). |
+| **`libfakemem.c` / `libfakemem.so`** | Intercepts `sysconf` calls to spoof the total physical RAM reported by the Android OS to Chrome, allowing us to perfectly emulate the memory size of the target device profile. |
+| **`test_mem.c`, `test_sysconf.c`** | Small C programs used to test the interception hooks locally within the container before applying them to the browser. |
 
-Baked image: the native layer is already integrated into `damru-redroid:latest`, reducing cold-start time and runtime failure points.
+---
 
-## Rule
+## How It Is Applied
 
-Native changes should be tested against both main-page and worker-scope browser probes. Avoid JavaScript wrappers for values that can be controlled below the page layer.
+*   **Manual Deployment**: If you are using the manual/base Redroid image, Damru will automatically push these `.so` files via ADB into the Android filesystem (e.g., `/vendor/lib64/`) and configure the environment variables (`LD_PRELOAD`, `VK_INSTANCE_LAYERS`) so Chrome loads them upon launch.
+*   **Instant Boot Deployment**: If you use the pre-baked [damru-redroid-latest.tar](https://drive.google.com/file/d/1AzSTOlGpSfqHB-F-Yty2JqbOEMlgFT5F/view?usp=sharing) OS image, these binaries are *already injected permanently* into the OS, drastically speeding up boot times and reducing runtime points of failure.
+
+*For instructions on modifying and recompiling these binaries using the NDK, see the inline comments within the `.c` source files.*

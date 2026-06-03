@@ -1,23 +1,25 @@
-# Damru Core Library
+#  Damru Core Library (`damru/`)
 
-This directory contains the Python runtime that drives Damru sessions: Redroid startup, ADB control, Android identity patching, Chrome lifecycle, CDP attachment, proxy-aware profile shaping, and multi-worker pools.
+Welcome to the heart of the Damru framework. This directory contains the main Python source code responsible for orchestrating the entire lifecycle of the spoofing process. 
 
-## Core Modules
+Our core philosophy here is **"Zero JS Injection"**. Every spoof is executed natively or at the protocol level.
 
-| Module | Role |
-| --- | --- |
-| `async_core.py` | Primary async browser entry point. |
-| `core.py` | Synchronous wrapper around the async runtime. |
-| `pool.py` | Multi-container orchestration through `DamruPool`. |
-| `devices.py` | 49 real Android device profiles. |
-| `chrome.py` | Chrome/WebView lifecycle, preferences, flags, first-run cleanup. |
-| `root.py` | Android root operations, props, iptables, display, native patching. |
-| `proxy.py` | Proxy parsing plus IP-aware timezone and locale selection. |
-| `cdp.py` | Chrome DevTools Protocol attachment and port routing. |
-| `cli.py` | `python -m damru` setup, checks, WSL repair, viewer, image/APK commands. |
-| `playwright_patch/` | Bundled Playwright `crPage.js` runtime patch. |
-| `wsl_kernel/` | Bundled WSL2 kernel artifact and metadata. |
+---
 
-## Design Rule
+## Architecture Overview
 
-Damru avoids JavaScript monkey-patching for core stealth. Prefer Android, native, browser-engine, CDP, or container-level fixes before adding any page script behavior.
+The library is modular and highly specialized:
+
+*   **`async_core.py` & `core.py`**: The main entry points (Async and Sync context managers). These manage the connection flow: `ADB detection -> Rooting -> Applying OS Props -> Patching GPU -> Launching Chrome -> Attaching CDP`.
+*   **`devices.py`**: A massive built-in database of 49 real Android devices. It holds correct hardware specs (CPU cores, RAM, screen resolutions, OS props) to ensure our spoofing is physically accurate.
+*   **`root.py`**: Executes the **Layer 1 (OS)** and **Layer 2 (Binary)** stealth patches via ADB shell using `su`. It modifies `build.prop`, pushes custom GPU `.so` files, and manages `iptables` for WebRTC/IPv6 blocking.
+*   **`cdp.py`**: Handles the connection to the Chrome DevTools Protocol, securely forwarding ports from the Android emulator to `localhost`.
+*   **`chrome.py`**: Manages the Chrome browser lifecycle on the device. It handles clearing app data, dismissing the First Run Experience (FRE), and injecting our **Layer 4** stealth patches directly into Chrome's `Preferences` JSON file.
+*   **`proxy.py`**: Parses incoming proxy strings and uses them to dynamically map Timezones, Geolocation, and Locales so the browser's identity matches the IP's physical origin.
+*   **`pool.py`**: Connection pooling managers (`DamruPool`, `DamruPoolSync`) designed for scaling operations concurrently across multiple Docker containers.
+*   **`cli.py`**: User-facing setup, environment checks, image baking, WSL repair, screenshot/video capture, and optional scrcpy viewer commands.
+*   **`playwright_patch/`**: Contains `crPage.js` modifications that are dynamically loaded to neutralize Playwright's default behavior, preventing CDP target discovery leaks.
+
+---
+
+> **Note to Developers:** When modifying the core, remember to avoid relying on JavaScript-based evasions. Always look for OS-level or CDP-level solutions first.
