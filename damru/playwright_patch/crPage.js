@@ -397,7 +397,7 @@ class FrameSession {
       }),
       this._client.send("Log.enable", {}),
       lifecycleEventsEnabled = this._client.send("Page.setLifecycleEventsEnabled", { enabled: true }),
-      (process.env.PLAYWRIGHT_STEALTH_RUNTIME ? this._client.send("Runtime.enable", {}).then(() => { this._stealthDisableTimer = setTimeout(() => { this._client.send("Runtime.disable", {}).catch(() => {}); }, 100); }) : this._client.send("Runtime.enable", {})),
+      (process.env.PLAYWRIGHT_STEALTH_RUNTIME && this._client.send("Runtime.enable", {}).then(() => { /* PLAYWRIGHT_STEALTH_RUNTIME_DAMRU_DYNAMIC_V2 */ this._stealthDisableTimer = setTimeout(() => { this._client.send("Runtime.disable", {}).catch(() => {}); }, 100); }) || this._client.send("Runtime.enable", {})),
       this._client.send("Page.addScriptToEvaluateOnNewDocument", {
         source: "",
         worldName: this._crPage.utilityWorldName

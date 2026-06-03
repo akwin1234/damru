@@ -28,6 +28,8 @@ logger = logging.getLogger(__name__)
 # Marker string present in our patched crPage.js -- used for quick detection.
 _PATCH_MARKER = "PLAYWRIGHT_STEALTH_RUNTIME_DAMRU_DYNAMIC_V2"
 _ENV_MARKER = "PLAYWRIGHT_STEALTH_RUNTIME"
+_VALID_RUNTIME_SNIPPET = f"process.env.{_ENV_MARKER} &&"
+_VALID_CONTEXT_SNIPPET = "const frame = contextPayload.auxData ?"
 
 # Location of the bundled (already-patched) crPage.js shipped with damru.
 _BUNDLED_CRPAGE = Path(__file__).parent / "crPage.js"
@@ -78,29 +80,43 @@ def _write_text(path: Path, text: str) -> None:
 def _is_patched(path: Path) -> bool:
     """Check whether the file at *path* already contains our patch marker."""
     try:
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
-            # Read in chunks to avoid loading huge files in one shot.
-            for chunk in iter(lambda: f.read(65536), ""):
-                if _PATCH_MARKER in chunk:
-                    return True
-        return False
+        text = _read_text(path)
+        return (
+            _PATCH_MARKER in text
+            and _VALID_RUNTIME_SNIPPET in text
+            and _VALID_CONTEXT_SNIPPET in text
+        )
     except Exception:
         return False
 
 
 def _patch_text(source: str) -> str:
     """Patch the installed Playwright file while preserving its version shape."""
+    # Repair bad patches created by older mojibake-cleanup builds.
+    source = source.replace(
+        f'process.env.{_ENV_MARKER}  this._client.send',
+        f'process.env.{_ENV_MARKER} && this._client.send',
+    )
+    source = source.replace(
+        'const frame = contextPayload.auxData  this._page',
+        'const frame = contextPayload.auxData ? this._page',
+    )
+    if (
+        _PATCH_MARKER in source
+        and _VALID_RUNTIME_SNIPPET in source
+        and _VALID_CONTEXT_SNIPPET in source
+    ):
+        return source
+
     runtime_enable = 'this._client.send("Runtime.enable", {}),'
     replacement = (
-        f'(process.env.{_ENV_MARKER}  '
+        f'(process.env.{_ENV_MARKER} && '
         'this._client.send("Runtime.enable", {}).then(() => { '
         f'/* {_PATCH_MARKER} */ '
         'this._stealthDisableTimer = setTimeout(() => { '
         'this._client.send("Runtime.disable", {}).catch(() => {}); '
         '}, 100); }) : this._client.send("Runtime.enable", {})),'
     )
-    if _PATCH_MARKER in source:
-        return source
     if runtime_enable not in source:
         raise RuntimeError("Playwright crPage.js Runtime.enable hook point not found")
     patched = source.replace(runtime_enable, replacement, 1)
@@ -119,6 +135,10 @@ def _patch_text(source: str) -> str:
         patched = patched.replace(frame_nav, frame_nav_patch, 1)
 
     context_created = (
+        'const frame = contextPayload.auxData ? '
+        'this._page.frameManager.frame(contextPayload.auxData.frameId) : null;'
+    )
+    broken_context_created = (
         'const frame = contextPayload.auxData  '
         'this._page.frameManager.frame(contextPayload.auxData.frameId) : null;'
     )
@@ -130,6 +150,8 @@ def _patch_text(source: str) -> str:
     )
     if context_created in patched:
         patched = patched.replace(context_created, context_created_patch, 1)
+    elif broken_context_created in patched:
+        patched = patched.replace(broken_context_created, context_created_patch, 1)
 
     return patched
 
@@ -171,7 +193,7 @@ def ensure_patched() -> bool:
 
         source_path = target
         target_text = _read_text(target)
-        if _ENV_MARKER in target_text and _PATCH_MARKER not in target_text and backup.exists():
+        if _ENV_MARKER in target_text and not _is_patched(target) and backup.exists():
             source_path = backup
 
         patched = _patch_text(_read_text(source_path))
