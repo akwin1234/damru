@@ -79,6 +79,13 @@ Damru ships the locally verified WSL2 Redroid/NAT kernel artifact in `damru/wsl_
 - `SHA256SUMS`
 - `source_metadata/` with the WSL build `.config`, `.config.old`, embedded `kernel/config_data`, and source tree info
 
+The public source repository and compiled release are available here:
+
+- Source repo: https://github.com/akwin1234/damru-wsl2-kernel-redroid-natfix-source
+- Compiled kernel release: https://github.com/akwin1234/damru-wsl2-kernel-redroid-natfix-source/releases/tag/v6.6.114.1-damru-redroid-natfix-20260602
+- Kernel binary: https://github.com/akwin1234/damru-wsl2-kernel-redroid-natfix-source/releases/download/v6.6.114.1-damru-redroid-natfix-20260602/wsl2-kernel-redroid-natfix-20260602
+- SHA256: `1c2a5c2c4737a02b8f81dcd82162727cb5644d194bb9cfb2f9162a9862b03c6e`
+
 The installer is backup-first. It verifies the bundled checksums, copies the kernel and config to `%USERPROFILE%\.damru\wsl-kernels\`, backs up any existing `%USERPROFILE%\.wslconfig`, preserves unrelated `.wslconfig` settings, and writes the `[wsl2] kernel=...` entry. It also writes `dnsTunneling=true` and `networkingMode=NAT`; this fixes the common WSL state where the distro can ping public IPs but `apt`, `pip`, or Docker containers cannot resolve DNS names.
 
 

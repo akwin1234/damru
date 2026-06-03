@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Published the Damru WSL2 Redroid/NAT kernel source fork and compiled kernel release, and linked them from WSL kernel documentation.
+- Added `LEGAL.md` with fork, mirror, attribution, and commercial-use policy, plus README/license links to the policy.
+- Rewrote `CONTRIBUTING.md` to remove corrupted encoding and add privacy/licensing contribution rules.
 - Fixed README shields.io badge URLs that lost the `?style=` query separator.
 - Removed the old `ubuntu-proof-summary.png` proof asset and all references to it.
 - Fixed Google Drive manual-download links that lost `?usp=sharing` during text cleanup.

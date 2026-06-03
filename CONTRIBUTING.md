@@ -1,40 +1,50 @@
 # Contributing to Damru
 
-First off, thank you for considering contributing to Damru! It's people like you that make Damru the apex predator of Android browser automation.
+Thank you for considering a contribution to Damru.
 
-## 🤖 AI-Assisted Development & "Vibe Coding"
+## AI-Assisted Development
 
-Damru is a **vibe-coded** project. This means it was built with a heavy focus on rapid experimentation, deep technical intuition, and a "just make it work" philosophy. 
+Damru was built with heavy AI-assisted engineering and rapid experimentation. The project has used OpenAI Codex, Claude Code, Kimi CLI, and other tools during research, native patching, and integration work.
 
-We would like to acknowledge the following AI tools that served as primary "co-pilots" in the development of this framework:
-*   **OpenAI Codex**
-*   **Claude Code**
-*   **Kimi CLI**
+AI-generated patches are welcome, but contributors are responsible for testing, reviewing, and understanding the code before submitting it.
 
-These tools were instrumental in research, C++ binary patching, and orchestrating the complex interactions between Android's OS layers and Playwright.
+## How to Contribute
 
-## 🚀 How Can I Contribute
+### Reporting Bugs
 
-### 1. Reporting Bugs
-If you find a bug (e.g., an anti-bot successfully detecting Damru), please open an issue. Provide:
-*   The target URL.
-*   Your device profile and proxy setup.
-*   Logs (with `debug=True`).
+If you find a bug, open an issue with:
 
-### 2. Suggesting Enhancements
-We are always looking to improve our stealth layers. If you know of a new fingerprinting vector (e.g., a new WebGL extension check), open an issue with your research.
+- Target URL or benchmark name.
+- OS and environment details.
+- Device profile and proxy setup, with credentials removed.
+- Logs with secrets, IPs, usernames, and tokens redacted.
 
-### 3. Code Contributions
-We welcome Pull Requests!
-*   **Zero JS Philosophy:** Ensure your fixes do not rely on JavaScript injection (`Object.defineProperty`). We solve problems at the OS, Binary, or CDP layer.
-*   **Write Tests:** Any new spoofing mechanism must include a corresponding test in the `tests/` folder.
-*   **Run the Suite:** Run the full `pytest` suite before submitting your PR to ensure no regressions.
+### Suggesting Enhancements
 
-## 🛠️ Development Setup
+If you know of a new fingerprinting vector or stability issue, open an issue with reproducible evidence and a minimal test case where possible.
 
-1. Clone the repo.
-2. Setup a virtual environment: `python3 -m venv venv && source venv/bin/activate`
-3. Install editable: `pip install -e .`
-4. Make your changes on a new branch.
+### Code Contributions
 
-We look forward to reviewing your PR!
+Pull requests are welcome for noncommercial project improvement.
+
+- Follow Damru's zero-JS philosophy. Prefer OS, binary, browser-engine, CDP, or Android-layer fixes over JavaScript monkey patches.
+- Add or update tests for new spoofing behavior.
+- Run the relevant pytest suite before submitting.
+- Do not commit credentials, private proxies, private APK URLs, personal paths, or proof assets containing private data.
+- Preserve the license, attribution, and legal notices.
+
+## Development Setup
+
+```bash
+git clone https://github.com/akwin1234/damru.git
+cd damru
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+python -m damru install-deps -y
+python -m damru check-env
+```
+
+## License
+
+By contributing, you agree that your contribution is provided under the same license and project policy as Damru. See `LICENSE` and `LEGAL.md`.

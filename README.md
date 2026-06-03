@@ -45,6 +45,7 @@
 - [Testing](#testing-your-setup)
 - [Roadmap](#the-big-plan-roadmap)
 - [FAQ](#frequently-asked-questions)
+- [License & Fork Policy](#license--fork-policy)
 - [Legal Disclaimer](#mandatory-legal-disclaimer--ethical-use-notice)
 
 ---
@@ -818,7 +819,7 @@ MuMu Player support is currently an **experimental, unfinished, and non-function
 The `damru-redroid-latest.tar` image is a full Android 14 operating system export. The current test artifact is about 915 MB as a Docker tarball and expands to a larger Docker image after `docker load`. It includes pre-installed Chrome, TTS assets, custom fonts, and pre-patched binary drivers for faster deployment.
 
 ### 4. Does Damru work on native Linux
-**Yes.** Any Docker image built in WSL2 is a standard Linux image. Damru works perfectly on native Linux (Ubuntu, Debian, etc.), provided the `binder` kernel modules are loaded.
+**Ubuntu 24.04 LTS is the only officially supported native Linux target today.** Other distributions may run Docker, but Damru Redroid reliability depends on kernel binderfs and container networking behavior. Debian 13 was tested and is not supported yet because its stock kernel did not provide the binderfs support needed for reliable multi-container Redroid.
 
 ### 5. Why "Zero JS Injection"
 Standard stealth tools are caught by anti-bots because their JavaScript injections leave traces (timing, prototype pollution). Damru lies from the outside-in (OS, Binary, and Protocol levels), making it mathematically invisible to scripts.
@@ -837,6 +838,14 @@ Damru is built on the shoulders of giants. We would like to credit the following
 *   **[Magisk](https://github.com/topjohnwu/Magisk)**: For the inspiration behind the `resetprop` logic used in our system property spoofing.
 *   **[curl_cffi](https://github.com/yifeikong/curl_cffi)**: For providing the TLS impersonation capabilities used in our edge-layer bypasses.
 *   **[Docker](https://www.docker.com/)**: For the containerization infrastructure that enables scalable automation pools.
+
+---
+
+## License & Fork Policy
+
+Damru is distributed under the **PolyForm Noncommercial License 1.0.0**. Personal, educational, and noncommercial research use is allowed. Commercial use, hosted services, paid automation, paid scraping, paid botting, managed traffic operations, and SaaS use require a separate written commercial license.
+
+Public forks and mirrors must preserve the license, credits, and attribution, and must clearly identify themselves as unofficial unless maintained by the Damru maintainers. Rebranding Damru or removing attribution is not allowed by the project policy. See [LEGAL.md](LEGAL.md) for the full fork, mirror, attribution, and commercial-use policy.
 
 ---
 

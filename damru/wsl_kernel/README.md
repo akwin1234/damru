@@ -2,6 +2,12 @@
 
 This directory contains the locally verified WSL2 kernel artifact used for Damru Redroid on WSL.
 
+Public source and prebuilt release:
+
+- Source repo: https://github.com/akwin1234/damru-wsl2-kernel-redroid-natfix-source
+- Release: https://github.com/akwin1234/damru-wsl2-kernel-redroid-natfix-source/releases/tag/v6.6.114.1-damru-redroid-natfix-20260602
+- Binary asset: https://github.com/akwin1234/damru-wsl2-kernel-redroid-natfix-source/releases/download/v6.6.114.1-damru-redroid-natfix-20260602/wsl2-kernel-redroid-natfix-20260602
+
 Included files:
 
 - `wsl2-kernel-redroid-natfix-20260602`: WSL2 kernel binary with Android binderfs and Docker bridge/NAT options enabled.
