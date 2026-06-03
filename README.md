@@ -224,7 +224,7 @@ For the full list of available Android identities, see the:
 
 Download the current pre-baked image:
 
-**[Download damru-redroid-latest.tar](https://drive.google.com/file/d/1AzSTOlGpSfqHB-F-Yty2JqbOEMlgFT5F/viewusp=sharing)**
+**[Download damru-redroid-latest.tar](https://drive.google.com/file/d/1AzSTOlGpSfqHB-F-Yty2JqbOEMlgFT5F/view?usp=sharing)**
 
 Current local artifact prepared for release testing:
 
@@ -253,7 +253,7 @@ Once downloaded, follow **Step 3** in the Deployment Guide below to load it into
 
 Normal users should prefer `python -m damru install-image`; the baked image already contains Chrome, WebView/TTS assets, fonts, and warm preferences. Use the raw APK bundle only when you want to bake your own image or run unbaked raw Redroid containers.
 
-Google Drive bundle: [Chrome/WebView/TTS/resetprop APK assets](https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/viewusp=sharing)
+Google Drive bundle: [Chrome/WebView/TTS/resetprop APK assets](https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing)
 
 Automatic install:
 
@@ -634,7 +634,7 @@ Damru uses a centralized configuration file located at `damru/config.py`. If you
    python -m damru install-apks --download
    ```
 
-   It downloads the Chrome/WebView/TTS/resetprop APK bundle automatically, extracts to `/home/damru/chrome-apks` on Linux/WSL, and configures `CHROME_APK` only when needed. The [Google Drive APK bundle](https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/viewusp=sharing) is for manual recovery if automatic download is unavailable.
+   It downloads the Chrome/WebView/TTS/resetprop APK bundle automatically, extracts to `/home/damru/chrome-apks` on Linux/WSL, and configures `CHROME_APK` only when needed. The [Google Drive APK bundle](https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing) is for manual recovery if automatic download is unavailable.
 
    If you still see an APK asset error, download the same Google Drive bundle manually, extract it as `/home/damru/chrome-apks`, keep the WebView/TTS/Magisk APKs beside the Chrome version folders, then set `CHROME_APK` to a Chrome split-APK version directory, for example:
 

@@ -20,10 +20,11 @@ from .apk_assets import bundled_magisk_apk, find_apk_bundle_root, validate_apk_b
 
 _DAMRU_IMAGE_TAR = "damru-redroid-latest.tar"
 _DAMRU_IMAGE_SHA256 = "19bfe988e58d41fa031b7df3ebd3a1cb8213cf376b5972c0749a40b42df9feb2"
-_DAMRU_IMAGE_URL = "https://drive.google.com/file/d/1AzSTOlGpSfqHB-F-Yty2JqbOEMlgFT5F/viewusp=sharing"
+_DAMRU_IMAGE_URL = "https://drive.google.com/file/d/1AzSTOlGpSfqHB-F-Yty2JqbOEMlgFT5F/view?usp=sharing"
 _DAMRU_APKS_ZIP = "chrome-apks.zip"
 _DAMRU_APKS_URL = "https://cosmicresidential.com/chrome-apks.zip"
-_DAMRU_APKS_MIRROR_URL = "https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/viewusp=sharing"
+_DAMRU_APKS_MIRROR_URL = "https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing"
+_CHROME_APK_AUTO_SKIP_VERSIONS = {"145.0.7632.75"}
 
 
 def _is_windows() -> bool:
@@ -1641,6 +1642,12 @@ def _chrome_apk_version_dirs(root: Path) -> list[Path]:
         return []
     return [p for p in sorted(root.iterdir()) if p.is_dir() and any(p.glob("*.apk"))]
 
+def _preferred_chrome_apk_version_dir(version_dirs: list[Path]) -> Path | None:
+    if not version_dirs:
+        return None
+    compatible = [p for p in version_dirs if p.name not in _CHROME_APK_AUTO_SKIP_VERSIONS]
+    return (compatible or version_dirs)[-1]
+
 def _ensure_shipped_magisk_in_bundle(root: Path) -> None:
     """Copy Damru's shipped Magisk APK into an extracted APK bundle if missing."""
     target = root / "magisk.apk"
@@ -1719,7 +1726,7 @@ def _install_apks(args: argparse.Namespace) -> int:
 
     auto_roots = {_repo_root() / "chrome-apks", Path.cwd() / "chrome-apks", Path.cwd().parent / "chrome-apks"}
     if apk_root.resolve() not in {p.resolve() for p in auto_roots}:
-        config_target = version_dirs[-1] if version_dirs else apk_root
+        config_target = _preferred_chrome_apk_version_dir(version_dirs) or apk_root
         config_value = _to_wsl_path(str(config_target)) if _is_windows() else str(config_target)
         _write_config({"CHROME_APK": config_value})
         print(f"Config updated: CHROME_APK = {config_value}")
