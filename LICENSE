@@ -34,7 +34,7 @@ Commercial purposes are any purposes intended for or directed toward commercial 
 
 You must give the licensor credit by including a copy of this license and any copyright notice from the licensor with the software.
 
-For public repositories, mirrors, README copies, package copies, or substantial reposts, attribution must be visible near the top of the README or repository description and must link to the official Damru repository. Unofficial public copies must clearly identify themselves as unofficial.
+For public repositories, mirrors, source copies, README copies, package copies, release copies, asset copies, or substantial reposts, attribution must be visible near the top of the README or repository description and must link to the official Damru repository. Unofficial public copies must clearly identify themselves as unofficial. These requirements apply to copied or derived source code, native code, Python modules, CLI code, documentation, examples, tests, configs, package metadata, release artifacts, screenshots, videos, and proof assets.
 
 ## No Other Rights
 

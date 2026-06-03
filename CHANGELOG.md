@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Broadened the legal policy so attribution and unofficial-copy requirements apply to the full Damru codebase, docs, native code, examples, tests, configs, package metadata, release artifacts, and proof assets.
 - Tightened fork/mirror attribution policy so public copies must preserve the license, credit Damru visibly, and identify themselves as unofficial unless maintained by the Damru maintainers.
 - Published the Damru WSL2 Redroid/NAT kernel source fork and compiled kernel release, and linked them from WSL kernel documentation.
 - Added `LEGAL.md` with fork, mirror, attribution, and commercial-use policy, plus README/license links to the policy.
