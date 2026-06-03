@@ -37,7 +37,7 @@ MUMU_SYSTEM_DISK_WRITABLE = True
 
 # Chrome APK Path
 # Example absolute Linux path to your custom APK directory
-# CHROME_APK = "/opt/damru/chrome-apks/145.0.7632.75"
+# CHROME_APK = "/home/damru/chrome-apks/145.0.7632.75"
 CHROME_APK = None
 
 # Redroid Container Settings

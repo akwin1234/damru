@@ -22,6 +22,7 @@ import zipfile
 from typing import Dict, Optional
 
 from .adb import ADB
+from .apk_assets import find_any_bundle_apk
 from .devices import AndroidDevice
 from .utils import logger, sleep
 
@@ -710,6 +711,10 @@ class RootOps:
 
         Returns local APK paths in installation order.
         """
+        bundled = find_any_bundle_apk(["google_tts.apk", "GoogleTTS.apk"])
+        if bundled is not None:
+            return [str(bundled)]
+
         cache_dir = os.path.join(tempfile.gettempdir(), "damru_google_tts")
         os.makedirs(cache_dir, exist_ok=True)
 
@@ -736,6 +741,42 @@ class RootOps:
         if os.path.isfile(overlay_apk) and os.path.getsize(overlay_apk) > 200_000:
             apks.append(overlay_apk)
         return apks
+
+    async def _ensure_local_tts_apk_installed(
+        self,
+        package: str,
+        names: list[str],
+        installed_pkgs: set[str],
+    ) -> set[str]:
+        """Install a TTS APK from the local Damru APK bundle when present."""
+        if package in installed_pkgs:
+            return installed_pkgs
+
+        apk = find_any_bundle_apk(names)
+        if apk is None:
+            return installed_pkgs
+
+        out = await self.adb._run(
+            ["install", "-r", str(apk)],
+            timeout=240, allow_failure=True,
+        )
+        if "success" not in out.lower():
+            logger.debug("Local TTS APK install output for %s: %s", apk.name, out)
+            return installed_pkgs
+
+        refreshed = await self.adb.shell(
+            "pm list packages",
+            timeout=10, allow_failure=True,
+        )
+        refreshed_pkgs = {
+            line.replace("package:", "").strip()
+            for line in refreshed.splitlines()
+            if line.strip().startswith("package:")
+        }
+        if package in refreshed_pkgs:
+            logger.info("Installed local TTS APK: %s", apk.name)
+            return refreshed_pkgs
+        return installed_pkgs
 
     async def _ensure_google_tts_installed(self, installed_pkgs: set[str]) -> set[str]:
         """Install Google Speech Services from NikGapps addon when missing."""
@@ -810,6 +851,11 @@ class RootOps:
                 installed_pkgs.add(espeak_pkg)
 
         installed_pkgs = await self._ensure_google_tts_installed(installed_pkgs)
+        installed_pkgs = await self._ensure_local_tts_apk_installed(
+            rhvoice_pkg,
+            ["rhvoice.apk", "RHVoice.apk"],
+            installed_pkgs,
+        )
 
         current_engine = (
             await self.adb.shell(
@@ -2001,6 +2047,10 @@ class RootOps:
     @staticmethod
     def _download_espeak_apk() -> Optional[str]:
         """Download eSpeak-NG APK from F-Droid. Returns local path or None."""
+        bundled = find_any_bundle_apk(["espeak.apk", "espeak-ng.apk"])
+        if bundled is not None:
+            return str(bundled)
+
         cache_dir = os.path.join(tempfile.gettempdir(), "damru_tts")
         os.makedirs(cache_dir, exist_ok=True)
         apk_path = os.path.join(cache_dir, "espeak-ng.apk")

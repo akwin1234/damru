@@ -29,6 +29,7 @@ from pathlib import PureWindowsPath
 from typing import List, Optional
 
 from .async_core import DamruError
+from .apk_assets import candidate_apk_bundle_roots, find_bundle_apk
 from .config import (
     CONTAINER_BOOT_TIMEOUT,
     DOCKER_CMD_TIMEOUT,
@@ -1010,6 +1011,15 @@ class RedroidManager:
             if not all_apks:
                 raise DamruError(f"No .apk files in directory: {apk_path}")
 
+            webview = find_bundle_apk("TrichromeWebView.apk", apk_path)
+            if webview is not None:
+                logger.info("Installing TrichromeWebView on %s...", serial)
+                await self._run_cmd(
+                    self._adb_cmd("install", "-r", str(webview), serial=serial),
+                    timeout=APK_INSTALL_TIMEOUT,
+                    allow_failure=True,
+                )
+
             # Install TrichromeLibrary first if present (Chrome needs it)
             trichrome = p / "google_trichrome_library.apk"
             if trichrome.exists():
@@ -1239,19 +1249,8 @@ class RedroidManager:
                 return str(p.resolve())
             raise DamruError(f"Chrome APK not found: {explicit_path}")
 
-        pkg_dir = Path(__file__).parent
-        cwd = Path.cwd()
-        search_dirs = [
-            pkg_dir,
-            pkg_dir.parent,
-            pkg_dir.parent.parent,
-            cwd,
-            cwd.parent,
-        ]
-
         # Look for chrome-apks/<version>/ directories
-        for d in search_dirs:
-            apk_root = d / "chrome-apks"
+        for apk_root in candidate_apk_bundle_roots():
             if not apk_root.is_dir():
                 continue
 
@@ -1282,8 +1281,8 @@ class RedroidManager:
             )
             return str(picked.resolve())
 
-        for d in search_dirs:
-            single = d / "chrome.apk"
+        for apk_root in candidate_apk_bundle_roots():
+            single = apk_root.parent / "chrome.apk"
             if single.exists():
                 return str(single.resolve())
 

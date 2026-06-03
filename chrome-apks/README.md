@@ -12,14 +12,15 @@ python -m damru install-apks --download
 
 Google Drive bundle: [Chrome/WebView/TTS APK assets](https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing)
 
-Extract/copy it so this folder contains version directories such as `145.0.7632.75/` with `base.apk`, `google_trichrome_library.apk`, and Chrome split APKs. Keep the top-level WebView/TTS APKs in this same bundle folder too, for example `TrichromeWebView.apk`, `google_tts.apk`, `espeak.apk`, and `rhvoice.apk`.
+Extract/copy it so one bundle root, normally `/home/damru/chrome-apks` on Linux/WSL, contains version directories such as `145.0.7632.75/` with `base.apk`, `google_trichrome_library.apk`, and Chrome split APKs. Keep the top-level WebView/TTS APKs in this same bundle folder too, for example `TrichromeWebView.apk`, `google_tts.apk`, `espeak.apk`, and `rhvoice.apk`.
 
-Manual Linux/WSL example from the project root:
+Manual Linux/WSL example:
 
 ```bash
-mkdir -p chrome-apks
-unzip damru-chrome-apks-latest.zip -d chrome-apks
-find chrome-apks -maxdepth 2 -name '*.apk' | head
+sudo mkdir -p /home/damru
+sudo chown "$USER:$USER" /home/damru
+unzip damru-chrome-apks-latest.zip -d /home/damru/chrome-apks
+find /home/damru/chrome-apks -maxdepth 2 -name '*.apk' | head
 ```
 
 If the archive already contains a top-level `chrome-apks/` directory, extract it beside the project instead. On Windows, use File Explorer or 7-Zip, then copy the resulting `chrome-apks` folder into the Damru project. WSL sees Windows files under `/mnt/c/...`.

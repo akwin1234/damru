@@ -261,9 +261,9 @@ Automatic install:
 python -m damru install-apks --download
 ```
 
-`install-apks` downloads the APK asset bundle, extracts to `./chrome-apks`, validates that APK files exist, and updates `CHROME_APK` only when the extraction path is outside Damru's normal auto-search locations. `install-deps` and `setup` also run this automatically when no baked image and no local APKs are available.
+`install-apks` downloads the APK asset bundle, extracts to `/home/damru/chrome-apks` on Linux/WSL by default, validates that APK files exist, and updates `CHROME_APK` only when needed. `install-deps` and `setup` also run this automatically when no baked image and no local APKs are available.
 
-Extract/copy the bundle so the project contains this layout. The bundle is not only Chrome; it also includes Trichrome WebView and TTS voice APKs used by raw/unbaked Redroid flows:
+Extract/copy the bundle so one bundle root contains this layout. The bundle is not only Chrome; it also includes Trichrome WebView and TTS voice APKs used by raw/unbaked Redroid flows:
 
 ```text
 chrome-apks/
@@ -278,11 +278,10 @@ chrome-apks/
 Manual Linux/WSL extraction, from the directory where you downloaded the bundle:
 
 ```bash
-mkdir -p chrome-apks
-unzip damru-chrome-apks-latest.zip -d chrome-apks
-# If the archive already contains a top-level chrome-apks/ folder, extract beside your project instead:
-# unzip damru-chrome-apks-latest.zip
-find chrome-apks -maxdepth 2 -name '*.apk' | head
+sudo mkdir -p /home/damru
+sudo chown "$USER:$USER" /home/damru
+unzip damru-chrome-apks-latest.zip -d /home/damru/chrome-apks
+find /home/damru/chrome-apks -maxdepth 2 -name '*.apk' | head
 ```
 
 On Windows, extract the archive with File Explorer or 7-Zip, then copy the resulting `chrome-apks` folder into your Damru project folder. If Damru runs inside WSL, the same folder is visible as a `/mnt/c/...` path.
@@ -294,10 +293,10 @@ python -m damru check-env
 python -m damru bake-image --image damru-redroid:latest
 ```
 
-If automatic detection fails, keep the full `chrome-apks/` bundle together and point config/code at the specific Chrome split-APK version directory:
+Damru auto-searches `/home/damru/chrome-apks`, package-local `chrome-apks/`, the current directory's `chrome-apks/`, and the parent directory's `chrome-apks/`. From that one bundle root it discovers Chrome split APKs, `TrichromeWebView.apk`, `google_tts.apk`, `espeak.apk`, and `rhvoice.apk`. If automatic detection fails, keep the full `chrome-apks/` bundle together and point config/code at the specific Chrome split-APK version directory:
 
 ```python
-CHROME_APK = "/path/to/damru/chrome-apks/145.0.7632.75"
+CHROME_APK = "/home/damru/chrome-apks/145.0.7632.75"
 ```
 
 For WSL paths, convert the Windows path to `/mnt/c/...`:
@@ -311,7 +310,7 @@ Or pass it directly in Python:
 ```python
 from damru import AsyncDamru
 
-async with AsyncDamru(chrome_apk="/path/to/damru/chrome-apks/145.0.7632.75") as browser:
+async with AsyncDamru(chrome_apk="/home/damru/chrome-apks/145.0.7632.75") as browser:
     page = await browser.new_page()
 ```
 
@@ -632,19 +631,20 @@ Damru uses a centralized configuration file located at `damru/config.py`. If you
    python -m damru install-apks --download
    ```
 
-   It downloads the [Chrome/WebView/TTS APK bundle](https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing), extracts to `chrome-apks/`, and configures `CHROME_APK` only when needed.
+   It downloads the [Chrome/WebView/TTS APK bundle](https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing), extracts to `/home/damru/chrome-apks` on Linux/WSL, and configures `CHROME_APK` only when needed.
 
-   If you still see an APK asset error, download the same Google Drive bundle manually, extract it as `chrome-apks/`, keep the WebView/TTS APKs beside the Chrome version folders, then set `CHROME_APK` to a Chrome split-APK version directory, for example:
+   If you still see an APK asset error, download the same Google Drive bundle manually, extract it as `/home/damru/chrome-apks`, keep the WebView/TTS APKs beside the Chrome version folders, then set `CHROME_APK` to a Chrome split-APK version directory, for example:
 
    ```python
-   CHROME_APK = "/home/ubuntu/chrome-apks/145.0.7632.75"
+   CHROME_APK = "/home/damru/chrome-apks/145.0.7632.75"
    ```
 
    Manual Linux/WSL extraction example:
    ```bash
-   mkdir -p chrome-apks
-   unzip damru-chrome-apks-latest.zip -d chrome-apks
-   find chrome-apks -maxdepth 2 -name '*.apk' | head
+   sudo mkdir -p /home/damru
+   sudo chown "$USER:$USER" /home/damru
+   unzip damru-chrome-apks-latest.zip -d /home/damru/chrome-apks
+   find /home/damru/chrome-apks -maxdepth 2 -name '*.apk' | head
    ```
 
    ```python

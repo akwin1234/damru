@@ -16,6 +16,7 @@ import time
 import zipfile
 from pathlib import Path
 from pathlib import PureWindowsPath
+from .apk_assets import find_apk_bundle_root, validate_apk_bundle
 
 _DAMRU_IMAGE_TAR = "damru-redroid-latest.tar"
 _DAMRU_IMAGE_SHA256 = "19bfe988e58d41fa031b7df3ebd3a1cb8213cf376b5972c0749a40b42df9feb2"
@@ -545,6 +546,10 @@ def _start_docker_lines(sudo: str = "", attempts: int = 60) -> list[str]:
 
 
 def _chrome_apks_available() -> tuple[bool, str]:
+    bundle_root = find_apk_bundle_root()
+    if bundle_root is not None:
+        return validate_apk_bundle(bundle_root)
+
     try:
         from . import config
 
@@ -1164,6 +1169,7 @@ def _install_deps(args: argparse.Namespace) -> int:
             *_wsl_dns_repair_lines(),
             "apt_update",
             "apt-get install -y android-tools-adb docker.io curl wget git jq cpio gcc iptables kmod ca-certificates acl python3-venv",
+            f"mkdir -p /home/damru && chown {shlex.quote(WSL_USERNAME or 'root')}:{shlex.quote(WSL_USERNAME or 'root')} /home/damru 2>/dev/null || true",
             *backend_lines,
             *_restart_docker_lines(),
             "modprobe binder_linux devices=binder,hwbinder,vndbinder 2>/dev/null || true",
@@ -1180,6 +1186,7 @@ def _install_deps(args: argparse.Namespace) -> int:
             "sudo_cmd apt-get update -y",
             "sudo_cmd apt-get install -y android-tools-adb docker.io curl wget git jq cpio gcc iptables kmod ca-certificates acl python3-venv",
             "if apt-cache show \"linux-modules-extra-$(uname -r)\" >/dev/null 2>&1; then sudo_cmd apt-get install -y \"linux-modules-extra-$(uname -r)\"; fi",
+            "sudo_cmd mkdir -p /home/damru && if [ -n \"${USER:-}\" ]; then sudo_cmd chown \"$USER:$USER\" /home/damru 2>/dev/null || true; fi",
             "if [ -n \"${USER:-}\" ]; then sudo_cmd usermod -aG docker \"$USER\" 2>/dev/null || true; fi",
             *sudo_cmd_backend_lines,
             *_restart_docker_lines("sudo_cmd"),
@@ -1213,6 +1220,7 @@ def _install_deps(args: argparse.Namespace) -> int:
             "sudo apt-get update -y",
             "sudo apt-get install -y android-tools-adb docker.io curl wget git jq cpio gcc iptables kmod ca-certificates acl python3-venv",
             "if apt-cache show \"linux-modules-extra-$(uname -r)\" >/dev/null 2>&1; then sudo apt-get install -y \"linux-modules-extra-$(uname -r)\"; fi",
+            "sudo mkdir -p /home/damru && if [ -n \"${USER:-}\" ]; then sudo chown \"$USER:$USER\" /home/damru 2>/dev/null || true; fi",
             "if [ -n \"${USER:-}\" ]; then sudo usermod -aG docker \"$USER\" 2>/dev/null || true; fi",
             *sudo_backend_lines,
             *_restart_docker_lines("sudo"),
@@ -1671,7 +1679,12 @@ def _install_apks(args: argparse.Namespace) -> int:
         print(f"Not a valid ZIP archive: {zip_path}", file=sys.stderr)
         return 1
 
-    output_root = Path(args.output or (Path.cwd() / "chrome-apks")).expanduser().resolve()
+    if args.output:
+        output_root = Path(args.output).expanduser().resolve()
+    elif _is_windows():
+        output_root = (Path.cwd() / "chrome-apks").resolve()
+    else:
+        output_root = Path("/home/damru/chrome-apks").resolve()
     with zipfile.ZipFile(zip_path) as zf:
         names = [n for n in zf.namelist() if n and not n.endswith("/")]
         if not any(n.lower().endswith(".apk") for n in names):
@@ -1685,10 +1698,11 @@ def _install_apks(args: argparse.Namespace) -> int:
     apk_root = output_root
     if not apk_root.is_dir() and (output_root.parent / "chrome-apks").is_dir():
         apk_root = output_root.parent / "chrome-apks"
-    version_dirs = _chrome_apk_version_dirs(apk_root)
-    if not version_dirs and not any(apk_root.glob("*.apk")):
-        print(f"No APK files found after extraction under {apk_root}", file=sys.stderr)
+    bundle_ok, bundle_detail = validate_apk_bundle(apk_root)
+    if not bundle_ok:
+        print(f"Invalid APK bundle after extraction: {bundle_detail}", file=sys.stderr)
         return 1
+    version_dirs = _chrome_apk_version_dirs(apk_root)
 
     auto_roots = {_repo_root() / "chrome-apks", Path.cwd() / "chrome-apks", Path.cwd().parent / "chrome-apks"}
     if apk_root.resolve() not in {p.resolve() for p in auto_roots}:

@@ -24,6 +24,7 @@ os.environ.setdefault("PLAYWRIGHT_STEALTH_RUNTIME", "1")
 from playwright.async_api import BrowserContext, Page
 
 from .adb import ADB, ADBError
+from .apk_assets import find_bundle_apk
 from .cdp import CDPConnection
 from .chrome import ChromeManager
 from .devices import AndroidDevice, get_device, get_random_device, pick_random_android_version, pick_random_chrome_version
@@ -268,10 +269,8 @@ class AsyncDamru:
                         from .docker import RedroidManager
                         apk_path = RedroidManager().find_chrome_apk(None)
                         _mm = MuMuManager()
-                        # TrichromeWebView lives one level above the version dir
-                        from pathlib import Path as _Path
-                        twv = _Path(apk_path).parent / "TrichromeWebView.apk"
-                        if twv.exists():
+                        twv = find_bundle_apk("TrichromeWebView.apk", apk_path)
+                        if twv is not None:
                             await self._adb.install_apk(str(twv))
                             logger.info("TrichromeWebView installed")
                         await _mm.install_apk(self._serial or "", apk_path)

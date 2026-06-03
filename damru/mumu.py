@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from .async_core import DamruError
+from .apk_assets import find_bundle_apk
 from .config import (
     APK_INSTALL_TIMEOUT,
     CONTAINER_BOOT_TIMEOUT,
@@ -816,6 +817,14 @@ class MuMuManager:
             all_apks = sorted(p.glob("*.apk"))
             if not all_apks:
                 raise DamruError(f"No .apk files in directory: {apk_path}")
+
+            webview = find_bundle_apk("TrichromeWebView.apk", apk_path)
+            if webview is not None:
+                await self._run_plain_adb(
+                    ["adb", "-s", serial, "install", "-r", str(webview)],
+                    timeout=APK_INSTALL_TIMEOUT,
+                    allow_failure=True,
+                )
 
             # Install TrichromeLibrary first if present.
             trichrome = p / "google_trichrome_library.apk"
