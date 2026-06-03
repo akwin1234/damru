@@ -1,17 +1,18 @@
 # Test Suite
 
-Damru has two kinds of tests:
+Damru tests are split into fast unit tests and live environment probes.
 
-- Fast unit tests that do not need Android, Docker, Redroid, ADB, GPU access, or live websites.
-- Environment probes that exercise real WSL/Linux Docker, Redroid, ADB, Chrome, GPU spoofing, fingerprinting sites, and network behavior.
+## Fast Tests
 
-Default pytest runs only the fast unit tests and skips environment-heavy probes:
+Default pytest runs the unit-safe suite and skips Docker, ADB, Redroid, GPU, network, and live website probes.
 
 ```bash
 python -m pytest -q
 ```
 
-Run the live probes only when the machine has the required Linux/WSL Redroid environment ready:
+## Live Probes
+
+Run these only on a prepared Ubuntu/WSL Redroid host:
 
 ```bash
 python -m pytest --run-damru-probes -q
@@ -26,3 +27,7 @@ python -m damru fix-wsl
 ```
 
 Manual probe scripts can still be run directly with `python tests/<script>.py` when you intentionally want a live browser/device check.
+
+## Privacy
+
+Never commit proxy credentials, local usernames, IP addresses, private screenshots, or account data in test fixtures or proof outputs.

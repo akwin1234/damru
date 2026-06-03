@@ -1,20 +1,51 @@
-#  Documentation (`docs/`)
+# Damru Documentation
 
-Welcome to the Damru knowledge base. This directory holds project documentation, architecture plans, roadmaps, and research notes.
+This directory is the long-form knowledge base for Damru. The main README stays quick; these pages hold the operational details, references, and verification notes.
 
----
+## Start Here
 
-## Contents
+| Document | Use it for |
+| --- | --- |
+| [Python API](PYTHON_API.md) | `AsyncDamru`, `Damru`, pools, profiles, proxy options, and examples. |
+| [Proof](PROOF.md) | Sanitized verification results, screenshots, and video proof. |
+| [Device Profiles](DEVICE_PROFILES.md) | Full list of 49 built-in Android identities. |
+| [Viewer](VIEWER.md) | Screenshots, screen recording, and scrcpy live viewer. |
+| [WSL Kernel](WSL_KERNEL.md) | WSL2 custom kernel, Docker NAT, binderfs, and repair behavior. |
+| [WSL Fallback Results](WSL_FALLBACK_TEST_RESULTS.md) | Known degraded WSL behavior and fallback validation. |
+| [Automation Roadmap](AUTOMATION_GAPS_PLAN.md) | Remaining infrastructure and automation work. |
 
-*   **CLI setup**: Run `python -m damru setup` for guided first-run configuration, `python -m damru install-deps` for Linux/WSL dependencies, `python -m damru install-image` to load the baked Redroid image, `python -m damru install-apks --download` for raw Chrome/WebView/TTS APK assets plus Damru's shipped resetprop source when baking or using unbaked Redroid, `python -m damru fix-wsl` for safe Docker/binderfs/netfilter repair, and `python -m damru check-env` to verify Docker, binderfs, image/assets, and the Damru Playwright `crPage.js` patch. WSL setup keeps Docker/Redroid inside WSL and prefers legacy iptables; native Linux prefers nft iptables to match modern Docker daemons.
-*   **Current validation**: Ubuntu WSL2 with Damru's bundled WSL kernel and native Ubuntu VPS were both tested with fresh/reset setup flows, `check-env`, unit tests, single-worker Redroid browser smoke, and two-worker `DamruPool(mode="auto", max_devices=2)` smoke. Both platforms loaded `https://example.com` in concurrent workers with `navigator.hardwareConcurrency == 8`. Debian 13 VPS was tested separately; Docker worked, but Redroid multi-container support failed because the stock Debian VPS kernel had `CONFIG_ANDROID_BINDERFS` disabled.
-*   **[`PROOF.md`](PROOF.md)**: Sanitized WSL/native Linux verification notes plus proof assets: [Android screen recording](assets/proof/ubuntu-redroid-proof.mp4), Example.com proof, and individual site screenshots for Amazon, Foot Locker/DataDome, Fingerprint Pro, Sannysoft, and CreepJS.
-*   **[`DEVICE_PROFILES.md`](DEVICE_PROFILES.md)**: Full generated reference for the 49 Android device profiles available in `damru/devices.py`.
-*   **[`VIEWER.md`](VIEWER.md)**: Optional screenshot, video recording, and scrcpy live-view workflows.
-*   **[`WSL_KERNEL.md`](WSL_KERNEL.md)**: WSL2 kernel requirements for Docker bridge/NAT networking and Redroid binderfs.
-*   **Image baking**: Use `python -m damru install-apks --download`, then `python -m damru bake-image --image damru-redroid:latest` inside Linux/WSL2, then `docker save damru-redroid:latest -o damru-redroid-latest.tar`. The tarball is ignored by Git; keep `damru-redroid-latest.tar.sha256` with the release artifact. The APK installer downloads the Google Drive Chrome/WebView/TTS asset bundle to `/home/damru/chrome-apks` on Linux/WSL and copies Damru's shipped `magisk.apk` there when raw Redroid needs standalone `resetprop`.
-*   **[`AUTOMATION_GAPS_PLAN.md`](AUTOMATION_GAPS_PLAN.md)**: Contains the "Big Plan" for future iterations of Damru. It outlines exactly what features are missing to make Damru a fully autonomous 1-click infrastructure tool (e.g., a CLI installer, automated Docker image baking, and self-healing health checks).
-*   **`architecture/`**: (Coming Soon) Deep dives into the CDP overrides and Android binary patching mechanics.
-*   **`CONTRIBUTING.md`**: Guidelines for contributing to the Damru ecosystem.
+## Supported Path
 
-*More architectural diagrams and research papers regarding browser fingerprinting will be added here as the project evolves.*
+The public supported host path is Ubuntu 24.04 LTS:
+
+- Native Ubuntu 24.04 VPS/Linux.
+- Ubuntu 24.04 inside WSL2 with Damru's bundled WSL kernel.
+
+Debian 13 was tested, but its stock VPS kernel did not expose the binderfs support required for reliable multi-container Redroid. Other Linux variants are future targets, not current support promises.
+
+## Setup Commands
+
+```bash
+python -m damru setup -y
+python -m damru check-env --viewer
+```
+
+Useful recovery commands:
+
+```bash
+python -m damru install-deps -y
+python -m damru fix-wsl
+python -m damru install-apks --download
+python -m damru install-image --download
+```
+
+WSL kernel install:
+
+```powershell
+python -m damru wsl-kernel install --yes --confirm-wsl-kernel-risk
+wsl --shutdown
+```
+
+## Proof Assets
+
+Proof assets live under `docs/assets/proof/` and are sanitized before publication. Do not commit proxy credentials, private IP addresses, account data, local usernames, or private screenshots.

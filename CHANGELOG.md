@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Reworked the main README into a cleaner front page with support status, quickstart, proof, examples, CLI reference, asset links, WSL kernel links, and legal policy summary.
+- Polished small README files for the docs, core library, APK bundle, native layer, bundled WSL kernel, tools, and tests directories.
 - Broadened the legal policy so attribution and unofficial-copy requirements apply to the full Damru codebase, docs, native code, examples, tests, configs, package metadata, release artifacts, and proof assets.
 - Tightened fork/mirror attribution policy so public copies must preserve the license, credit Damru visibly, and identify themselves as unofficial unless maintained by the Damru maintainers.
 - Published the Damru WSL2 Redroid/NAT kernel source fork and compiled kernel release, and linked them from WSL kernel documentation.
