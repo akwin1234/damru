@@ -303,8 +303,8 @@ async def main():
                             if(!gl)return JSON.stringify({error:'no webgl'});
                             var ext=gl.getExtension('WEBGL_debug_renderer_info');
                             return JSON.stringify({
-                                vendor:ext?gl.getParameter(ext.UNMASKED_VENDOR_WEBGL):gl.getParameter(gl.VENDOR),
-                                renderer:ext?gl.getParameter(ext.UNMASKED_RENDERER_WEBGL):gl.getParameter(gl.RENDERER)
+                                vendor:extgl.getParameter(ext.UNMASKED_VENDOR_WEBGL):gl.getParameter(gl.VENDOR),
+                                renderer:extgl.getParameter(ext.UNMASKED_RENDERER_WEBGL):gl.getParameter(gl.RENDERER)
                             });
                         })()""",
                         "returnByValue": True,

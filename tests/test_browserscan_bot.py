@@ -36,7 +36,7 @@ async def main():
             await sleep(1)
             ip_text = await page.evaluate("() => document.body.innerText")
             ip_data = json.loads(ip_text)
-            print(f"  Exit IP: {ip_data.get('ip', '?')} ({ip_data.get('org', '?')}, {ip_data.get('city', '?')}, {ip_data.get('country', '?')})")
+            print(f"  Exit IP: {ip_data.get('ip', '')} ({ip_data.get('org', '')}, {ip_data.get('city', '')}, {ip_data.get('country', '')})")
         except Exception as e:
             print(f"  IP check failed: {e}")
 

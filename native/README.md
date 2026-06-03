@@ -1,13 +1,13 @@
-﻿# âš™ï¸ Native Binaries (`native/`)
+# Native Binaries (`native/`)
 
 Welcome to the deepest layer of Damru's stealth architecture. This folder contains the **C source code and compiled shared objects (`.so`)** used for **Layer 2 (Binary)** spoofing.
 
-> **Why native patching?** 
+> **Why native patching?**
 > Anti-bot scripts like *CreepJS* and *BrowserScan* can ask the browser directly what GPU it is using. Relying on JavaScript wrappers to fake this response leaves trace evidence. Damru bypasses this entirely by physically altering the underlying Vulkan and OpenGL drivers of the Android OS.
 
 ---
 
-## ðŸ› ï¸ What's Inside
+## What's Inside
 
 | File / Component | Description |
 | :--- | :--- |
@@ -17,9 +17,9 @@ Welcome to the deepest layer of Damru's stealth architecture. This folder contai
 
 ---
 
-## ðŸš€ How It Is Applied
+## How It Is Applied
 
 *   **Manual Deployment**: If you are using the manual/base Redroid image, Damru will automatically push these `.so` files via ADB into the Android filesystem (e.g., `/vendor/lib64/`) and configure the environment variables (`LD_PRELOAD`, `VK_INSTANCE_LAYERS`) so Chrome loads them upon launch.
-*   **Instant Boot Deployment**: If you use the pre-baked [damru-redroid-latest.tar](https://drive.google.com/file/d/1AzSTOlGpSfqHB-F-Yty2JqbOEMlgFT5F/view?usp=sharing) OS image, these binaries are *already injected permanently* into the OS, drastically speeding up boot times and reducing runtime points of failure.
+*   **Instant Boot Deployment**: If you use the pre-baked [damru-redroid-latest.tar](https://drive.google.com/file/d/1AzSTOlGpSfqHB-F-Yty2JqbOEMlgFT5F/viewusp=sharing) OS image, these binaries are *already injected permanently* into the OS, drastically speeding up boot times and reducing runtime points of failure.
 
 *For instructions on modifying and recompiling these binaries using the NDK, see the inline comments within the `.c` source files.*

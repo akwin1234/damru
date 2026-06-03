@@ -39,7 +39,7 @@ async def goto_retry(page, url, retries=8, wait_until="domcontentloaded", timeou
 async def main():
     setup_logging(debug=False)
     print("=" * 60)
-    print("  Battery Spoof + CreepJS â€” Full AsyncDamru Pipeline")
+    print("  Battery Spoof + CreepJS - Full AsyncDamru Pipeline")
     print("=" * 60)
 
     async with AsyncDamru(
@@ -66,11 +66,11 @@ async def main():
                     };
                 } catch(e) { return {error: e.message}; }
             }""")
-            level = battery.get("level", "?")
-            charging = battery.get("charging", "?")
+            level = battery.get("level", "")
+            charging = battery.get("charging", "")
             print(f"    Level: {level}")
             print(f"    Charging: {charging}")
-            print(f"    ChargingTime: {battery.get('chargingTime', '?')}")
+            print(f"    ChargingTime: {battery.get('chargingTime', '')}")
 
             if charging is False and level != "100%":
                 print("    PASS: Battery looks like a real phone")
@@ -134,12 +134,12 @@ async def main():
             print(f"    Model: {hw.get('model')}, Platform: {hw.get('platform')}")
             print(f"    PlatformVersion: {hw.get('platformVersion')}")
             print(f"    Brands: {hw.get('brands', '')[:90]}")
-            print(f"    GPU: {hw.get('gpu_renderer', '?')}")
+            print(f"    GPU: {hw.get('gpu_renderer', '')}")
             print(f"    Webdriver: {hw.get('webdriver')}")
             print(f"    Touch: maxTouchPoints={hw.get('maxTouchPoints')}, ontouchstart={hw.get('ontouchstart')}")
             print(f"    CSS: pointer:coarse={hw.get('pointerCoarse')}, any-pointer:coarse={hw.get('anyPointerCoarse')}, hover:none={hw.get('hoverNone')}")
             print(f"    Network: type={hw.get('netType')}, effective={hw.get('netEffective')}, rtt={hw.get('netRtt')}, downlink={hw.get('netDownlink')}")
-            print(f"    Storage: {hw.get('storageQuotaGB', '?')}GB")
+            print(f"    Storage: {hw.get('storageQuotaGB', '')}GB")
 
             # Verdict
             gpu = hw.get('gpu_renderer', '')

@@ -31,7 +31,7 @@ async def test_todetect(page):
 
     data = await page.evaluate(r"""() => {
         const all = document.body.innerText;
-        const scoreMatch = all.match(/(?:overall|total|score|result)[:\s]*(-?\d+)/i);
+        const scoreMatch = all.match(/(:overall|total|score|result)[:\s]*(-\d+)/i);
         const percentMatch = all.match(/(\d+)\s*%/);
         
         const tables = [];
@@ -45,13 +45,13 @@ async def test_todetect(page):
         }
 
         return {
-            score: scoreMatch ? scoreMatch[1] : percentMatch ? percentMatch[1] + "%" : "N/A",
+            score: scoreMatch  scoreMatch[1] : percentMatch  percentMatch[1] + "%" : "N/A",
             tables: tables.slice(0, 5),
             pageText: all.substring(0, 2000),
         };
     }""")
 
-    print(f"\n  Score: {data.get('score', '?')}")
+    print(f"\n  Score: {data.get('score', '')}")
     if data.get("tables"):
         for i, table in enumerate(data["tables"]):
             print(f"\n  Table {i + 1}:")
@@ -97,16 +97,16 @@ async def test_fingerprint(page):
             }
 
             return {
-                visitorId: visitorIdMatch ? visitorIdMatch[1] : "N/A",
+                visitorId: visitorIdMatch  visitorIdMatch[1] : "N/A",
                 botDetected: botDetected && !notBot,
-                botStatus: botMatch ? botMatch[1] : (notBot ? "not detected" : (botDetected ? "detected" : "N/A")),
+                botStatus: botMatch  botMatch[1] : (notBot  "not detected" : (botDetected  "detected" : "N/A")),
                 tables: tables.slice(0, 5),
                 pageText: all.substring(0, 2000),
             };
         }""", timeout=5000)
         
-        print(f"\n  Visitor ID: {data.get('visitorId', '?')}")
-        print(f"  Bot Status: {data.get('botStatus', '?')}")
+        print(f"\n  Visitor ID: {data.get('visitorId', '')}")
+        print(f"  Bot Status: {data.get('botStatus', '')}")
         
         if data.get("tables"):
             for i, table in enumerate(data["tables"]):
@@ -166,8 +166,8 @@ async def main():
         print("  SUMMARY")
         print("=" * 60)
         print(f"  Total time: {report['total_time_s']}s")
-        print(f"  todetect score: {results.get('todetect', {}).get('score', '?')}")
-        print(f"  fingerprint bot: {results.get('fingerprint', {}).get('botStatus', '?')}")
+        print(f"  todetect score: {results.get('todetect', {}).get('score', '')}")
+        print(f"  fingerprint bot: {results.get('fingerprint', {}).get('botStatus', '')}")
         print(f"\n  Report: {out_path}")
 
     print("\nDone!")

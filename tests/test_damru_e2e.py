@@ -68,7 +68,7 @@ async def main():
     print(f"[6] Chrome: {chrome.package} v{version}")
 
     if not version:
-        print("    Chrome not installed â€” skipping launch test")
+        print("    Chrome not installed - skipping launch test")
         return
 
     # 6b. Set system HTTP proxy BEFORE Chrome launch (so all traffic routes through it)
@@ -93,7 +93,7 @@ async def main():
     print(f"[9] Devtools socket: {socket_ok}")
 
     if not socket_ok:
-        print("    No devtools socket â€” cannot connect CDP")
+        print("    No devtools socket - cannot connect CDP")
         await chrome.force_stop()
         return
 
@@ -148,8 +148,8 @@ async def main():
             if (!gl) return {error: 'no webgl'};
             const ext = gl.getExtension('WEBGL_debug_renderer_info');
             return {
-                vendor: ext ? gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR),
-                renderer: ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)
+                vendor: ext  gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR),
+                renderer: ext  gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)
             };
         }""")
         print(f"\n{'='*60}")
@@ -179,7 +179,7 @@ async def main():
             }
             // Extract Android version from UA string
             const m = navigator.userAgent.match(/Android (\\d+)/);
-            r.android_ver = m ? m[1] : 'unknown';
+            r.android_ver = m  m[1] : 'unknown';
             return r;
         }""")
         print(f"\n[11b] UA Check:")
@@ -199,7 +199,7 @@ async def main():
                     platformVersion: d.platformVersion,
                     model: d.model,
                     arch: d.architecture,
-                    brands: d.fullVersionList?.map(b => b.brand + '/' + b.version).join(', ')
+                    brands: d.fullVersionList.map(b => b.brand + '/' + b.version).join(', ')
                 };
             }""")
             print(f"    CH platformVersion: {ch.get('platformVersion')}")
@@ -208,11 +208,11 @@ async def main():
         except Exception as e:
             print(f"    Client Hints: {e}")
 
-    # 12. IP / WebRTC leak tests (requires proxy â€” already set at step 6b)
+    # 12. IP / WebRTC leak tests (requires proxy - already set at step 6b)
     if proxy and page:
         print(f"\n[12] IP Leak Tests (proxy={proxy})")
 
-        # ipleak.net â€” check visible IP + WebRTC
+        # ipleak.net - check visible IP + WebRTC
         try:
             await page.goto("https://ipleak.net/", wait_until="load", timeout=30000)
             await asyncio.sleep(8)  # Wait for JS-rendered content
@@ -242,7 +242,7 @@ async def main():
                 });
                 return { ip: ip || 'not found', webrtc: webrtcIps, title: document.title };
             }""")
-            print(f"    ipleak.net: IP={ip_info.get('ip', '?')}")
+            print(f"    ipleak.net: IP={ip_info.get('ip', '')}")
             webrtc = ip_info.get('webrtc', [])
             if webrtc:
                 print(f"    ipleak.net WebRTC LEAK: {webrtc}")
@@ -251,7 +251,7 @@ async def main():
         except Exception as e:
             print(f"    ipleak.net: error - {e}")
 
-        # whoer.net â€” overall anonymity score
+        # whoer.net - overall anonymity score
         try:
             await page.goto("https://whoer.net/", wait_until="domcontentloaded", timeout=60000)
             await asyncio.sleep(15)  # whoer.net is heavy JS, needs time
@@ -262,12 +262,12 @@ async def main():
                 // Extract anonymity percentage
                 const pctMatch = body.match(/(\\d+)\\s*%/);
                 return {
-                    ip: ipMatch ? ipMatch[1] : 'N/A',
-                    score: pctMatch ? pctMatch[1] + '%' : 'N/A',
+                    ip: ipMatch  ipMatch[1] : 'N/A',
+                    score: pctMatch  pctMatch[1] + '%' : 'N/A',
                     title: document.title
                 };
             }""")
-            print(f"    whoer.net: score={whoer.get('score', '?')}, IP={whoer.get('ip', '?')}")
+            print(f"    whoer.net: score={whoer.get('score', '')}, IP={whoer.get('ip', '')}")
         except Exception as e:
             print(f"    whoer.net: error - {e}")
 

@@ -89,12 +89,12 @@ python -m damru install-viewer
 ### 4. No Dependency Management
 
 **Missing checks for:**
--  ADB installed?
--  Python packages (playwright, etc.)?
--  Chrome APK availability?
--  WSL2 kernel version? (partially covered by `check-env` and `fix-wsl` when Docker/netfilter modules are missing)
--  Sufficient disk space?
--  Network connectivity?
+-  ADB installed
+-  Python packages (playwright, etc.)
+-  Chrome APK availability
+-  WSL2 kernel version (partially covered by `check-env` and `fix-wsl` when Docker/netfilter modules are missing)
+-  Sufficient disk space
+-  Network connectivity
 
 ---
 

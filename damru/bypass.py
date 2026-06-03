@@ -175,7 +175,7 @@ def arm_bypass_sync(page, domain: str, http_proxy: Optional[str] = None) -> None
         method = req.method.upper()
         post_data = req.post_data
         fwd = _make_bypass_headers(hdrs, req)
-        url_path = url.split("?")[0]
+        url_path = url.split("")[0]
 
         if url_path in _sensor_served:
             route.continue_()
@@ -243,7 +243,7 @@ async def arm_bypass_async(page, domain: str, http_proxy: Optional[str] = None) 
         method = req.method.upper()
         post_data = req.post_data
         fwd = _make_bypass_headers(hdrs, req)
-        url_path = url.split("?")[0]
+        url_path = url.split("")[0]
 
         if url_path in _sensor_served:
             await route.continue_()
@@ -320,7 +320,7 @@ async def goto_with_bypass(page, url: str, http_proxy: Optional[str] = None, tim
         resp = await page.goto(url, timeout=timeout, wait_until=wait_until)
         return (resp.status if resp else 0), await page.title()
     html_bytes = html_body.encode("utf-8")
-    route_pattern = url.split("?")[0] + "*"
+    route_pattern = url.split("")[0] + "*"
     async def _route_handler(route):
         if route.request.resource_type == "document":
             await route.fulfill(status=200, content_type="text/html; charset=utf-8", body=html_bytes)
@@ -341,7 +341,7 @@ def goto_with_bypass_sync(page, url: str, http_proxy: Optional[str] = None, time
         resp = page.goto(url, timeout=timeout, wait_until=wait_until)
         return (resp.status if resp else 0), page.title()
     html_bytes = html_body.encode("utf-8")
-    route_pattern = url.split("?")[0] + "*"
+    route_pattern = url.split("")[0] + "*"
     def _route_handler(route):
         if route.request.resource_type == "document":
             route.fulfill(status=200, content_type="text/html; charset=utf-8", body=html_bytes)

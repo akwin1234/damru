@@ -5,7 +5,7 @@ Two modes:
   Auto:   Spin up redroid Docker containers (WSL2 on Windows, native on Linux).
   MuMu:   Auto-manage MuMu instances via MuMuManager.exe on Windows.
 
-Containers/emulators are REUSED â€” only Chrome is recycled per session
+Containers/emulators are REUSED - only Chrome is recycled per session
 (stop -> clear cache -> change fingerprint via root -> restart Chrome).
 
 Both async (DamruPool) and sync (DamruPoolSync) APIs provided.
@@ -191,7 +191,7 @@ class DamruPool:
             self._health_task = None
 
         if self._mode == "auto" and self._docker:
-            # Don't stop containers â€” keep them alive for next run
+            # Don't stop containers - keep them alive for next run
             # Just disconnect ADB connections
             adb = ADB()
             for slot in self._slots:
@@ -224,7 +224,7 @@ class DamruPool:
         if sys.platform == "win32":
             await asyncio.sleep(2.0)
 
-    # â”€â”€ Manual mode init â”€â”€
+    # -- Manual mode init --
 
     async def _init_manual(self) -> None:
         """Discover existing ADB devices and create slots."""
@@ -251,7 +251,7 @@ class DamruPool:
                 i, dev["serial"], dev.get("model", "unknown"),
             )
 
-    # â”€â”€ Auto mode init â”€â”€
+    # -- Auto mode init --
 
     async def _init_auto(self) -> None:
         """Start redroid containers and create slots.
@@ -422,7 +422,7 @@ class DamruPool:
         )
         self._slots.extend(slots)
 
-    # â”€â”€ Session management â”€â”€
+    # -- Session management --
 
     @asynccontextmanager
     async def session(
@@ -433,7 +433,7 @@ class DamruPool:
     ):
         """Acquire a device, apply fresh fingerprint, yield BrowserContext.
 
-        The container/emulator stays running â€” only Chrome is recycled.
+        The container/emulator stays running - only Chrome is recycled.
         Each session gets a unique random device fingerprint unless
         a specific device name is provided.
 
@@ -543,10 +543,10 @@ class DamruPool:
             self._release_slot(slot)
 
     async def _task_watchdog(self, damru: AsyncDamru, slot: DeviceSlot, timeout: float) -> None:
-        """Kill Chrome after task_timeout. User code gets errors â†’ exits with block."""
+        """Kill Chrome after task_timeout. User code gets errors -> exits with block."""
         await asyncio.sleep(timeout)
         logger.warning(
-            "Task timeout (%ds) on slot %d â€” killing Chrome",
+            "Task timeout (%ds) on slot %d - killing Chrome",
             timeout, slot.index,
         )
         if damru._chrome:
@@ -575,7 +575,7 @@ class DamruPool:
 
         return await asyncio.gather(*[_run(item) for item in items])
 
-    # â”€â”€ Slot management â”€â”€
+    # -- Slot management --
 
     async def _acquire_slot(self) -> DeviceSlot:
         """Wait for and return a free healthy slot."""
@@ -596,7 +596,7 @@ class DamruPool:
         slot.busy = False
         self._free_event.set()
 
-    # â”€â”€ Health monitoring â”€â”€
+    # -- Health monitoring --
 
     async def _health_loop(self) -> None:
         """Background task: periodically check ADB connectivity of idle slots."""
@@ -613,7 +613,7 @@ class DamruPool:
                     if "ok" not in out:
                         raise Exception("ADB unresponsive")
                 except Exception:
-                    # Re-check busy â€” another coroutine may have acquired it during await
+                    # Re-check busy - another coroutine may have acquired it during await
                     if slot.busy:
                         continue
                     logger.warning("Slot %d unresponsive, recovering...", slot.index)
@@ -623,7 +623,7 @@ class DamruPool:
         """Attempt to recover an unresponsive slot."""
         if slot.container_index is None:
             slot.healthy = False
-            logger.error("Slot %d (manual mode) unresponsive â€” marked dead", slot.index)
+            logger.error("Slot %d (manual mode) unresponsive - marked dead", slot.index)
             return
 
         slot.restart_count += 1
@@ -654,7 +654,7 @@ class DamruPool:
                 slot.serial = serial
             else:
                 slot.healthy = False
-                logger.error("Slot %d (manual mode) unresponsive â€” marked dead", slot.index)
+                logger.error("Slot %d (manual mode) unresponsive - marked dead", slot.index)
                 return
 
             slot.healthy = True
@@ -693,7 +693,7 @@ class DamruPool:
             )
             slot.serial = ensured
 
-    # â”€â”€ Proxy routing â”€â”€
+    # -- Proxy routing --
 
     def _get_proxy(self, index: int) -> Optional[str]:
         if self._proxies:
@@ -705,7 +705,7 @@ class DamruPool:
             return self._http_proxies[index % len(self._http_proxies)]
         return self._http_proxy
 
-    # â”€â”€ Properties â”€â”€
+    # -- Properties --
 
     @property
     def slots(self) -> List[DeviceSlot]:
@@ -858,7 +858,7 @@ class DamruPoolSync:
         proxy: Optional[str] = None,
         task_timeout: Optional[float] = _UNSET,
     ):
-        """Sync context manager â€” acquires slot, applies fingerprint, yields SYNC context.
+        """Sync context manager - acquires slot, applies fingerprint, yields SYNC context.
 
         Thread-safe: can be called from multiple ThreadPoolExecutor workers.
 
@@ -874,7 +874,7 @@ class DamruPoolSync:
                 config.TASK_TIMEOUT.
         """
         if not self._loop or not self._loop.is_running():
-            raise DamruError("Pool not initialized â€” use inside 'with' block")
+            raise DamruError("Pool not initialized - use inside 'with' block")
 
         timeout = task_timeout if task_timeout is not _UNSET else self._pool._task_timeout
         damru_ref: List[Optional[AsyncDamru]] = [None]
@@ -992,11 +992,11 @@ class DamruPoolSync:
                     pass
 
         def _on_task_timeout():
-            logger.warning("Task timeout (%ds) â€” killing Chrome", timeout)
+            logger.warning("Task timeout (%ds) - killing Chrome", timeout)
             if self._loop and self._loop.is_running():
                 asyncio.run_coroutine_threadsafe(_kill_chrome(), self._loop)
 
-        # â”€â”€ Phase 1: Async setup (fingerprint, Chrome, CDP, hardware overrides) â”€â”€
+        # -- Phase 1: Async setup (fingerprint, Chrome, CDP, hardware overrides) --
         max_enter_time = (
             (self._pool._max_retries + 1)
             * (self._pool._session_timeout + self._pool._cleanup_timeout + 5)
@@ -1004,7 +1004,7 @@ class DamruPoolSync:
         fut = asyncio.run_coroutine_threadsafe(_enter(), self._loop)
         fut.result(timeout=max_enter_time)
 
-        # â”€â”€ Phase 2: Swap async CDP â†’ sync CDP â”€â”€
+        # -- Phase 2: Swap async CDP -> sync CDP --
         swap_fut = asyncio.run_coroutine_threadsafe(_swap_to_sync(), self._loop)
         cdp_port, sync_overrides = swap_fut.result(timeout=15)
 
@@ -1027,7 +1027,7 @@ class DamruPoolSync:
             # Re-apply hardware overrides on the sync context
             _apply_sync_overrides(sync_ctx, sync_overrides)
         except Exception as e:
-            # Sync connect failed â€” clean up and raise
+            # Sync connect failed - clean up and raise
             if sync_browser:
                 try:
                     sync_browser.close()
@@ -1046,7 +1046,7 @@ class DamruPoolSync:
                 pass
             raise DamruError(f"Sync CDP reconnect failed: {e}")
 
-        # â”€â”€ Phase 3: Yield sync BrowserContext to caller â”€â”€
+        # -- Phase 3: Yield sync BrowserContext to caller --
         timer = None
         try:
             if timeout:

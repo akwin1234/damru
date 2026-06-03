@@ -31,7 +31,7 @@ async def capture_tls(ctx, session_num: int) -> dict:
         body_text = await page.evaluate("""
             () => {
                 const pre = document.querySelector('pre');
-                return pre ? pre.textContent : document.body.innerText;
+                return pre  pre.textContent : document.body.innerText;
             }
         """)
 

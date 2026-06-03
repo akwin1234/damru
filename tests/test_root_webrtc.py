@@ -14,7 +14,7 @@ class FakeADB:
         if "iptables -L OUTPUT" in command:
             return self.iptables_output
         if "iptables -C OUTPUT" in command:
-            return "iptables: Bad rule (does a matching rule exist in that chain?)."
+            return "iptables: Bad rule (does a matching rule exist in that chain)."
         if command.startswith("stat -c"):
             return "u0_a123"
         return ""

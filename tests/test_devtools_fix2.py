@@ -1,7 +1,7 @@
 ﻿"""Test fingerprint.com/demo with CDP disconnect during fingerprinting.
 
-Strategy: Connect CDP â†’ set overrides â†’ navigate â†’ DISCONNECT CDP â†’
-wait for fingerprinting â†’ RECONNECT CDP â†’ extract results.
+Strategy: Connect CDP -> set overrides -> navigate -> DISCONNECT CDP ->
+wait for fingerprinting -> RECONNECT CDP -> extract results.
 
 FingerprintJS can't detect DevTools if CDP isn't connected during
 the fingerprinting phase.
@@ -21,7 +21,7 @@ PH_HTTP = "proxy.example:50000"
 
 async def main():
     print("=" * 70)
-    print("  fingerprint.com/demo â€” CDP disconnect test")
+    print("  fingerprint.com/demo - CDP disconnect test")
     print("=" * 70)
 
     async with AsyncDamru(
@@ -48,7 +48,7 @@ async def main():
         # UA is already in HTTP headers, touch/cores are renderer-level
         await sleep(1)
 
-        # Step 3: DISCONNECT CDP â€” fingerprinting script runs without DevTools
+        # Step 3: DISCONNECT CDP - fingerprinting script runs without DevTools
         print("\n  [2] Disconnecting CDP...")
         damru = context  # This is the BrowserContext, we need the AsyncDamru
         # Actually we need to access the AsyncDamru instance directly
@@ -99,7 +99,7 @@ async def main():
             print("  ERROR: No pages found after reconnect")
             return
         page = pages[0]
-        print(f"  Reconnected â€” page URL: {page.url}")
+        print(f"  Reconnected - page URL: {page.url}")
 
         # Step 5: Extract the fingerprint report
         print("  [5] Extracting results...")

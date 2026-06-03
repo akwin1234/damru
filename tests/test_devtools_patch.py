@@ -106,7 +106,7 @@ async def main():
 
                 // Search for signal values in the full text
                 const signalPatterns = {
-                    'botDetection': /bot\s*(?:detection|detected)[:\s]*([^\n]+)/i,
+                    'botDetection': /bot\s*(:detection|detected)[:\s]*([^\n]+)/i,
                     'tampering': /tampering[:\s]*([^\n]+)/i,
                     'emulator': /emulator[:\s]*([^\n]+)/i,
                     'vpn': /vpn[:\s]*([^\n]+)/i,

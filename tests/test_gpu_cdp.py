@@ -36,7 +36,7 @@ async def main():
     print("[1/8] Connecting ADB...")
     await adb.ensure_server()
     info = await adb.get_device_info()
-    print(f"  Device: {info.get('model', '?')} Android {info.get('android_version', '?')}")
+    print(f"  Device: {info.get('model', '')} Android {info.get('android_version', '')}")
 
     # Step 2: Check root
     print("[2/8] Checking root...")
@@ -145,8 +145,8 @@ async def main():
                         if (!gl) return JSON.stringify({error: 'no webgl context'});
                         var ext = gl.getExtension('WEBGL_debug_renderer_info');
                         return JSON.stringify({
-                            vendor: ext ? gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR),
-                            renderer: ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)
+                            vendor: ext  gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR),
+                            renderer: ext  gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)
                         });
                     })()
                     """,

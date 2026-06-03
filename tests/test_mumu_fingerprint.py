@@ -41,10 +41,10 @@ async def main():
         target = random.choice(pool or DEVICES)
 
     print("=" * 60)
-    print("  MuMu â€” fingerprint.com/demo")
+    print("  MuMu - fingerprint.com/demo")
     print("=" * 60)
     print(f"  Device:  {target.name}  (Android {target.android_version})")
-    print(f"  GPU:     {target.gpu_family} â€” {target.webgl_renderer}")
+    print(f"  GPU:     {target.gpu_family} - {target.webgl_renderer}")
     print(f"  mem:     {target.device_memory} GB   cores: {target.hardware_concurrency}")
     print()
 
@@ -60,7 +60,7 @@ async def main():
         page = ctx.pages[0] if ctx.pages else await ctx.new_page()
 
         await page.goto("https://fingerprint.com/demo/", wait_until="domcontentloaded", timeout=90000)
-        print("  Loaded â€” waiting 60s for analysis...")
+        print("  Loaded - waiting 60s for analysis...")
         await sleep(60)
 
         ss = os.path.join(RESULTS_DIR, "fingerprint.png")
@@ -80,7 +80,7 @@ async def main():
                 // Scores and signals
                 const suspectMatch = all.match(/suspect\s*score[:\s]*(\d+)/i);
                 const emulatorMatch = all.match(/emulator[:\s]*(true|false)/i);
-                const rootMatch = all.match(/root\s*apps?[:\s]*(true|false)/i);
+                const rootMatch = all.match(/root\s*apps[:\s]*(true|false)/i);
                 const confidenceMatch = all.match(/confidence[:\s]*([\d.]+)/i);
                 const visitorIdMatch = all.match(/visitor\s*id[:\s]*([A-Z0-9]{20,})/i);
                 // Collect all key: value pairs from the demo sections
@@ -99,12 +99,12 @@ async def main():
                     if (pre) apiData = JSON.parse(pre.textContent);
                 } catch(e) {}
                 return {
-                    botStatus: notBot ? "notDetected" : (botDetected ? "detected" : "N/A"),
-                    suspectScore: suspectMatch ? suspectMatch[1] : "N/A",
-                    emulator: emulatorMatch ? emulatorMatch[1] : "N/A",
-                    rootApps: rootMatch ? rootMatch[1] : "N/A",
-                    confidence: confidenceMatch ? confidenceMatch[1] : "N/A",
-                    visitorId: visitorIdMatch ? visitorIdMatch[1] : "N/A",
+                    botStatus: notBot  "notDetected" : (botDetected  "detected" : "N/A"),
+                    suspectScore: suspectMatch  suspectMatch[1] : "N/A",
+                    emulator: emulatorMatch  emulatorMatch[1] : "N/A",
+                    rootApps: rootMatch  rootMatch[1] : "N/A",
+                    confidence: confidenceMatch  confidenceMatch[1] : "N/A",
+                    visitorId: visitorIdMatch  visitorIdMatch[1] : "N/A",
                     signals: signals,
                     apiData: apiData,
                     pageText: all.substring(0, 5000),
@@ -115,12 +115,12 @@ async def main():
             data = {"error": str(e)}
 
         elapsed = round(time.monotonic() - t_start, 1)
-        print(f"\n  Bot status:    {data.get('botStatus', '?')}")
-        print(f"  Suspect score: {data.get('suspectScore', '?')}")
-        print(f"  Emulator:      {data.get('emulator', '?')}")
-        print(f"  Root apps:     {data.get('rootApps', '?')}")
-        print(f"  Confidence:    {data.get('confidence', '?')}")
-        print(f"  Visitor ID:    {data.get('visitorId', '?')}")
+        print(f"\n  Bot status:    {data.get('botStatus', '')}")
+        print(f"  Suspect score: {data.get('suspectScore', '')}")
+        print(f"  Emulator:      {data.get('emulator', '')}")
+        print(f"  Root apps:     {data.get('rootApps', '')}")
+        print(f"  Confidence:    {data.get('confidence', '')}")
+        print(f"  Visitor ID:    {data.get('visitorId', '')}")
         print(f"  Time:          {elapsed}s")
         signals = data.get("signals", {})
         if signals:
@@ -136,7 +136,7 @@ async def main():
                 if k in api:
                     print(f"    {k}: {api[k]}")
         if data.get("suspectScore") == "N/A" and not signals and not api:
-            print("\n  [Page still loading â€” increase wait time or check screenshot]")
+            print("\n  [Page still loading - increase wait time or check screenshot]")
             print(f"\n  Page text (first 500 chars):\n  {data.get('pageText','')[:500]}")
 
         report = {

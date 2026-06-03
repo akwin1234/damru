@@ -46,15 +46,15 @@ async def main():
                     if (rows.length > 0) tables.push(rows);
                 }
                 return {
-                    visitorId: visitorIdMatch ? visitorIdMatch[1] : "N/A",
-                    botStatus: notBot ? "not detected" : (botDetected ? "detected" : "N/A"),
+                    visitorId: visitorIdMatch  visitorIdMatch[1] : "N/A",
+                    botStatus: notBot  "not detected" : (botDetected  "detected" : "N/A"),
                     tables: tables.slice(0, 5),
                     pageText: all.substring(0, 2000)
                 };
             }""", timeout=5000)
             
-            print(f"\n  Visitor ID: {data.get('visitorId', '?')}")
-            print(f"  Bot Status: {data.get('botStatus', '?')}")
+            print(f"\n  Visitor ID: {data.get('visitorId', '')}")
+            print(f"  Bot Status: {data.get('botStatus', '')}")
             
             if data.get("tables"):
                 for i, table in enumerate(data["tables"]):

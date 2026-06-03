@@ -107,7 +107,7 @@ _COUNTRY_LOCALE_VARIANTS: Dict[str, List[str]] = {
     "YT": ["fr-YT"], "ZA": ["en-ZA", "af-ZA", "zu-ZA"], "ZM": ["en-ZM"], "ZW": ["en-ZW"],
 }
 
-# Timezone â†’ BCP-47 locale mapping (ported from fingerprint-chromium)
+# Timezone -> BCP-47 locale mapping (ported from fingerprint-chromium)
 _TIMEZONE_LOCALE_MAP: Dict[str, str] = {
     # Asia Pacific
     "Asia/Manila": "fil-PH",
@@ -214,7 +214,7 @@ def build_accept_language(locale: str) -> str:
     elif lang == "en":
         return f"{locale},en-US;q=0.9,en;q=0.8"
     elif lang == "fil":
-        # Filipino locale: fil as secondary (NOT en-PH â€” that's artificial and suspicious)
+        # Filipino locale: fil as secondary (NOT en-PH - that's artificial and suspicious)
         # Real Android Chrome in PH sends: fil-PH,fil;q=0.9,en-US;q=0.8,en;q=0.7
         return f"{locale},{lang};q=0.9,en-US;q=0.8,en;q=0.7"
     elif locale == "en-PH":
@@ -310,7 +310,7 @@ def resolve_system_proxy(
     if scheme in ("http", "https"):
         return f"{host}:{port}"
 
-    # 4. SOCKS5 â†’ try HTTP on port-1 (common proxy provider pattern)
+    # 4. SOCKS5 -> try HTTP on port-1 (common proxy provider pattern)
     if scheme in ("socks5", "socks5h"):
         http_port = port - 1
         logger.info(
@@ -358,7 +358,7 @@ def resolve_proxy_geo(proxy: str, retries: int = 3, use_cache: bool = False) -> 
     _ENDPOINTS = [
         ("https://ipapi.co/json/", lambda d: (d.get("timezone"), d.get("country_code"), d.get("ip"))),
         ("https://ipinfo.io/json", lambda d: (d.get("timezone"), d.get("country"), d.get("ip"))),
-        ("http://ip-api.com/json/?fields=query,timezone,countryCode", lambda d: (d.get("timezone"), d.get("countryCode"), d.get("query"))),
+        ("http://ip-api.com/json/fields=query,timezone,countryCode", lambda d: (d.get("timezone"), d.get("countryCode"), d.get("query"))),
     ]
 
     try:

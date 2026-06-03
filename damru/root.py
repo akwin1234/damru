@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import io
 import os
 import random
 import subprocess
@@ -22,7 +21,7 @@ import zipfile
 from typing import Dict, Optional
 
 from .adb import ADB
-from .apk_assets import find_any_bundle_apk
+from .apk_assets import bundled_magisk_apk, find_any_bundle_apk
 from .devices import AndroidDevice
 from .utils import logger, sleep
 
@@ -51,19 +50,6 @@ _FAKEMEM_SO = "/data/local/tmp/libfakemem.so"
 _FAKEMEM_TARGET = "/data/local/tmp/damru_fakemem_gb"
 _FAKEMEM_WRAP = "/data/local/tmp/damru_chrome_wrap.sh"
 _APP_PROCESS_REAL = "/system/bin/app_process64.real"
-
-# NikGapps GoogleTTS addon (Android 14) direct mirror URL (no JS challenge).
-_NIKGAPPS_GOOGLE_TTS_URL = (
-    "https://downloads.sourceforge.net/project/nikgapps/"
-    "Releases/Android-14/04-Feb-2026/Addons/"
-    "NikGapps-Addon-14-GoogleTTS-20260204-signed.zip"
-)
-
-# eSpeak-NG from F-Droid (bundles 100+ voices offline, no Play Services needed)
-_ESPEAK_APK_URL = "https://f-droid.org/repo/com.reecedunn.espeak_22.apk"
-
-# Used only as a source for Magisk's standalone resetprop binary on raw images.
-_MAGISK_APK_URL = "https://github.com/topjohnwu/Magisk/releases/download/v28.1/Magisk-v28.1.apk"
 
 # Font paths
 _FONTS_XML = "/system/etc/fonts.xml"
@@ -194,12 +180,14 @@ class RootOps:
         if not lib_path:
             raise RootError(f"Unsupported ABI: {abi}. Cannot push resetprop.")
 
-        # Find or fetch Magisk APK used as a resetprop binary source.
+        # Find local Magisk APK used as a resetprop binary source.
         magisk_apk = self._find_magisk_apk()
         if not magisk_apk:
-            magisk_apk = await asyncio.to_thread(self._download_magisk_apk)
-        if not magisk_apk:
-            raise RootError("Could not find or download Magisk APK for resetprop extraction.")
+            raise RootError(
+                "Missing Damru magisk.apk asset. Raw Redroid needs it only to "
+                "extract standalone resetprop. Reinstall Damru or run "
+                "`python -m damru setup`."
+            )
 
         # Extract libmagisk.so from APK
         tmp_path = os.path.join(tempfile.gettempdir(), "damru_resetprop.so")
@@ -239,7 +227,15 @@ class RootOps:
                 pass
 
     def _find_magisk_apk(self) -> Optional[str]:
-        """Find Magisk APK in package directory or common locations."""
+        """Find Magisk APK in the local Damru APK bundle or package tools."""
+        bundled = find_any_bundle_apk(["magisk.apk", "Magisk.apk", "Magisk-v28.1.apk"])
+        if bundled is not None:
+            return str(bundled)
+
+        shipped = bundled_magisk_apk()
+        if shipped is not None:
+            return str(shipped)
+
         # Check package directory
         pkg_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         candidates = [
@@ -260,33 +256,6 @@ class RootOps:
                 return os.path.join(pkg_dir, f)
 
         return None
-
-    @staticmethod
-    def _download_magisk_apk() -> Optional[str]:
-        """Download Magisk APK for resetprop extraction on raw images."""
-        candidates = [
-            os.path.join("/home/damru", "tools", "magisk.apk"),
-            os.path.join(tempfile.gettempdir(), "damru_magisk.apk"),
-        ]
-        last_exc: Exception | None = None
-        for target in candidates:
-            try:
-                os.makedirs(os.path.dirname(target), exist_ok=True)
-                if not os.path.isfile(target) or os.path.getsize(target) < 1_000_000:
-                    urllib.request.urlretrieve(_MAGISK_APK_URL, target)
-                if os.path.getsize(target) < 1_000_000:
-                    continue
-                with zipfile.ZipFile(target, "r") as zf:
-                    if not any(name.startswith("lib/") and name.endswith("libmagisk.so") for name in zf.namelist()):
-                        continue
-                return target
-            except Exception as exc:
-                last_exc = exc
-                logger.debug("Magisk APK download/validation failed for %s: %s", target, exc)
-        if last_exc:
-            logger.warning("Magisk APK auto-download failed: %s", last_exc)
-        return None
-
     async def set_prop(self, key: str, value: str) -> None:
         """Set a single system property.
 
@@ -686,7 +655,7 @@ class RootOps:
 
         Emulator defaults (AC=true, level=100, status=5/full, temp=0) are
         instant detection flags. Uses `dumpsys battery set` which overrides
-        the BatteryService â€” Chrome's navigator.getBattery() reads from this.
+        the BatteryService - Chrome's navigator.getBattery() reads from this.
 
         Randomizes: level (23-89%), temperature (25-33C), charging source.
         """
@@ -737,40 +706,11 @@ class RootOps:
 
     @staticmethod
     def _prepare_google_tts_apks() -> list[str]:
-        """Download/extract GoogleTTS APKs from NikGapps addon.
-
-        Returns local APK paths in installation order.
-        """
+        """Return bundled GoogleTTS APKs in installation order."""
         bundled = find_any_bundle_apk(["google_tts.apk", "GoogleTTS.apk"])
         if bundled is not None:
             return [str(bundled)]
-
-        cache_dir = os.path.join(tempfile.gettempdir(), "damru_google_tts")
-        os.makedirs(cache_dir, exist_ok=True)
-
-        addon_zip = os.path.join(cache_dir, "NikGapps-Addon-14-GoogleTTS.zip")
-        app_apk = os.path.join(cache_dir, "GoogleTTS.apk")
-        overlay_apk = os.path.join(cache_dir, "GoogleTTSOverlay.apk")
-
-        if not os.path.isfile(addon_zip) or os.path.getsize(addon_zip) < 1_000_000:
-            urllib.request.urlretrieve(_NIKGAPPS_GOOGLE_TTS_URL, addon_zip)
-
-        if not os.path.isfile(app_apk) or os.path.getsize(app_apk) < 1_000_000:
-            with zipfile.ZipFile(addon_zip, "r") as outer:
-                nested_bytes = outer.read("AppSet/GoogleTTS/GoogleTTS.zip")
-            with zipfile.ZipFile(io.BytesIO(nested_bytes), "r") as nested:
-                with open(app_apk, "wb") as f:
-                    f.write(nested.read("___app___GoogleTTS/GoogleTTS.apk"))
-                try:
-                    with open(overlay_apk, "wb") as f:
-                        f.write(nested.read("___overlay/GoogleTTSOverlay.apk"))
-                except KeyError:
-                    pass
-
-        apks = [app_apk]
-        if os.path.isfile(overlay_apk) and os.path.getsize(overlay_apk) > 200_000:
-            apks.append(overlay_apk)
-        return apks
+        return []
 
     async def _ensure_local_tts_apk_installed(
         self,
@@ -809,7 +749,7 @@ class RootOps:
         return installed_pkgs
 
     async def _ensure_google_tts_installed(self, installed_pkgs: set[str]) -> set[str]:
-        """Install Google Speech Services from NikGapps addon when missing."""
+        """Install Google Speech Services from the local Damru APK bundle."""
         pkg = "com.google.android.tts"
         if pkg in installed_pkgs:
             return installed_pkgs
@@ -834,10 +774,10 @@ class RootOps:
                 if line.strip().startswith("package:")
             }
             if pkg in refreshed_pkgs:
-                logger.info("Installed Google Speech Services (NikGapps addon)")
+                logger.info("Installed Google Speech Services from APK bundle")
                 return refreshed_pkgs
         except Exception as exc:
-            logger.warning("Google Speech Services auto-install failed: %s", exc)
+            logger.debug("Google Speech Services bundle install failed: %s", exc)
 
         return installed_pkgs
 
@@ -1109,8 +1049,8 @@ class RootOps:
         """Spoof GPU renderer + GL extensions for Chrome via renderer.config.
 
         renderer.config supports per-app overrides:
-          CustomizedRendererString  â†’ changes WEBGL_debug_renderer_info
-          CustomizedGLESExtension   â†’ changes raw GL extension list
+          CustomizedRendererString  -> changes WEBGL_debug_renderer_info
+          CustomizedGLESExtension   -> changes raw GL extension list
 
         When the target device's GPU family differs from the emulator's native
         GPU, we ALSO override extensions so the WebGL extension set matches
@@ -1129,7 +1069,7 @@ class RootOps:
             f"test -f {src} && echo OK", timeout=5, allow_failure=True
         )
         if "OK" not in out:
-            logger.warning("No renderer.config found â€” GPU spoof not available on this emulator")
+            logger.warning("No renderer.config found - GPU spoof not available on this emulator")
             return
 
         # Backup original config ONLY if no backup exists yet.
@@ -1146,7 +1086,7 @@ class RootOps:
         else:
             logger.debug("Using existing backup of original renderer.config")
 
-        # Build Chrome entry with escaped package name (dots â†’ \.)
+        # Build Chrome entry with escaped package name (dots -> \.)
         pkg_escaped = chrome_package.replace(".", "\\.")
         renderer = device.webgl_renderer
 
@@ -1154,7 +1094,7 @@ class RootOps:
         # CustomizedGLESExtension was tested but breaks WebGL1 because Chrome
         # tries to USE extensions that don't exist on the actual GPU hardware
         # (e.g. GL_ARM_* on Adreno). The renderer string override alone is
-        # sufficient â€” BrowserScan doesn't cross-reference extensions vs renderer.
+        # sufficient - BrowserScan doesn't cross-reference extensions vs renderer.
         target_family = device.gpu_family
         native_family = _detect_gpu_family(native_gpu)
         if target_family != native_family:
@@ -1274,14 +1214,14 @@ class RootOps:
           Vendor:   Google Inc. (<vendor>)
 
         We patch vulkan.pastel.so with THREE types of changes:
-          1. String: "SwiftShader Device" â†’ target GPU (e.g. "Adreno (TM) 750")
-          2. String: "SwiftShader driver" â†’ target driver name
-          3. Binary: vendorID 0x1AE0 â†’ target vendor ID (e.g. 0x5143 for Qualcomm)
+          1. String: "SwiftShader Device" -> target GPU (e.g. "Adreno (TM) 750")
+          2. String: "SwiftShader driver" -> target driver name
+          3. Binary: vendorID 0x1AE0 -> target vendor ID (e.g. 0x5143 for Qualcomm)
              Found by locating vendorID near deviceID 0xC0DE in the binary.
 
         The vendorID patch is critical: ANGLE maps it to the vendor name that
-        appears in both GL_VENDOR "Google Inc. (Google)" â†’ "Google Inc. (Qualcomm)"
-        and GL_RENDERER "ANGLE (Google, ...)" â†’ "ANGLE (Qualcomm, ...)".
+        appears in both GL_VENDOR "Google Inc. (Google)" -> "Google Inc. (Qualcomm)"
+        and GL_RENDERER "ANGLE (Google, ...)" -> "ANGLE (Qualcomm, ...)".
 
         Note: "Google Inc." prefix in GL_VENDOR is ANGLE's own constant (normal
         for any device using ANGLE). Only the parenthesized vendor name leaks.
@@ -1298,7 +1238,7 @@ class RootOps:
             f"test -f {vulkan_so} && echo OK", timeout=5, allow_failure=True
         )
         if not vk_exists:
-            logger.warning("vulkan.pastel.so not found â€” GPU binary spoof unavailable")
+            logger.warning("vulkan.pastel.so not found - GPU binary spoof unavailable")
             return
 
         # Keep renderer names reasonable; binary patcher will still enforce
@@ -1674,14 +1614,14 @@ class RootOps:
                 logger.debug("Failed to restore %s: %s", key, e)
         self._original_props.clear()
 
-    # â”€â”€ Memory spoof (LD_PRELOAD sysinfo interceptor) â”€â”€
+    # -- Memory spoof (LD_PRELOAD sysinfo interceptor) --
 
     @staticmethod
     def _compile_fakemem() -> str:
         """Compile libfakemem.so for x86_64. Returns local path to .so.
 
         Uses gcc in WSL2 (Windows) or native gcc (Linux).
-        Result is cached â€” only compiles once.
+        Result is cached - only compiles once.
         """
         native_dir = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "native"
@@ -2075,26 +2015,11 @@ class RootOps:
     # -- eSpeak-NG TTS installation --
 
     @staticmethod
-    def _download_espeak_apk() -> Optional[str]:
-        """Download eSpeak-NG APK from F-Droid. Returns local path or None."""
+    def _find_espeak_apk() -> Optional[str]:
+        """Find eSpeak-NG APK in the local Damru APK bundle."""
         bundled = find_any_bundle_apk(["espeak.apk", "espeak-ng.apk"])
         if bundled is not None:
             return str(bundled)
-
-        cache_dir = os.path.join(tempfile.gettempdir(), "damru_tts")
-        os.makedirs(cache_dir, exist_ok=True)
-        apk_path = os.path.join(cache_dir, "espeak-ng.apk")
-
-        if os.path.isfile(apk_path) and os.path.getsize(apk_path) > 100_000:
-            return apk_path
-
-        try:
-            urllib.request.urlretrieve(_ESPEAK_APK_URL, apk_path)
-            if os.path.getsize(apk_path) > 100_000:
-                return apk_path
-        except Exception as exc:
-            logger.debug("eSpeak-NG download failed: %s", exc)
-
         return None
 
     async def ensure_espeak_tts(self) -> bool:
@@ -2107,9 +2032,9 @@ class RootOps:
         if espeak_pkg in installed:
             return True
 
-        apk = await asyncio.to_thread(self._download_espeak_apk)
+        apk = await asyncio.to_thread(self._find_espeak_apk)
         if not apk:
-            logger.debug("eSpeak-NG APK not available")
+            logger.debug("eSpeak-NG APK not available in Damru APK bundle")
             return False
 
         out = await self.adb._run(

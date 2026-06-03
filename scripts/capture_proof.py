@@ -86,7 +86,7 @@ async def _snapshot(page, key: str, label: str, url: str, wait_seconds: int, out
                 timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
                 language: navigator.language,
                 viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio },
-                bodyText: document.body ? document.body.innerText.slice(0, 800) : ""
+                bodyText: document.body  document.body.innerText.slice(0, 800) : ""
             })"""
         )
         await page.screenshot(path=str(out_dir / result["screenshot"]), full_page=False, scale="css")

@@ -385,8 +385,8 @@ if _need_browser:
                         ['model', 'platformVersion']
                     );
                 })()""")
-                print(f"  Device model (from CH): {ch.get('model', '?')}")
-                print(f"  Platform version: {ch.get('platformVersion', '?')}")
+                print(f"  Device model (from CH): {ch.get('model', '')}")
+                print(f"  Platform version: {ch.get('platformVersion', '')}")
             except Exception:
                 pass
 
@@ -667,7 +667,7 @@ if _need_browser:
                         const all = document.body.innerText;
                         const hm = all.match(/(\\d+)%\\s*headless:/i);
                         const sm = all.match(/(\\d+)%\\s*stealth:/i);
-                        return { h: hm ? parseInt(hm[1]) : -1, s: sm ? parseInt(sm[1]) : -1 };
+                        return { h: hm  parseInt(hm[1]) : -1, s: sm  parseInt(sm[1]) : -1 };
                     }""")
                     if r["h"] >= 0:
                         assert r["h"] <= 5, f"CreepJS headless: {r['h']}%"

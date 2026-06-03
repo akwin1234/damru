@@ -31,7 +31,7 @@ async def main():
     ) as context:
         page = context.pages[0] if context.pages else await context.new_page()
 
-        # â”€â”€ Test 0: Direct JS check â”€â”€
+        # -- Test 0: Direct JS check --
         print("\n--- [0] Direct JS Check ---")
         await page.goto("data:text/html,<h1>screen</h1>", wait_until="domcontentloaded", timeout=10000)
         await asyncio.sleep(1)
@@ -46,7 +46,7 @@ async def main():
             outerH: window.outerHeight,
             dpr: window.devicePixelRatio,
             colorDepth: screen.colorDepth,
-            orientation: screen.orientation ? screen.orientation.type : 'N/A',
+            orientation: screen.orientation  screen.orientation.type : 'N/A',
         })""")
         print(f"  screen: {sc['screenW']}x{sc['screenH']}")
         print(f"  avail:  {sc['availW']}x{sc['availH']}")
@@ -56,7 +56,7 @@ async def main():
         print(f"  color:  {sc['colorDepth']}")
         print(f"  orient: {sc['orientation']}")
 
-        # â”€â”€ Test 1: BrowserLeaks â”€â”€
+        # -- Test 1: BrowserLeaks --
         print("\n--- [1] BrowserLeaks ---")
         try:
             await page.goto("https://browserleaks.com/javascript", wait_until="domcontentloaded", timeout=45000)
@@ -82,7 +82,7 @@ async def main():
         except Exception as e:
             print(f"  ERROR: {e}")
 
-        # â”€â”€ Test 2: BrowserScan â”€â”€
+        # -- Test 2: BrowserScan --
         print("\n--- [2] BrowserScan ---")
         try:
             await page.goto("https://www.browserscan.net/", wait_until="domcontentloaded", timeout=45000)
@@ -96,7 +96,7 @@ async def main():
         except Exception as e:
             print(f"  ERROR: {e}")
 
-        # â”€â”€ Test 3: whatismyresolution.com (simple) â”€â”€
+        # -- Test 3: whatismyresolution.com (simple) --
         print("\n--- [3] whatismyresolution.com ---")
         try:
             await page.goto("https://whatismyscreenresolution.net/", wait_until="domcontentloaded", timeout=30000)
@@ -110,7 +110,7 @@ async def main():
         except Exception as e:
             print(f"  ERROR: {e}")
 
-        # â”€â”€ Test 4: deviceinfo.me â”€â”€
+        # -- Test 4: deviceinfo.me --
         print("\n--- [4] deviceinfo.me ---")
         try:
             await page.goto("https://www.deviceinfo.me/", wait_until="domcontentloaded", timeout=45000)

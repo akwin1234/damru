@@ -18,7 +18,7 @@ async def main():
     os.makedirs(RESULTS_DIR, exist_ok=True)
 
     print("=" * 60)
-    print("  fingerprint.com/demo Test â€” 2GB RAM")
+    print("  fingerprint.com/demo Test - 2GB RAM")
     print("=" * 60)
     t_start = time.monotonic()
 
@@ -100,9 +100,9 @@ async def main():
                 }
 
                 return {
-                    visitorId: visitorIdMatch ? visitorIdMatch[1] : "N/A",
+                    visitorId: visitorIdMatch  visitorIdMatch[1] : "N/A",
                     botDetected: botDetected && !notBot,
-                    botStatus: botMatch ? botMatch[1] : (notBot ? "not detected" : (botDetected ? "detected" : "N/A")),
+                    botStatus: botMatch  botMatch[1] : (notBot  "not detected" : (botDetected  "detected" : "N/A")),
                     cards: [...new Set(cards)].slice(0, 30),
                     tables: tables.slice(0, 5),
                     sections: sections.slice(0, 15),
@@ -110,9 +110,9 @@ async def main():
                 };
             }""")
 
-            print(f"\n  Visitor ID:  {data.get('visitorId', '?')}")
-            print(f"  Bot Status:  {data.get('botStatus', '?')}")
-            print(f"  Bot Detected: {data.get('botDetected', '?')}")
+            print(f"\n  Visitor ID:  {data.get('visitorId', '')}")
+            print(f"  Bot Status:  {data.get('botStatus', '')}")
+            print(f"  Bot Detected: {data.get('botDetected', '')}")
 
             if data.get("sections"):
                 print(f"\n  Sections:")

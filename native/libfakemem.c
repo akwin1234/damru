@@ -147,7 +147,7 @@ static int _get_nprocs(void) {
         unsigned long m = mask[i];
         while (m) { count += (int)(m & 1); m >>= 1; }
     }
-    return count > 0 ? count : 1;
+    return count > 0  count : 1;
 }
 
 static long _get_rlimit(int resource) {

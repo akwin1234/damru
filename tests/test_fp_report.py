@@ -13,7 +13,7 @@ PH_HTTP = "proxy.example:50000"
 
 async def main():
     print("=" * 70)
-    print("  fingerprint.com/demo â€” full report extraction")
+    print("  fingerprint.com/demo - full report extraction")
     print("=" * 70)
 
     async with AsyncDamru(
@@ -34,7 +34,7 @@ async def main():
         )
         print("  Page loaded (domcontentloaded)")
 
-        # Wait for API to complete â€” needs ~50s through rotating proxy
+        # Wait for API to complete - needs ~50s through rotating proxy
         for attempt in range(8):
             await asyncio.sleep(10)
             has_results = await page.evaluate("""() => {
@@ -69,7 +69,7 @@ async def main():
             const allElements = document.querySelectorAll('*');
             const signals = [];
             for (const el of allElements) {
-                const text = el.textContent?.trim();
+                const text = el.textContent.trim();
                 if (text && text.length < 500 && text.length > 2) {
                     const tag = el.tagName;
                     const cls = el.className;

@@ -65,7 +65,7 @@ async def test():
         "su 0 mkdir -p /data/data/com.android.chrome/shared_prefs",
         allow_failure=True,
     )
-    prefs_xml = '<?xml version="1.0" encoding="utf-8" standalone="yes" ?><map><boolean name="first_run_flow" value="true" /><boolean name="tos_accepted" value="true" /></map>'
+    prefs_xml = '<xml version="1.0" encoding="utf-8" standalone="yes" ><map><boolean name="first_run_flow" value="true" /><boolean name="tos_accepted" value="true" /></map>'
     import base64
     b64 = base64.b64encode(prefs_xml.encode()).decode()
     await adb.shell(
@@ -116,8 +116,8 @@ async def test():
         print(f"FAIL: {result['error']}")
         return False
 
-    renderer = result.get("renderer", "?")
-    vendor = result.get("vendor", "?")
+    renderer = result.get("renderer", "")
+    vendor = result.get("vendor", "")
     print(f"  Renderer: {renderer}")
     print(f"  Vendor:   {vendor}")
     print(f"  Expected renderer to contain: {device.webgl_renderer}")

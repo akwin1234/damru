@@ -41,12 +41,12 @@ class DamruError(Exception):
 class AsyncDamru:
     """Stealth browser automation on Android via ADB + root.
 
-    Spoofing layers (root + CDP ONLY â€” zero JS injection):
-        Layer 1: Android system props (root resetprop) â€” undetectable
+    Spoofing layers (root + CDP ONLY - zero JS injection):
+        Layer 1: Android system props (root resetprop) - undetectable
         Layer 2: Chrome CLI flags (best-effort on "user" builds)
-        Layer 3: GPU binary patch (.so) or renderer.config â€” undetectable
-        Layer 4: CDP protocol overrides (UA, cores, touch, network) â€” C++ level
-        Layer 5: Chrome Preferences JSON patch (locale, DoH) â€” undetectable
+        Layer 3: GPU binary patch (.so) or renderer.config - undetectable
+        Layer 4: CDP protocol overrides (UA, cores, touch, network) - C++ level
+        Layer 5: Chrome Preferences JSON patch (locale, DoH) - undetectable
 
     GPU renderer + GL extensions are spoofed via renderer.config + opengl-gc
     (MuMu) or binary .so patch (redroid).
@@ -143,9 +143,9 @@ class AsyncDamru:
         import time as _time
         _t0 = _time.monotonic()
 
-        # â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
-        # â•‘  PHASE 1: Device detection (sequential â€” each needs prior) â•‘
-        # â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        # #==============================================================#
+        # |  PHASE 1: Device detection (sequential - each needs prior) |
+        # #==============================================================#
 
         # Step 1: Detect ADB device
         self._adb = ADB(serial=self._serial)
@@ -159,8 +159,8 @@ class AsyncDamru:
                     raise
             self._adb.serial = self._serial
 
-        # Step 2: Device info + root check + GPU detect â€” all need ADB,
-        # but are independent of each other â†’ run in parallel.
+        # Step 2: Device info + root check + GPU detect - all need ADB,
+        # but are independent of each other -> run in parallel.
         self._root = RootOps(self._adb)
         info_task = asyncio.ensure_future(self._adb.get_device_info())
         root_task = asyncio.ensure_future(self._root.check_root())
@@ -169,8 +169,8 @@ class AsyncDamru:
 
         logger.info(
             "Device: %s (%s) - Android %s [%s]",
-            info.get("model", "?"), info.get("brand", "?"),
-            info.get("android_version", "?"), self._serial,
+            info.get("model", ""), info.get("brand", ""),
+            info.get("android_version", ""), self._serial,
         )
         logger.info("Root access confirmed")
         logger.info("Native GPU: %s", native_gpu or "unknown")
@@ -196,7 +196,7 @@ class AsyncDamru:
             )
             if applied:
                 logger.info("MuMu dynamic profile applied from target device: %s", target_device.name)
-                # Profile restart wipes the data partition â€” Chrome must be reinstalled.
+                # Profile restart wipes the data partition - Chrome must be reinstalled.
                 _mumu_chrome_wiped = True
         except asyncio.TimeoutError:
             logger.warning("MuMu dynamic profile apply timed out; continuing with current MuMu settings")
@@ -214,30 +214,30 @@ class AsyncDamru:
         logger.info("Profile: %s (tz=%s, locale=%s)",
                      self._profile.description, self._profile.timezone, self._profile.locale)
 
-        # â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
-        # â•‘  WARM START DETECTION                                       â•‘
-        # â•‘  If Chrome was previously set up (Prefs exist), use fast   â•‘
-        # â•‘  reuse path: skip pm clear/FRE/TTS setup, overlap GPU.    â•‘
-        # â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        # #==============================================================#
+        # |  WARM START DETECTION                                       |
+        # |  If Chrome was previously set up (Prefs exist), use fast   |
+        # |  reuse path: skip pm clear/FRE/TTS setup, overlap GPU.    |
+        # #==============================================================#
 
         self._chrome = ChromeManager(self._adb, package=self._chrome_package)
         warm_start = await self._chrome.has_preferences()
         if warm_start:
-            logger.info("WARM START â€” fast reuse (skip pm clear/FRE/TTS setup)")
+            logger.info("WARM START - fast reuse (skip pm clear/FRE/TTS setup)")
         else:
-            logger.info("COLD START â€” full setup")
+            logger.info("COLD START - full setup")
 
-        # â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
-        # â•‘  PHASE 2: System-level spoofing â€” PARALLEL BATCH           â•‘
-        # â•‘  All are independent ADB shell commands that don't depend  â•‘
-        # â•‘  on each other. Running them concurrently saves ~5-8s.     â•‘
-        # â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        # #==============================================================#
+        # |  PHASE 2: System-level spoofing - PARALLEL BATCH           |
+        # |  All are independent ADB shell commands that don't depend  |
+        # |  on each other. Running them concurrently saves ~5-8s.     |
+        # #==============================================================#
 
         # Check real (non-spoofed) SDK from build.prop to guard against a previous
         # session's resetprop having left ro.build.version.release/sdk at a higher
         # value than the actual framework. If the real SDK < target SDK, setting
         # ro.build.version.sdk to the target value will make Chrome call Android APIs
-        # that don't exist in the framework â†’ FATAL EXCEPTION (NoSuchMethodError).
+        # that don't exist in the framework -> FATAL EXCEPTION (NoSuchMethodError).
         real_sdk_raw = await self._adb.shell(
             "su -c \"grep '^ro.build.version.sdk=' /system/build.prop 2>/dev/null\" | cut -d= -f2",
             allow_failure=True,
@@ -247,7 +247,7 @@ class AsyncDamru:
         if real_sdk > 0 and real_sdk != target_sdk:
             version_match = False
             logger.info(
-                "SDK mismatch: real_sdk=%d vs target_sdk=%d â€” skipping SDK spoof to avoid Chrome crash",
+                "SDK mismatch: real_sdk=%d vs target_sdk=%d - skipping SDK spoof to avoid Chrome crash",
                 real_sdk, target_sdk,
             )
         else:
@@ -262,8 +262,8 @@ class AsyncDamru:
                 except Exception:
                     if not _mumu_chrome_wiped:
                         raise
-                    # MuMu profile restart wiped Chrome â€” auto-reinstall.
-                    logger.info("Chrome wiped by MuMu profile restart â€” reinstalling...")
+                    # MuMu profile restart wiped Chrome - auto-reinstall.
+                    logger.info("Chrome wiped by MuMu profile restart - reinstalling...")
                     try:
                         from .mumu import MuMuManager
                         from .docker import RedroidManager
@@ -302,7 +302,7 @@ class AsyncDamru:
             if debuggable != "1":
                 tasks.append(self._root.set_prop("ro.debuggable", "1"))
                 logger.info("Set ro.debuggable=1 (enables DevTools socket)")
-            # Chrome checks ro.build.type at Java level â€” "user" builds block devtools
+            # Chrome checks ro.build.type at Java level - "user" builds block devtools
             # socket creation even when ro.debuggable=1. Must be "userdebug" or "eng".
             if build_type not in ("userdebug", "eng"):
                 tasks.append(self._root.set_prop("ro.build.type", "userdebug"))
@@ -343,7 +343,7 @@ class AsyncDamru:
         chrome_version_fut = asyncio.ensure_future(_detect_chrome())
 
         async def _start_tts_service():
-            """Start eSpeak TTS service (warm start â€” already installed)."""
+            """Start eSpeak TTS service (warm start - already installed)."""
             await self._adb.shell(
                 "am startservice --user 0 "
                 "-n com.reecedunn.espeak/.TtsService",
@@ -366,12 +366,12 @@ class AsyncDamru:
         await asyncio.gather(*phase2_tasks)
         version = await chrome_version_fut
 
-        # â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
-        # â•‘  PHASE 3+4: GPU + Chrome prep (OVERLAPPED for speed)       â•‘
-        # â•‘  GPU patch (/vendor/lib64) and Chrome cleanup (/data/data) â•‘
-        # â•‘  touch different paths â†’ run concurrently. Chrome launch   â•‘
-        # â•‘  waits for gather (SF restart) to complete.                â•‘
-        # â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        # #==============================================================#
+        # |  PHASE 3+4: GPU + Chrome prep (OVERLAPPED for speed)       |
+        # |  GPU patch (/vendor/lib64) and Chrome cleanup (/data/data) |
+        # |  touch different paths -> run concurrently. Chrome launch   |
+        # |  waits for gather (SF restart) to complete.                |
+        # #==============================================================#
 
         has_renderer_config = await self._adb.shell(
             "test -f /system/etc/mumu-configs/renderer.config && echo OK",
@@ -385,7 +385,7 @@ class AsyncDamru:
             if warm_start:
                 already = await self._root.is_gpu_already_patched(eff_renderer)
                 if already:
-                    logger.info("GPU already patched for '%s' â€” skipping (saves ~6s)", eff_renderer)
+                    logger.info("GPU already patched for '%s' - skipping (saves ~6s)", eff_renderer)
                     await self._root.apply_battery_spoof()
                     return
 
@@ -401,9 +401,9 @@ class AsyncDamru:
                     except Exception as e2:
                         logger.warning("Binary GPU spoof fallback failed: %s (continuing)", e2)
             else:
-                logger.info("No renderer.config â€” using binary SwiftShader .so patch")
+                logger.info("No renderer.config - using binary SwiftShader .so patch")
                 await self._root.apply_gpu_binary_spoof(target_device)
-            # Battery MUST follow GPU spoof â€” SurfaceFlinger restart resets BatteryService.
+            # Battery MUST follow GPU spoof - SurfaceFlinger restart resets BatteryService.
             await self._root.apply_battery_spoof()
 
         async def _chrome_prep():
@@ -428,7 +428,7 @@ class AsyncDamru:
                     return
             await self._root.apply_memory_spoof(target_device.device_memory)
 
-        # GPU+battery, Chrome prep, CPU cores, memory â€” ALL in parallel
+        # GPU+battery, Chrome prep, CPU cores, memory - ALL in parallel
         await asyncio.gather(
             _gpu_then_battery(),
             _chrome_prep(),
@@ -436,7 +436,7 @@ class AsyncDamru:
             _memory_spoof(),
         )
 
-        # Chrome launch with retry â€” SurfaceFlinger restart kills processes
+        # Chrome launch with retry - SurfaceFlinger restart kills processes
         # and the system needs variable time to re-register activities.
         # If Chrome doesn't start (no devtools socket), retry with longer delay.
         socket_ready = False
@@ -460,12 +460,12 @@ class AsyncDamru:
             if socket_ready:
                 break
 
-            # Socket not found â€” on warm start, FRE/sign-in promo may have appeared
+            # Socket not found - on warm start, FRE/sign-in promo may have appeared
             # unexpectedly (e.g. Preferences didn't suppress it). Try dismissing.
             if warm_start:
                 logger.debug("Warm start: socket missing, checking for unexpected FRE/sign-in promo...")
                 await self._chrome.dismiss_fre(max_attempts=4)
-                # Give Chrome much more time after FRE dismissal â€” browser UI visible but
+                # Give Chrome much more time after FRE dismissal - browser UI visible but
                 # devtools socket may still be initializing. On slow hardware (2-core MuMu),
                 # Chrome can take 100+ seconds to expose chrome_devtools_remote socket.
                 logger.info("Warm start: Chrome UI confirmed alive, polling socket for up to 90s...")
@@ -503,11 +503,11 @@ class AsyncDamru:
 
         await self._sync_geo_from_browser_proxy()
 
-        # â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
-        # â•‘  PHASE 5: CDP overrides + TTS warmup â€” PARALLEL BATCH      â•‘
-        # â•‘  All are independent CDP commands. TTS uses a separate tab â•‘
-        # â•‘  so it doesn't interfere with CDP overrides on main page.  â•‘
-        # â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        # #==============================================================#
+        # |  PHASE 5: CDP overrides + TTS warmup - PARALLEL BATCH      |
+        # |  All are independent CDP commands. TTS uses a separate tab |
+        # |  so it doesn't interfere with CDP overrides on main page.  |
+        # #==============================================================#
 
         real_chrome = version if version else None
         await asyncio.gather(
@@ -541,7 +541,7 @@ class AsyncDamru:
         self._cdp_port = self._cdp._local_port
 
         _elapsed = _time.monotonic() - _t0
-        logger.info("Ready in %.1fs! (%s â€” root + CDP â€” zero JS injection)",
+        logger.info("Ready in %.1fs! (%s - root + CDP - zero JS injection)",
                      _elapsed, "warm" if warm_start else "cold")
 
         return self._context
@@ -725,9 +725,9 @@ class AsyncDamru:
         # - screen reset (next session sets new size)
         # - WebRTC rules (next session applies same rules)
         # - system props (next session sets new props)
-        # Container stays alive â€” only Chrome is recycled per session
+        # Container stays alive - only Chrome is recycled per session
 
-        logger.info("Cleanup complete (minimal â€” container reused)")
+        logger.info("Cleanup complete (minimal - container reused)")
         if sys.platform == "win32":
             await asyncio.sleep(2.0)
 
@@ -805,7 +805,7 @@ class AsyncDamru:
 
         Call AFTER navigating to the target page.  All CDP overrides
         (UA, touch, cores) are already baked into the renderer for the
-        current page â€” they persist for in-flight requests even after
+        current page - they persist for in-flight requests even after
         the CDP session closes.
 
         Use reconnect_cdp() afterwards to regain page.evaluate() access.
@@ -820,19 +820,19 @@ class AsyncDamru:
         """Reconnect CDP after fingerprinting completes.
 
         Returns the new BrowserContext.  Previous page references are
-        invalid â€” get fresh ones from context.pages.
+        invalid - get fresh ones from context.pages.
         """
         self._cdp = CDPConnection(self._adb)
         await self._cdp.setup_port_forward()
         self._context = await self._cdp.connect()
-        logger.info("CDP reconnected â€” %d pages", len(self._context.pages))
+        logger.info("CDP reconnected - %d pages", len(self._context.pages))
         return self._context
 
     async def _apply_hardware_overrides(self, device: AndroidDevice) -> None:
         """Override hardwareConcurrency via CDP protocol (C++ level).
 
         CDP Emulation.setHardwareConcurrencyOverride modifies the C++ return
-        value â€” completely undetectable by fingerprinting scripts.
+        value - completely undetectable by fingerprinting scripts.
 
         deviceMemory uses native value (no override). Worker scopes also
         use native values. Accepted tradeoff: 0% stealth > correct values.
@@ -1151,7 +1151,7 @@ class AsyncDamru:
         """Override User-Agent, Chrome version, Client Hints, and locale via CDP.
 
         Uses the real emulator Android version and real installed Chrome version
-        so Workers â€” which can't be CDP-overridden â€” see the same values as
+        so Workers - which can't be CDP-overridden - see the same values as
         the main page.  Workers inherit the browser-level UA from the Chromium
         binary; CDP Emulation.setUserAgentOverride only affects page targets.
         Any mismatch between page and Worker is a detectable tell.
@@ -1170,13 +1170,13 @@ class AsyncDamru:
         The grease brand ("Not X Brand") and brand order are computed per
         Chrome major version to match Chromium's actual algorithm.
 
-        This is a C++ level override â€” completely undetectable by JS.
+        This is a C++ level override - completely undetectable by JS.
         """
         if not self._context:
             return
 
         # Use real emulator Android version to match Workers (can't override
-        # Worker UA via CDP â€” Emulation domain is page-target only).
+        # Worker UA via CDP - Emulation domain is page-target only).
         if android_version:
             android_ver = int(android_version)
             _VERSION_TO_SDK = {12: 31, 13: 33, 14: 34, 15: 35, 16: 36}
@@ -1209,7 +1209,7 @@ class AsyncDamru:
         # This overrides the HTTP Accept-Language header at C++ level.
         profile_locale = self._profile.locale if self._profile else "en-US"
         accept_lang_header = build_accept_language(profile_locale)
-        # Strip q-values for CDP â€” only bare language tags needed
+        # Strip q-values for CDP - only bare language tags needed
         accept_lang_tags = ",".join(
             p.split(";")[0].strip() for p in accept_lang_header.split(",")
         )
@@ -1258,7 +1258,7 @@ class AsyncDamru:
         the system default (en-US on AOSP/redroid) instead of the target
         locale from the profile.
 
-        This is a C++ level override â€” completely undetectable by JS.
+        This is a C++ level override - completely undetectable by JS.
         """
         if not self._context:
             return
@@ -1283,13 +1283,13 @@ class AsyncDamru:
         """Enable touch emulation via CDP protocol.
 
         Fixes multiple emulator tells without any JS injection:
-          - navigator.maxTouchPoints: 0/1 â†’ 5 (matching real phone)
-          - CSS @media (pointer: coarse) â†’ matches (touch device)
-          - CSS @media (any-pointer: coarse) â†’ matches
-          - CSS @media (hover: none) â†’ matches (no mouse hover)
-          - 'ontouchstart' in window â†’ true
+          - navigator.maxTouchPoints: 0/1 -> 5 (matching real phone)
+          - CSS @media (pointer: coarse) -> matches (touch device)
+          - CSS @media (any-pointer: coarse) -> matches
+          - CSS @media (hover: none) -> matches (no mouse hover)
+          - 'ontouchstart' in window -> true
 
-        CDP Emulation.setTouchEmulationEnabled is a C++ level override â€”
+        CDP Emulation.setTouchEmulationEnabled is a C++ level override -
         completely undetectable by fingerprinting scripts.
         """
         if not self._context:
@@ -1339,12 +1339,12 @@ class AsyncDamru:
         realistic throughput values.
 
         CDP Network.emulateNetworkConditions overrides:
-          - navigator.connection.type â†’ wifi/cellular
-          - navigator.connection.effectiveType â†’ 4g
-          - navigator.connection.rtt â†’ realistic mobile RTT
-          - navigator.connection.downlink â†’ realistic mobile throughput
+          - navigator.connection.type -> wifi/cellular
+          - navigator.connection.effectiveType -> 4g
+          - navigator.connection.rtt -> realistic mobile RTT
+          - navigator.connection.downlink -> realistic mobile throughput
 
-        Pure CDP override â€” no JS injection needed.
+        Pure CDP override - no JS injection needed.
         """
         if not self._context:
             return
@@ -1399,7 +1399,7 @@ class AsyncDamru:
         """Query the emulator's native GPU via SurfaceFlinger.
 
         Returns the GLES line like 'Qualcomm, Adreno (TM) 640, OpenGL ES 3.2'.
-        Generic approach â€” works on any rooted Android device/emulator.
+        Generic approach - works on any rooted Android device/emulator.
         """
         if not self._adb:
             return ""
@@ -1548,7 +1548,7 @@ class AsyncDamru:
         )
 
     async def _warmup_tts_parallel(self) -> None:
-        """TTS warmup on a SEPARATE tab â€” safe to run concurrently with CDP overrides.
+        """TTS warmup on a SEPARATE tab - safe to run concurrently with CDP overrides.
 
         Creates a new tab, navigates to example.com, triggers speak(), waits
         for voices, then closes the tab. The main page is untouched.
@@ -1625,7 +1625,7 @@ class AsyncDamru:
         user-activation (autoplay policy), so we use CDP Runtime.evaluate
         with userGesture=true to bypass the gate.
 
-        We navigate to example.com (real HTTPS origin needed â€” data: and
+        We navigate to example.com (real HTTPS origin needed - data: and
         about:blank have opaque origins that don't trigger TTS binding),
         fire speak()+cancel() via CDP with user-gesture flag, then wait
         for onvoiceschanged.
@@ -1641,7 +1641,7 @@ class AsyncDamru:
                     timeout=5000,
                 )
             # Use CDP directly with userGesture: true so Chrome treats the
-            # speak() call as if triggered by a tap â€” bypasses autoplay gate.
+            # speak() call as if triggered by a tap - bypasses autoplay gate.
             cdp = await self._context.new_cdp_session(page)  # type: ignore[union-attr]
 
             # Ensure Runtime is enabled on this CDP session (the crPage.js
@@ -1650,7 +1650,7 @@ class AsyncDamru:
             await cdp.send("Runtime.enable")
 
             # Step 1: trigger speak() with user gesture flag.
-            # Use non-empty text â€” empty string may be optimized away by Chrome.
+            # Use non-empty text - empty string may be optimized away by Chrome.
             # Add a 500ms delay before cancel() to allow TTS service binding.
             await cdp.send("Runtime.evaluate", {
                 "expression": (
@@ -1666,7 +1666,7 @@ class AsyncDamru:
             await sleep(1.0)
 
             # Step 2: wait for voices to load (onvoiceschanged or timeout).
-            # Retry up to 3 times â€” TTS service binding is async and may need
+            # Retry up to 3 times - TTS service binding is async and may need
             # multiple speak() triggers on some devices.
             count = 0
             for attempt in range(3):

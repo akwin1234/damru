@@ -30,7 +30,7 @@ async def main():
                 const gl = c.getContext('webgl2') || c.getContext('webgl');
                 if (!gl) return 'no webgl';
                 const ext = gl.getExtension('WEBGL_debug_renderer_info');
-                return ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : 'no ext';
+                return ext  gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : 'no ext';
             } catch(e) { return 'error: ' + e.message; }
         }""")
         print(f"  GPU renderer: {gpu}")

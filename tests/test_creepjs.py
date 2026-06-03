@@ -84,8 +84,8 @@ CREEPJS_SCRAPE = """async () => {
         const gl = c.getContext('webgl');
         if (gl) {
             const dbg = gl.getExtension('WEBGL_debug_renderer_info');
-            r.glVendor = dbg ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) : 'N/A';
-            r.glRenderer = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : 'N/A';
+            r.glVendor = dbg  gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) : 'N/A';
+            r.glRenderer = dbg  gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : 'N/A';
             r.webglExts = gl.getSupportedExtensions().length;
         }
         const gl2 = document.createElement('canvas').getContext('webgl2');

@@ -1,4 +1,4 @@
-/* Test: Does sysconf(_SC_PHYS_PAGES) see our fake sysinfo? */
+/* Test: Does sysconf(_SC_PHYS_PAGES) see our fake sysinfo */
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/sysinfo.h>

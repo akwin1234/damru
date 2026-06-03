@@ -10,7 +10,7 @@ This directory contains external tools, assets, and third-party binaries used ex
 
 Provided for developers who wish to manually explore the Redroid container, debug root access, or install custom Magisk modules during research phases.
 
-> **Note:** Users do not need to provide Magisk for normal setup. Damru uses Redroid's native `su` binary, and raw/unbaked Redroid automatically downloads the official Magisk APK to `/home/damru/tools/magisk.apk` only when it needs a source for extracting standalone `resetprop`. The APK is kept out of Git because it is a large third-party binary.
+> **Note:** Users do not need to provide Magisk separately for normal setup. Damru ships `magisk.apk` as a package asset, copies it into the local APK bundle when needed, and raw/unbaked Redroid uses it only as a local source for extracting standalone `resetprop`. Damru does not download Magisk from third-party APK sites at runtime.
 
 ---
 

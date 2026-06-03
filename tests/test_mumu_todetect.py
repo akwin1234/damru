@@ -47,10 +47,10 @@ async def main():
         target = random.choice(pool or DEVICES)
 
     print("=" * 60)
-    print("  MuMu â€” todetect.net")
+    print("  MuMu - todetect.net")
     print("=" * 60)
     print(f"  Device:  {target.name}  (Android {target.android_version})")
-    print(f"  GPU:     {target.gpu_family} â€” {target.webgl_renderer}")
+    print(f"  GPU:     {target.gpu_family} - {target.webgl_renderer}")
     print(f"  mem:     {target.device_memory} GB   cores: {target.hardware_concurrency}")
     print()
 
@@ -66,7 +66,7 @@ async def main():
         page = ctx.pages[0] if ctx.pages else await ctx.new_page()
 
         await page.goto("https://todetect.net/", wait_until="domcontentloaded", timeout=60000)
-        print("  Loaded â€” waiting 25s for analysis...")
+        print("  Loaded - waiting 25s for analysis...")
         await sleep(25)
 
         ss = os.path.join(RESULTS_DIR, "todetect.png")
@@ -88,11 +88,11 @@ async def main():
                 }
                 if (rows.length) tables.push(rows);
             }
-            return { score: pct ? pct + "%" : "N/A", tables: tables.slice(0, 5), pageText: all.substring(0, 3000) };
+            return { score: pct  pct + "%" : "N/A", tables: tables.slice(0, 5), pageText: all.substring(0, 3000) };
         }""")
 
         elapsed = round(time.monotonic() - t_start, 1)
-        print(f"\n  Score: {data.get('score', '?')}   ({elapsed}s)")
+        print(f"\n  Score: {data.get('score', '')}   ({elapsed}s)")
         for i, table in enumerate(data.get("tables", [])):
             print(f"\n  Table {i+1}:")
             for row in table[:15]:

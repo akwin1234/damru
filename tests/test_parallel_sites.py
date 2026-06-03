@@ -93,15 +93,15 @@ async def test_fingerprint():
                     if (rows.length > 0) tables.push(rows);
                 }
                 return {
-                    visitorId: visitorIdMatch ? visitorIdMatch[1] : "N/A",
-                    botStatus: notBot ? "not detected" : (botDetected ? "detected" : "N/A"),
+                    visitorId: visitorIdMatch  visitorIdMatch[1] : "N/A",
+                    botStatus: notBot  "not detected" : (botDetected  "detected" : "N/A"),
                     tables: tables.slice(0, 5),
                     pageText: all.substring(0, 2000)
                 };
             }""", timeout=5000)
 
-            print(f"\n[FINGERPRINT] Visitor ID: {data.get('visitorId', '?')}")
-            print(f"[FINGERPRINT] Bot Status: {data.get('botStatus', '?')}")
+            print(f"\n[FINGERPRINT] Visitor ID: {data.get('visitorId', '')}")
+            print(f"[FINGERPRINT] Bot Status: {data.get('botStatus', '')}")
 
             if data.get("tables"):
                 for i, table in enumerate(data["tables"]):
@@ -136,9 +136,9 @@ async def main():
     print("RESULTS:")
     for r in results:
         if isinstance(r, Exception):
-            print(f"  âŒ Error: {r}")
+            print(f"  [FAIL] Error: {r}")
         else:
-            print(f"  âœ… {r['site']}: {r['time']:.1f}s")
+            print(f"  [OK] {r['site']}: {r['time']:.1f}s")
     print("=" * 60)
 
 if __name__ == "__main__":

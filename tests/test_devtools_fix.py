@@ -14,7 +14,7 @@ PH_HTTP = "proxy.example:50000"
 
 async def main():
     print("=" * 70)
-    print("  fingerprint.com/demo â€” developerTools fix test")
+    print("  fingerprint.com/demo - developerTools fix test")
     print("=" * 70)
 
     async with AsyncDamru(

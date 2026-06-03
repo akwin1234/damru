@@ -26,5 +26,6 @@ results/
 .vscode/
 
 *.apk
+!damru/assets/magisk.apk
 chrome-apks/*
 !chrome-apks/README.md

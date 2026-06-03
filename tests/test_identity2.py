@@ -51,7 +51,7 @@ async def main():
                     architecture: high.architecture,
                     bitness: high.bitness,
                     mobile: high.mobile,
-                    fullVersionList: high.fullVersionList?.map(b => b.brand + ' ' + b.version) || [],
+                    fullVersionList: high.fullVersionList.map(b => b.brand + ' ' + b.version) || [],
                 };
             } catch(e) {
                 return { error: e.message };

@@ -15,6 +15,7 @@ def _make_bundle(root: Path) -> Path:
     (bundle / "google_tts.apk").write_bytes(b"apk")
     (bundle / "espeak.apk").write_bytes(b"apk")
     (bundle / "rhvoice.apk").write_bytes(b"apk")
+    (bundle / "magisk.apk").write_bytes(b"apk")
     return bundle
 
 
@@ -27,6 +28,7 @@ def test_bundle_root_derived_from_chrome_version_dir(tmp_path):
     assert find_bundle_apk("google_tts.apk", str(chrome_dir)) == (bundle / "google_tts.apk").resolve()
     assert find_bundle_apk("espeak.apk", str(chrome_dir)) == (bundle / "espeak.apk").resolve()
     assert find_bundle_apk("rhvoice.apk", str(chrome_dir)) == (bundle / "rhvoice.apk").resolve()
+    assert find_bundle_apk("magisk.apk", str(chrome_dir)) == (bundle / "magisk.apk").resolve()
     assert validate_apk_bundle(bundle) == (True, str(bundle.resolve()))
 
 
@@ -52,3 +54,4 @@ def test_bundle_validation_requires_webview_and_tts(tmp_path):
     assert "google_tts.apk" in detail
     assert "espeak.apk" in detail
     assert "rhvoice.apk" in detail
+    assert "magisk.apk" in detail

@@ -51,10 +51,10 @@ async def _extract_creepjs(page: Page) -> Dict[str, Any]:
         const stealthMatch = all.match(/(\\d+)%\\s*stealth:/i);
         const liesMatch = all.match(/lies[:\\s]*(\\d+)/i);
         return {
-            likeHeadless: likeHeadlessMatch ? likeHeadlessMatch[1] + "%" : "N/A",
-            headless: headlessMatch ? headlessMatch[1] + "%" : "N/A",
-            stealth: stealthMatch ? stealthMatch[1] + "%" : "N/A",
-            lies: liesMatch ? liesMatch[1] : "N/A",
+            likeHeadless: likeHeadlessMatch  likeHeadlessMatch[1] + "%" : "N/A",
+            headless: headlessMatch  headlessMatch[1] + "%" : "N/A",
+            stealth: stealthMatch  stealthMatch[1] + "%" : "N/A",
+            lies: liesMatch  liesMatch[1] : "N/A",
         };
     }""")
 
@@ -72,7 +72,7 @@ async def _extract_browserscan(page: Page) -> Dict[str, Any]:
         const all = document.body.innerText;
         const scoreMatch = all.match(/(\\d+)\\s*%/);
         return {
-            score: scoreMatch ? scoreMatch[1] + "%" : "N/A",
+            score: scoreMatch  scoreMatch[1] + "%" : "N/A",
         };
     }""")
 
@@ -285,18 +285,18 @@ def _format_summary(results: List[TestResult]) -> str:
             "FAIL": "FAIL",
             "ERROR": "ERR ",
             "SKIP": "SKIP",
-            "PENDING": "??? ",
-        }.get(r.status, "????")
+            "PENDING": "- ",
+        }.get(r.status, "-")
 
         detail = ""
         if r.status == "OK":
             d = r.data
             if r.name == "CreepJS":
-                detail = f"headless={d.get('headless','?')}, stealth={d.get('stealth','?')}, likeHeadless={d.get('likeHeadless','?')}, lies={d.get('lies','?')}"
+                detail = f"headless={d.get('headless','')}, stealth={d.get('stealth','')}, likeHeadless={d.get('likeHeadless','')}, lies={d.get('lies','')}"
             elif r.name == "BrowserScan":
-                detail = f"score={d.get('score','?')}"
+                detail = f"score={d.get('score','')}"
             elif r.name == "Sannysoft":
-                detail = f"{d.get('passed','?')}/{d.get('total','?')} passed"
+                detail = f"{d.get('passed','')}/{d.get('total','')} passed"
                 if d.get("failedTests"):
                     detail += f" (failed: {', '.join(d['failedTests'])})"
             elif r.name in ("Cloudflare"):

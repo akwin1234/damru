@@ -36,7 +36,7 @@ async def main():
 
     # Step 1: Device info
     info = await adb.get_device_info()
-    print(f"[1] Device: {info.get('model', '?')} Android {info.get('android_version', '?')}")
+    print(f"[1] Device: {info.get('model', '')} Android {info.get('android_version', '')}")
 
     # Step 2: Root
     root = RootOps(adb)
@@ -186,8 +186,8 @@ async def main():
                         if (!gl) return JSON.stringify({error: 'no webgl'});
                         var ext = gl.getExtension('WEBGL_debug_renderer_info');
                         return JSON.stringify({
-                            vendor: ext ? gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR),
-                            renderer: ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)
+                            vendor: ext  gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR),
+                            renderer: ext  gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)
                         });
                     })()
                     """,

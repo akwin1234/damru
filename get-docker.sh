@@ -159,7 +159,7 @@ while [ $# -gt 0 ]; do
 			echo "Illegal option $1"
 			;;
 	esac
-	shift $(( $# > 0 ? 1 : 0 ))
+	shift $(( $# > 0  1 : 0 ))
 done
 
 case "$mirror" in
@@ -362,7 +362,7 @@ check_forked() {
 		# Check if the `-u` option is supported
 		set +e
 		lsb_release -a -u > /dev/null 2>&1
-		lsb_release_exit_code=$?
+		lsb_release_exit_code=$
 		set -e
 
 		# Check if the command has exited successfully, it means we're in a forked distro

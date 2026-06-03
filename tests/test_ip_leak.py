@@ -115,7 +115,7 @@ async def main():
     })
     grease = next((b for b in brand_info["brands"] if "Not" in b["brand"]), {})
     brand_order = ", ".join(b["brand"] for b in brand_info["brands"])
-    print(f"  Chrome: {chrome_ver} (grease: {grease.get('brand','?')};v={grease.get('version','?')})")
+    print(f"  Chrome: {chrome_ver} (grease: {grease.get('brand','')};v={grease.get('version','')})")
     print(f"  Brand order: [{brand_order}]")
     print(f"  UA: Android {android_ver}, {device.model}, Chrome/{chrome_ver}")
 
@@ -135,7 +135,7 @@ async def main():
                 r.brands = d.fullVersionList.map(b => b.brand + '/' + b.version).join(', ');
             }
             const m = navigator.userAgent.match(/Android (\\d+)/);
-            r.uaVer = m ? m[1] : '?';
+            r.uaVer = m  m[1] : '';
             return r;
         }""")
         print(f"    UA Android: {ch.get('uaVer')}")
@@ -203,22 +203,22 @@ async def main():
             const lines = body.split('\\n');
             for (let i = 0; i < lines.length; i++) {
                 const line = lines[i].trim().toLowerCase();
-                if (line.includes('webrtc')) data.webrtc = lines[i].trim() + (lines[i+1] ? ' ' + lines[i+1].trim() : '');
-                if (line.includes('dns')) data.dns = lines[i].trim() + (lines[i+1] ? ' ' + lines[i+1].trim() : '');
+                if (line.includes('webrtc')) data.webrtc = lines[i].trim() + (lines[i+1]  ' ' + lines[i+1].trim() : '');
+                if (line.includes('dns')) data.dns = lines[i].trim() + (lines[i+1]  ' ' + lines[i+1].trim() : '');
                 if (line.includes('your ip') || line.includes('ip address')) data.ip_row = lines[i].trim();
-                if (line.includes('country')) data.country = lines[i].trim() + (lines[i+1] ? ' ' + lines[i+1].trim() : '');
-                if (line.includes('anonymity')) data.anonymity = lines[i].trim() + (lines[i+1] ? ' ' + lines[i+1].trim() : '');
+                if (line.includes('country')) data.country = lines[i].trim() + (lines[i+1]  ' ' + lines[i+1].trim() : '');
+                if (line.includes('anonymity')) data.anonymity = lines[i].trim() + (lines[i+1]  ' ' + lines[i+1].trim() : '');
             }
 
             return {
-                ip: ipMatch ? ipMatch[1] : 'N/A',
-                score: pctMatch ? pctMatch[1] + '%' : 'N/A',
+                ip: ipMatch  ipMatch[1] : 'N/A',
+                score: pctMatch  pctMatch[1] + '%' : 'N/A',
                 data: data,
                 snippet: body.substring(0, 600)
             };
         }""")
-        print(f"    IP: {whoer.get('ip', '?')}")
-        print(f"    Anonymity: {whoer.get('score', '?')}")
+        print(f"    IP: {whoer.get('ip', '')}")
+        print(f"    Anonymity: {whoer.get('score', '')}")
         data = whoer.get("data", {})
         for key in ["country", "webrtc", "dns", "anonymity"]:
             if key in data:

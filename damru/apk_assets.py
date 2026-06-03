@@ -3,10 +3,26 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Optional
+from importlib import resources
 
 
 def _package_root() -> Path:
     return Path(__file__).resolve().parent
+
+def bundled_magisk_apk() -> Optional[Path]:
+    """Return the Magisk APK shipped with Damru, when package data is available."""
+    try:
+        ref = resources.files("damru.assets").joinpath("magisk.apk")
+        with resources.as_file(ref) as path:
+            if path.is_file() and path.stat().st_size > 1_000_000:
+                return path.resolve()
+    except Exception:
+        pass
+
+    fallback = _package_root() / "assets" / "magisk.apk"
+    if fallback.is_file() and fallback.stat().st_size > 1_000_000:
+        return fallback.resolve()
+    return None
 
 
 def _configured_chrome_apk() -> Optional[str]:
@@ -112,6 +128,7 @@ def validate_apk_bundle(root: Path) -> tuple[bool, str]:
         "google_tts.apk",
         "espeak.apk",
         "rhvoice.apk",
+        "magisk.apk",
     ]
     missing = [name for name in required if find_bundle_apk(name, str(root)) is None]
     if missing:

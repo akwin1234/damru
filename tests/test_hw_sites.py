@@ -10,7 +10,7 @@ from damru import AsyncDamru
 PH_SOCKS5 = "socks5://proxy.example:50001"
 PH_HTTP = "proxy.example:50000"
 
-# Use S24 FE (10 cores, 8GB) â€” easy to spot if faked correctly
+# Use S24 FE (10 cores, 8GB) - easy to spot if faked correctly
 DEVICE = "Samsung Galaxy S24 FE"
 EXPECTED_CORES = 10
 EXPECTED_MEM = 8
@@ -32,7 +32,7 @@ async def main():
     ) as context:
         page = context.pages[0] if context.pages else await context.new_page()
 
-        # â”€â”€ Test 0: Direct JS check (baseline) â”€â”€
+        # -- Test 0: Direct JS check (baseline) --
         print("\n--- [0] Direct JS Check ---")
         await page.goto("data:text/html,<h1>hw</h1>", wait_until="domcontentloaded", timeout=10000)
         await asyncio.sleep(1)
@@ -40,7 +40,7 @@ async def main():
         print(f"  cores={hw['cores']} mem={hw['mem']}")
         print(f"  {'PASS' if hw['cores'] == EXPECTED_CORES and hw['mem'] == EXPECTED_MEM else 'FAIL'}")
 
-        # â”€â”€ Test 1: BrowserLeaks â”€â”€
+        # -- Test 1: BrowserLeaks --
         print("\n--- [1] BrowserLeaks (browserleaks.com/javascript) ---")
         try:
             await page.goto("https://browserleaks.com/javascript", wait_until="domcontentloaded", timeout=45000)
@@ -67,14 +67,14 @@ async def main():
                 return result;
             }""")
             if bl_hw.get("cores") or bl_hw.get("mem"):
-                print(f"  Extracted: cores={bl_hw.get('cores', '?')}, mem={bl_hw.get('mem', '?')}")
+                print(f"  Extracted: cores={bl_hw.get('cores', '')}, mem={bl_hw.get('mem', '')}")
                 cores_ok = str(EXPECTED_CORES) in str(bl_hw.get("cores", ""))
                 mem_ok = str(EXPECTED_MEM) in str(bl_hw.get("mem", ""))
                 print(f"  cores: {'PASS' if cores_ok else 'FAIL'}, mem: {'PASS' if mem_ok else 'FAIL'}")
         except Exception as e:
             print(f"  ERROR: {e}")
 
-        # â”€â”€ Test 2: BrowserScan â”€â”€
+        # -- Test 2: BrowserScan --
         print("\n--- [2] BrowserScan (browserscan.net) ---")
         try:
             await page.goto("https://www.browserscan.net/", wait_until="domcontentloaded", timeout=45000)
@@ -94,18 +94,18 @@ async def main():
                 const text = document.body.innerText;
                 const result = {};
                 // Look for patterns like "Hardware Concurrency 10" or "Device Memory 8"
-                const hcMatch = text.match(/(?:hardware\\s*concurrency|cpu\\s*cores?)[\\s:]*?(\\d+)/i);
-                const dmMatch = text.match(/(?:device\\s*memory)[\\s:]*?(\\d+)/i);
+                const hcMatch = text.match(/(:hardware\\s*concurrency|cpu\\s*cores)[\\s:]*(\\d+)/i);
+                const dmMatch = text.match(/(:device\\s*memory)[\\s:]*(\\d+)/i);
                 if (hcMatch) result.cores = hcMatch[1];
                 if (dmMatch) result.mem = dmMatch[1];
                 return result;
             }""")
             if bs_hw.get("cores") or bs_hw.get("mem"):
-                print(f"  Extracted: cores={bs_hw.get('cores', '?')}, mem={bs_hw.get('mem', '?')}")
+                print(f"  Extracted: cores={bs_hw.get('cores', '')}, mem={bs_hw.get('mem', '')}")
         except Exception as e:
             print(f"  ERROR: {e}")
 
-        # â”€â”€ Test 3: CreepJS â”€â”€
+        # -- Test 3: CreepJS --
         print("\n--- [3] CreepJS ---")
         try:
             await page.goto("https://abrahamjuliot.github.io/creepjs/", wait_until="domcontentloaded", timeout=45000)
@@ -121,19 +121,19 @@ async def main():
             cjs = await page.evaluate("""() => {
                 const text = document.body.innerText;
                 const result = {};
-                const hcMatch = text.match(/hardwareConcurrency[:\\s]*?(\\d+)/i);
-                const dmMatch = text.match(/deviceMemory[:\\s]*?(\\d+\\.?\\d*)/i);
+                const hcMatch = text.match(/hardwareConcurrency[:\\s]*(\\d+)/i);
+                const dmMatch = text.match(/deviceMemory[:\\s]*(\\d+\\.\\d*)/i);
                 const liesMatch = text.match(/lies[:\\s]*(\\d+)/i);
                 if (hcMatch) result.cores = hcMatch[1];
                 if (dmMatch) result.mem = dmMatch[1];
                 if (liesMatch) result.lies = liesMatch[1];
                 return result;
             }""")
-            print(f"  Extracted: cores={cjs.get('cores', '?')}, mem={cjs.get('mem', '?')}, lies={cjs.get('lies', '?')}")
+            print(f"  Extracted: cores={cjs.get('cores', '')}, mem={cjs.get('mem', '')}, lies={cjs.get('lies', '')}")
         except Exception as e:
             print(f"  ERROR: {e}")
 
-        # â”€â”€ Test 4: deviceinfo.me â”€â”€
+        # -- Test 4: deviceinfo.me --
         print("\n--- [4] deviceinfo.me ---")
         try:
             await page.goto("https://www.deviceinfo.me/", wait_until="domcontentloaded", timeout=45000)
@@ -155,7 +155,7 @@ async def main():
                 return result;
             }""")
             if di_hw.get("cores") or di_hw.get("mem"):
-                print(f"  cores={di_hw.get('cores', '?')}, mem={di_hw.get('mem', '?')}")
+                print(f"  cores={di_hw.get('cores', '')}, mem={di_hw.get('mem', '')}")
                 cores_ok = str(EXPECTED_CORES) in str(di_hw.get("cores", ""))
                 mem_ok = str(EXPECTED_MEM) in str(di_hw.get("mem", ""))
                 print(f"  cores: {'PASS' if cores_ok else 'FAIL'}, mem: {'PASS' if mem_ok else 'FAIL'}")

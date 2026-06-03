@@ -1,4 +1,4 @@
-﻿"""Test hardened JS injection â€” verifies both values AND anti-detection stealth.
+﻿"""Test hardened JS injection - verifies both values AND anti-detection stealth.
 
 Tests:
   1. Values correct (cores + memory match target device)
@@ -27,7 +27,7 @@ DETECTION_SCRIPT = """() => {
     results.cores = navigator.hardwareConcurrency;
     results.mem = navigator.deviceMemory;
 
-    // 2. Getter toString â€” should show "[native code]"
+    // 2. Getter toString - should show "[native code]"
     try {
         const dmDesc = Object.getOwnPropertyDescriptor(N, 'deviceMemory');
         const hcDesc = Object.getOwnPropertyDescriptor(N, 'hardwareConcurrency');
@@ -41,12 +41,12 @@ DETECTION_SCRIPT = """() => {
         }
     } catch(e) { results.toString_error = e.message; }
 
-    // 3. Getter .name â€” should be "get deviceMemory"
+    // 3. Getter .name - should be "get deviceMemory"
     try {
         const dmDesc = Object.getOwnPropertyDescriptor(N, 'deviceMemory');
         const hcDesc = Object.getOwnPropertyDescriptor(N, 'hardwareConcurrency');
-        results.dm_name = dmDesc && dmDesc.get ? dmDesc.get.name : 'N/A';
-        results.hc_name = hcDesc && hcDesc.get ? hcDesc.get.name : 'N/A';
+        results.dm_name = dmDesc && dmDesc.get  dmDesc.get.name : 'N/A';
+        results.hc_name = hcDesc && hcDesc.get  hcDesc.get.name : 'N/A';
     } catch(e) { results.name_error = e.message; }
 
     // 4. Function.prototype.toString integrity
@@ -56,7 +56,7 @@ DETECTION_SCRIPT = """() => {
         results.ts_hasNative = tsStr.includes('[native code]');
     } catch(e) { results.ts_error = e.message; }
 
-    // 5. Function.prototype.toString.call(getter) â€” advanced check
+    // 5. Function.prototype.toString.call(getter) - advanced check
     try {
         const dmDesc = Object.getOwnPropertyDescriptor(N, 'deviceMemory');
         if (dmDesc && dmDesc.get) {
@@ -97,11 +97,11 @@ DETECTION_SCRIPT = """() => {
 
 async def main():
     print("=" * 60)
-    print("  Hardened JS Injection â€” Stealth Detection Test")
+    print("  Hardened JS Injection - Stealth Detection Test")
     print("=" * 60)
 
     async with AsyncDamru(
-        device="Samsung Galaxy S24 FE",  # 10 cores, 8GB â€” good edge case
+        device="Samsung Galaxy S24 FE",  # 10 cores, 8GB - good edge case
         proxy=PH_SOCKS5,
         http_proxy=PH_HTTP,
         timezone="Asia/Manila",

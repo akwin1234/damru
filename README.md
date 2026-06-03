@@ -5,10 +5,10 @@
   <p><em>The world's first open-source framework for natively modded Android browser automation.</em></p>
   <p>High-performance, ultra-stealth browser automation framework designed for web scraping and botting at scale.</p>
 
-  [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
-  [![Playwright](https://img.shields.io/badge/playwright-1.40--1.59-green.svg?style=for-the-badge&logo=playwright&logoColor=white)](https://playwright.dev/python/)
-  [![Platform](https://img.shields.io/badge/Platform-WSL2%20%7C%20Linux-lightgrey.svg?style=for-the-badge&logo=linux&logoColor=white)]()
-  [![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-red.svg?style=for-the-badge)](https://polyformproject.org/licenses/noncommercial/1.0.0)
+  [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svgstyle=for-the-badge&logo=python&logoColor=white)](https://python.org)
+  [![Playwright](https://img.shields.io/badge/playwright-1.40--1.59-green.svgstyle=for-the-badge&logo=playwright&logoColor=white)](https://playwright.dev/python/)
+  [![Platform](https://img.shields.io/badge/Platform-WSL2%20%7C%20Linux-lightgrey.svgstyle=for-the-badge&logo=linux&logoColor=white)]()
+  [![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-red.svgstyle=for-the-badge)](https://polyformproject.org/licenses/noncommercial/1.0.0)
 
   <p>
     <strong>Community:</strong>
@@ -63,7 +63,7 @@ While Damru technically lists multiple environments, **Redroid (Docker)** is the
 > **Physical Device Warning**
 > Damru is designed strictly for containerized environments (Redroid). **It does not support physical Android devices.** Do not attempt to run Damru against your personal phone. If you choose to use a spare rooted device, you do so at your own risk. Damru's low-level OS patches and binary injections may brick or destabilize physical hardware.
 
-**Why Redroid?**
+**Why Redroid**
 Damru's most advanced stealth layers - including native GPU binary patching and OS-level `iptables` hooks-are optimized for the Redroid kernel. It provides a more stable environment for multi-container pools and is significantly more undetectable by modern anti-bot heuristics. MuMu Player support is currently an experimental, unfinished, and non-functional beta feature.
 
 ---
@@ -190,6 +190,7 @@ damru-project/
 |   +-- test_stealth.py    # Unit tests for fingerprinting integrity
 +-- chrome-apks/           # Pre-validated Mobile Assets
 |   +-- espeak.apk         # TTS engines for Voice fingerprinting
+|   +-- magisk.apk         # Local resetprop source for raw Redroid
 |   +-- 145.x/             # Specific Chrome/WebView versions
 +-- docs/                  # Roadmaps & Infrastructure Plans
 +-- scripts/               # Maintenance & Image Baking Utils
@@ -223,7 +224,7 @@ For the full list of available Android identities, see the:
 
 Download the current pre-baked image:
 
-**[Download damru-redroid-latest.tar](https://drive.google.com/file/d/1AzSTOlGpSfqHB-F-Yty2JqbOEMlgFT5F/view?usp=sharing)**
+**[Download damru-redroid-latest.tar](https://drive.google.com/file/d/1AzSTOlGpSfqHB-F-Yty2JqbOEMlgFT5F/viewusp=sharing)**
 
 Current local artifact prepared for release testing:
 
@@ -252,7 +253,7 @@ Once downloaded, follow **Step 3** in the Deployment Guide below to load it into
 
 Normal users should prefer `python -m damru install-image`; the baked image already contains Chrome, WebView/TTS assets, fonts, and warm preferences. Use the raw APK bundle only when you want to bake your own image or run unbaked raw Redroid containers.
 
-Google Drive bundle: [Chrome/WebView/TTS APK assets](https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing)
+Google Drive bundle: [Chrome/WebView/TTS/resetprop APK assets](https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/viewusp=sharing)
 
 Automatic install:
 
@@ -262,7 +263,7 @@ python -m damru install-apks --download
 
 `install-apks` downloads the APK asset bundle, extracts to `/home/damru/chrome-apks` on Linux/WSL by default, validates that APK files exist, and updates `CHROME_APK` only when needed. `install-deps` and `setup` also run this automatically when no baked image and no local APKs are available.
 
-Extract/copy the bundle so one bundle root contains this layout. The bundle is not only Chrome; it also includes Trichrome WebView and TTS voice APKs used by raw/unbaked Redroid flows:
+Extract/copy the bundle so one bundle root contains this layout. The bundle is not only Chrome; it also includes Trichrome WebView and TTS voice APKs. Damru ships `magisk.apk` and copies it into this bundle automatically when raw/unbaked Redroid needs a local `resetprop` source:
 
 ```text
 chrome-apks/
@@ -272,6 +273,7 @@ chrome-apks/
   espeak.apk
   google_tts.apk
   rhvoice.apk
+  magisk.apk
 ```
 
 Manual Linux/WSL extraction, from the directory where you downloaded the bundle:
@@ -292,7 +294,7 @@ python -m damru check-env
 python -m damru bake-image --image damru-redroid:latest
 ```
 
-Damru auto-searches `/home/damru/chrome-apks`, package-local `chrome-apks/`, the current directory's `chrome-apks/`, and the parent directory's `chrome-apks/`. From that one bundle root it discovers Chrome split APKs, `TrichromeWebView.apk`, `google_tts.apk`, `espeak.apk`, and `rhvoice.apk`. If automatic detection fails, keep the full `chrome-apks/` bundle together and point config/code at the specific Chrome split-APK version directory:
+Damru auto-searches `/home/damru/chrome-apks`, package-local `chrome-apks/`, the current directory's `chrome-apks/`, and the parent directory's `chrome-apks/`. From that one bundle root it discovers Chrome split APKs, `TrichromeWebView.apk`, `google_tts.apk`, `espeak.apk`, `rhvoice.apk`, and `magisk.apk`. If automatic detection fails, keep the full `chrome-apks/` bundle together and point config/code at the specific Chrome split-APK version directory:
 
 ```python
 CHROME_APK = "/home/damru/chrome-apks/145.0.7632.75"
@@ -313,13 +315,13 @@ async with AsyncDamru(chrome_apk="/home/damru/chrome-apks/145.0.7632.75") as bro
     page = await browser.new_page()
 ```
 
-`tools/magisk.apk` is also kept out of Git because it is a third-party APK. Users do not need to provide it for normal setup. If raw/unbaked Redroid does not provide `resetprop`, Damru automatically downloads the official Magisk APK to `/home/damru/tools/magisk.apk` and extracts only the standalone `resetprop` binary from it.
+Damru ships `magisk.apk` as a package asset and uses it only when raw/unbaked Redroid needs a local source for extracting standalone `resetprop`. During `setup`, `install-apks`, or `check-env`, Damru copies that asset to `/home/damru/chrome-apks/magisk.apk` when needed. Damru does not download Magisk, eSpeak, Google TTS, or RHVoice from third-party APK sites at runtime.
 
 ---
 
 ## First-Time User Deployment Guide (WSL2 / Linux)
 
-Ready to start? Damru uses **Redroid** (Android in Docker) to spin up headless mobile devices instantly. Follow this step-by-step guide to deploy Damru from scratch on the tested Ubuntu paths: native Ubuntu VPS/Linux, or Ubuntu inside WSL2 with Damru's bundled WSL kernel.
+Ready to start Damru uses **Redroid** (Android in Docker) to spin up headless mobile devices instantly. Follow this step-by-step guide to deploy Damru from scratch on the tested Ubuntu paths: native Ubuntu VPS/Linux, or Ubuntu inside WSL2 with Damru's bundled WSL kernel.
 
 > [!IMPORTANT]
 > Redroid is Linux-only. On Windows, Docker and Redroid must run inside WSL2; native Windows Docker is not a supported Redroid target.
@@ -461,7 +463,7 @@ If your Redroid container fails to boot or Docker won't start in WSL, run these 
     ```
 
 > [!TIP]
-> **What is an ADB Serial?**
+> **What is an ADB Serial**
 
 > An ADB serial is a unique identifier for your Android device. 
 > - For **Redroid/Docker**, it is usually the network address: `localhost:5555` or an internal IP.
@@ -630,9 +632,9 @@ Damru uses a centralized configuration file located at `damru/config.py`. If you
    python -m damru install-apks --download
    ```
 
-   It downloads the Chrome/WebView/TTS APK bundle automatically, extracts to `/home/damru/chrome-apks` on Linux/WSL, and configures `CHROME_APK` only when needed. The [Google Drive APK bundle](https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing) is for manual recovery if automatic download is unavailable.
+   It downloads the Chrome/WebView/TTS/resetprop APK bundle automatically, extracts to `/home/damru/chrome-apks` on Linux/WSL, and configures `CHROME_APK` only when needed. The [Google Drive APK bundle](https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/viewusp=sharing) is for manual recovery if automatic download is unavailable.
 
-   If you still see an APK asset error, download the same Google Drive bundle manually, extract it as `/home/damru/chrome-apks`, keep the WebView/TTS APKs beside the Chrome version folders, then set `CHROME_APK` to a Chrome split-APK version directory, for example:
+   If you still see an APK asset error, download the same Google Drive bundle manually, extract it as `/home/damru/chrome-apks`, keep the WebView/TTS/Magisk APKs beside the Chrome version folders, then set `CHROME_APK` to a Chrome split-APK version directory, for example:
 
    ```python
    CHROME_APK = "/home/damru/chrome-apks/145.0.7632.75"
@@ -760,7 +762,7 @@ if __name__ == "__main__":
 
 ### Example 3: Scaling Up with Connection Pooling
 
-Scraping thousands of pages? Damru provides a native Pool manager to run operations concurrently across multiple Docker containers.
+Scraping thousands of pages Damru provides a native Pool manager to run operations concurrently across multiple Docker containers.
 
 ```python
 from damru import DamruPoolSync
@@ -809,24 +811,24 @@ We are aggressively building Damru into a fully autonomous infrastructure tool. 
 
 ## Frequently Asked Questions
 
-### 1. Does Damru support physical Android devices?
+### 1. Does Damru support physical Android devices
 **No.** Damru is designed strictly for containerized environments (Redroid). Its low-level OS patches, `resetprop` logic, and binary driver injections are optimized for Redroid's kernel and filesystem. **Do not attempt to use Damru on your personal phone.** If you use a spare rooted device, you do so entirely at your own risk.
 
-### 2. Can I use MuMu Player instead of Docker?
+### 2. Can I use MuMu Player instead of Docker
 MuMu Player support is currently an **experimental, unfinished, and non-functional beta feature**. While the code structure for it exists, we highly recommend using **Redroid (Docker)** for any production or serious research work.
 
-### 3. Why is the .tar image so large?
+### 3. Why is the .tar image so large
 The `damru-redroid-latest.tar` image is a full Android 14 operating system export. The current test artifact is about 915 MB as a Docker tarball and expands to a larger Docker image after `docker load`. It includes pre-installed Chrome, TTS assets, custom fonts, and pre-patched binary drivers for faster deployment.
 
-### 4. Does Damru work on native Linux?
+### 4. Does Damru work on native Linux
 **Yes.** Any Docker image built in WSL2 is a standard Linux image. Damru works perfectly on native Linux (Ubuntu, Debian, etc.), provided the `binder` kernel modules are loaded.
 
-### 5. Why "Zero JS Injection"?
+### 5. Why "Zero JS Injection"
 Standard stealth tools are caught by anti-bots because their JavaScript injections leave traces (timing, prototype pollution). Damru lies from the outside-in (OS, Binary, and Protocol levels), making it mathematically invisible to scripts.
 
 ---
 
-## ðŸ™ Acknowledgments & Credits
+## Acknowledgments & Credits
 
 Damru is built on the shoulders of giants. We would like to credit the following projects and technologies that make this framework possible:
 

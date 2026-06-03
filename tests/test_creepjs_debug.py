@@ -1,4 +1,4 @@
-﻿"""Debug CreepJS stealth detection on redroid â€” capture full page details."""
+﻿"""Debug CreepJS stealth detection on redroid - capture full page details."""
 import asyncio
 import json
 import sys
@@ -67,11 +67,11 @@ async def main():
                 const liesMatch = text.match(/lies[:\\s]*(\\d+)/i);
                 const trashMatch = text.match(/trash[:\\s]*(\\d+)/i);
 
-                result.headless = headlessMatch ? headlessMatch[0] : 'N/A';
-                result.stealth = stealthMatch ? stealthMatch[0] : 'N/A';
-                result.likeHeadless = likeHeadlessMatch ? likeHeadlessMatch[0] : 'N/A';
-                result.lies = liesMatch ? liesMatch[0] : 'N/A';
-                result.trash = trashMatch ? trashMatch[0] : 'N/A';
+                result.headless = headlessMatch  headlessMatch[0] : 'N/A';
+                result.stealth = stealthMatch  stealthMatch[0] : 'N/A';
+                result.likeHeadless = likeHeadlessMatch  likeHeadlessMatch[0] : 'N/A';
+                result.lies = liesMatch  liesMatch[0] : 'N/A';
+                result.trash = trashMatch  trashMatch[0] : 'N/A';
 
                 // Get all red/warning elements
                 const allElements = document.querySelectorAll('*');
@@ -87,8 +87,8 @@ async def main():
                 result.redElements = [...new Set(warnings)].slice(0, 30);
 
                 // Find "bot" related text
-                const botSection = text.match(/bot.*?(?=\\n\\n)/gis);
-                result.botSections = botSection ? botSection.map(s => s.substring(0, 200)) : [];
+                const botSection = text.match(/bot.*(=\\n\\n)/gis);
+                result.botSections = botSection  botSection.map(s => s.substring(0, 200)) : [];
 
                 // Find "stealth" related text with context
                 const stealthSections = [];
@@ -120,7 +120,7 @@ async def main():
                     deviceMemory: navigator.deviceMemory,
                     hardwareConcurrency: navigator.hardwareConcurrency,
                     maxTouchPoints: navigator.maxTouchPoints,
-                    connection: navigator.connection ? {
+                    connection: navigator.connection  {
                         effectiveType: navigator.connection.effectiveType,
                         rtt: navigator.connection.rtt,
                         downlink: navigator.connection.downlink,

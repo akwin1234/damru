@@ -24,8 +24,8 @@ async def main():
             screenHeight: screen.height,
             devicePixelRatio: window.devicePixelRatio,
             hasUAData: !!navigator.userAgentData,
-            uaDataMobile: navigator.userAgentData ? navigator.userAgentData.mobile : 'N/A',
-            uaDataPlatform: navigator.userAgentData ? navigator.userAgentData.platform : 'N/A',
+            uaDataMobile: navigator.userAgentData  navigator.userAgentData.mobile : 'N/A',
+            uaDataPlatform: navigator.userAgentData  navigator.userAgentData.platform : 'N/A',
         };
     }""")
 
@@ -50,7 +50,7 @@ async def main():
                     model: high.model,
                     architecture: high.architecture,
                     bitness: high.bitness,
-                    fullVersionList: high.fullVersionList ? high.fullVersionList.map(b => b.brand + ' ' + b.version) : [],
+                    fullVersionList: high.fullVersionList  high.fullVersionList.map(b => b.brand + ' ' + b.version) : [],
                 };
             } catch(e) {
                 return { error: e.message };
@@ -66,8 +66,8 @@ async def main():
     result = await page.evaluate("""() => {
         // What BrowserScan checks
         return {
-            ua_model: navigator.userAgent.match(/; ([^)]+)\\)/)?.[1] || 'reduced',
-            ua_android: navigator.userAgent.match(/Android (\\d+)/)?.[1] || '?',
+            ua_model: navigator.userAgent.match(/; ([^)]+)\\)/).[1] || 'reduced',
+            ua_android: navigator.userAgent.match(/Android (\\d+)/).[1] || '',
         };
     }""")
     print("\n=== UA Parsing ===")

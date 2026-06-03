@@ -131,7 +131,7 @@ async def main():
         print("=" * 70)
 
         # Audio
-        sr = results.get("audioSampleRate", "?")
+        sr = results.get("audioSampleRate", "")
         print(f"\n  [AUDIO] sampleRate: {sr} {'PASS' if sr == 48000 else 'FAIL (want 48000)'}")
 
         # Fonts
@@ -150,7 +150,7 @@ async def main():
             print(f"    - {s}")
 
         # MIME
-        mc = results.get("mimeCount", "?")
+        mc = results.get("mimeCount", "")
         print(f"\n  [MIME] Supported: {mc}")
         unsup = results.get("mimeUnsupported", [])
         if unsup:

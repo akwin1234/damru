@@ -92,7 +92,7 @@ def _patch_text(source: str) -> str:
     """Patch the installed Playwright file while preserving its version shape."""
     runtime_enable = 'this._client.send("Runtime.enable", {}),'
     replacement = (
-        f'(process.env.{_ENV_MARKER} ? '
+        f'(process.env.{_ENV_MARKER}  '
         'this._client.send("Runtime.enable", {}).then(() => { '
         f'/* {_PATCH_MARKER} */ '
         'this._stealthDisableTimer = setTimeout(() => { '
@@ -119,7 +119,7 @@ def _patch_text(source: str) -> str:
         patched = patched.replace(frame_nav, frame_nav_patch, 1)
 
     context_created = (
-        'const frame = contextPayload.auxData ? '
+        'const frame = contextPayload.auxData  '
         'this._page.frameManager.frame(contextPayload.auxData.frameId) : null;'
     )
     context_created_patch = (

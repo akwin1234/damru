@@ -13,7 +13,7 @@ We would like to acknowledge the following AI tools that served as primary "co-p
 
 These tools were instrumental in research, C++ binary patching, and orchestrating the complex interactions between Android's OS layers and Playwright.
 
-## 🚀 How Can I Contribute?
+## 🚀 How Can I Contribute
 
 ### 1. Reporting Bugs
 If you find a bug (e.g., an anti-bot successfully detecting Damru), please open an issue. Provide:

@@ -16,14 +16,14 @@ import time
 import zipfile
 from pathlib import Path
 from pathlib import PureWindowsPath
-from .apk_assets import find_apk_bundle_root, validate_apk_bundle
+from .apk_assets import bundled_magisk_apk, find_apk_bundle_root, validate_apk_bundle
 
 _DAMRU_IMAGE_TAR = "damru-redroid-latest.tar"
 _DAMRU_IMAGE_SHA256 = "19bfe988e58d41fa031b7df3ebd3a1cb8213cf376b5972c0749a40b42df9feb2"
-_DAMRU_IMAGE_URL = "https://drive.google.com/file/d/1AzSTOlGpSfqHB-F-Yty2JqbOEMlgFT5F/view?usp=sharing"
+_DAMRU_IMAGE_URL = "https://drive.google.com/file/d/1AzSTOlGpSfqHB-F-Yty2JqbOEMlgFT5F/viewusp=sharing"
 _DAMRU_APKS_ZIP = "chrome-apks.zip"
 _DAMRU_APKS_URL = "https://cosmicresidential.com/chrome-apks.zip"
-_DAMRU_APKS_MIRROR_URL = "https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing"
+_DAMRU_APKS_MIRROR_URL = "https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/viewusp=sharing"
 
 
 def _is_windows() -> bool:
@@ -548,6 +548,7 @@ def _start_docker_lines(sudo: str = "", attempts: int = 60) -> list[str]:
 def _chrome_apks_available() -> tuple[bool, str]:
     bundle_root = find_apk_bundle_root()
     if bundle_root is not None:
+        _ensure_shipped_magisk_in_bundle(bundle_root)
         return validate_apk_bundle(bundle_root)
 
     try:
@@ -1144,7 +1145,7 @@ def _install_deps(args: argparse.Namespace) -> int:
         print(f"  {command}")
 
     if not args.yes:
-        answer = input("Continue? [y/N] ").strip().lower()
+        answer = input("Continue [y/N] ").strip().lower()
         if answer not in {"y", "yes"}:
             print("Cancelled.")
             return 1
@@ -1507,7 +1508,7 @@ def _find_image_tar(explicit: str | None = None) -> Path | None:
 def _download_google_drive_file(url: str, target: Path) -> None:
     import requests
 
-    file_id_match = re.search(r"/d/([^/]+)/", url) or re.search(r"[?&]id=([^&]+)", url)
+    file_id_match = re.search(r"/d/([^/]+)/", url) or re.search(r"[&]id=([^&]+)", url)
     if not file_id_match:
         raise RuntimeError("unsupported Drive URL; pass --url with a Google Drive file link")
     session = requests.Session()
@@ -1640,6 +1641,17 @@ def _chrome_apk_version_dirs(root: Path) -> list[Path]:
         return []
     return [p for p in sorted(root.iterdir()) if p.is_dir() and any(p.glob("*.apk"))]
 
+def _ensure_shipped_magisk_in_bundle(root: Path) -> None:
+    """Copy Damru's shipped Magisk APK into an extracted APK bundle if missing."""
+    target = root / "magisk.apk"
+    if target.is_file() and target.stat().st_size > 1_000_000:
+        return
+    source = bundled_magisk_apk()
+    if source is None:
+        return
+    root.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, target)
+
 def _safe_extract_zip(zf: zipfile.ZipFile, target: Path) -> None:
     target = target.resolve()
     for member in zf.infolist():
@@ -1698,6 +1710,7 @@ def _install_apks(args: argparse.Namespace) -> int:
     apk_root = output_root
     if not apk_root.is_dir() and (output_root.parent / "chrome-apks").is_dir():
         apk_root = output_root.parent / "chrome-apks"
+    _ensure_shipped_magisk_in_bundle(apk_root)
     bundle_ok, bundle_detail = validate_apk_bundle(apk_root)
     if not bundle_ok:
         print(f"Invalid APK bundle after extraction: {bundle_detail}", file=sys.stderr)

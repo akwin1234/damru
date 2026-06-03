@@ -414,7 +414,7 @@ class MuMuManager:
         else:
             logger.info(
                 "MuMu %d dynamic profile applied: %s %s, gpu_mode=%s gpu_custom=%s",
-                index, brand, phone_model, gpu.get("gpu_mode", "?"), gpu.get("gpu_model.custom", ""),
+                index, brand, phone_model, gpu.get("gpu_mode", ""), gpu.get("gpu_model.custom", ""),
             )
 
     async def apply_dynamic_profile_by_serial(self, serial: str, device) -> bool:
@@ -527,7 +527,7 @@ class MuMuManager:
         row = next((i for i in instances if i.index == index), None)
         if row and (row.is_process_started or row.is_android_started):
             logger.info("MuMu %d resources mismatch (%s CPU/%s GB) -> restarting for %s CPU/%s GB",
-                        index, cur_cpu or "?", cur_mem or "?", target_cpu, target_mem)
+                        index, cur_cpu or "", cur_mem or "", target_cpu, target_mem)
             await self.shutdown_instance(index)
             await asyncio.sleep(3)
 
@@ -549,11 +549,11 @@ class MuMuManager:
         logger.info(
             "MuMu %d profile: mode=%s cpu=%s mem=%s resolution=%s auto_rotate=%s",
             index,
-            verify.get("performance_mode", "?"),
-            verify.get("performance_cpu.custom", "?"),
-            verify.get("performance_mem.custom", "?"),
-            verify.get("resolution_mode", "?"),
-            verify.get("window_auto_rotate", "?"),
+            verify.get("performance_mode", ""),
+            verify.get("performance_cpu.custom", ""),
+            verify.get("performance_mem.custom", ""),
+            verify.get("resolution_mode", ""),
+            verify.get("window_auto_rotate", ""),
         )
         return True
 

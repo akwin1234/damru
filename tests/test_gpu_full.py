@@ -146,8 +146,8 @@ async def get_webgl_via_cdp():
                         if (!gl) return JSON.stringify({error: 'no webgl'});
                         var ext = gl.getExtension('WEBGL_debug_renderer_info');
                         return JSON.stringify({
-                            vendor: ext ? gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) : 'N/A',
-                            renderer: ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : 'N/A'
+                            vendor: ext  gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) : 'N/A',
+                            renderer: ext  gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : 'N/A'
                         });
                     })()
                     """,

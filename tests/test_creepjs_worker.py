@@ -53,8 +53,8 @@ async def main():
 
             return results;
         }""")
-        print(f"\n  Blob toString: {proxy_check.get('blob_toString', '?')}")
-        print(f"  Worker toString: {proxy_check.get('worker_toString', '?')}")
+        print(f"\n  Blob toString: {proxy_check.get('blob_toString', '')}")
+        print(f"  Worker toString: {proxy_check.get('worker_toString', '')}")
         print(f"  Blob.name: {proxy_check.get('blob_name')}")
         print(f"  Worker.name: {proxy_check.get('worker_name')}")
         print(f"  Main cores: {proxy_check.get('main_cores')}")

@@ -1,4 +1,4 @@
-/* Test: Does LD_PRELOAD sysinfo override work? */
+/* Test: Does LD_PRELOAD sysinfo override work */
 #include <stdio.h>
 #include <sys/sysinfo.h>
 #include <unistd.h>

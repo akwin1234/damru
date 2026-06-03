@@ -1,4 +1,4 @@
-﻿"""Debug Worker interception â€” test all Worker creation patterns."""
+﻿"""Debug Worker interception - test all Worker creation patterns."""
 import asyncio
 import sys
 import os

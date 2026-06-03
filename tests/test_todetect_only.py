@@ -18,7 +18,7 @@ async def main():
     os.makedirs(RESULTS_DIR, exist_ok=True)
 
     print("=" * 60)
-    print("  todetect.net Test â€” 2GB RAM")
+    print("  todetect.net Test - 2GB RAM")
     print("=" * 60)
     t_start = time.monotonic()
 
@@ -56,7 +56,7 @@ async def main():
             const lines = all.split('\n').map(l => l.trim()).filter(l => l);
 
             // Look for overall score
-            const scoreMatch = all.match(/(?:overall|total|score|result)[:\s]*(-?\d+)/i);
+            const scoreMatch = all.match(/(:overall|total|score|result)[:\s]*(-\d+)/i);
             const percentMatch = all.match(/(\d+)\s*%/);
 
             // Get all table data
@@ -79,14 +79,14 @@ async def main():
             }
 
             return {
-                score: scoreMatch ? scoreMatch[1] : percentMatch ? percentMatch[1] + "%" : "N/A",
+                score: scoreMatch  scoreMatch[1] : percentMatch  percentMatch[1] + "%" : "N/A",
                 tables: tables.slice(0, 5),
                 sections: sections.slice(0, 20),
                 pageText: all.substring(0, 3000),
             };
         }""")
 
-        print(f"\n  Overall Score: {data.get('score', '?')}")
+        print(f"\n  Overall Score: {data.get('score', '')}")
 
         if data.get("tables"):
             for i, table in enumerate(data["tables"]):

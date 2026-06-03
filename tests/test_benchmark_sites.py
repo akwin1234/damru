@@ -53,20 +53,20 @@ async def test_creepjs(page):
         const fpMatch = all.match(/([a-f0-9]{16,})/i);
 
         return {
-            likeHeadless: likeHeadlessMatch ? likeHeadlessMatch[1] + "%" : "N/A",
-            headless: headlessMatch ? headlessMatch[1] + "%" : "N/A",
-            stealth: stealthMatch ? stealthMatch[1] + "%" : "N/A",
-            lies: liesMatch ? liesMatch[1] : "N/A",
-            trustScore: trustMatch ? trustMatch[1] : "N/A",
+            likeHeadless: likeHeadlessMatch  likeHeadlessMatch[1] + "%" : "N/A",
+            headless: headlessMatch  headlessMatch[1] + "%" : "N/A",
+            stealth: stealthMatch  stealthMatch[1] + "%" : "N/A",
+            lies: liesMatch  liesMatch[1] : "N/A",
+            trustScore: trustMatch  trustMatch[1] : "N/A",
         };
     }""")
 
     print(f"\n  Results:")
-    print(f"    Headless:     {data.get('headless', '?')}")
-    print(f"    Stealth:      {data.get('stealth', '?')}")
-    print(f"    Like Headless: {data.get('likeHeadless', '?')}")
-    print(f"    Lies:         {data.get('lies', '?')}")
-    print(f"    Trust Score:  {data.get('trustScore', '?')}")
+    print(f"    Headless:     {data.get('headless', '')}")
+    print(f"    Stealth:      {data.get('stealth', '')}")
+    print(f"    Like Headless: {data.get('likeHeadless', '')}")
+    print(f"    Lies:         {data.get('lies', '')}")
+    print(f"    Trust Score:  {data.get('trustScore', '')}")
     return data
 
 
@@ -98,7 +98,7 @@ async def test_todetect(page):
         const lines = all.split('\n').map(l => l.trim()).filter(l => l);
 
         // Look for overall score
-        const scoreMatch = all.match(/(?:overall|total|score|result)[:\s]*(-?\d+)/i);
+        const scoreMatch = all.match(/(:overall|total|score|result)[:\s]*(-\d+)/i);
         const percentMatch = all.match(/(\d+)\s*%/);
 
         // Extract individual test results
@@ -163,7 +163,7 @@ async def test_todetect(page):
         }
 
         return {
-            score: scoreMatch ? scoreMatch[1] : percentMatch ? percentMatch[1] + "%" : "N/A",
+            score: scoreMatch  scoreMatch[1] : percentMatch  percentMatch[1] + "%" : "N/A",
             tests: tests,
             statuses: statuses.slice(0, 30),
             tables: tables.slice(0, 5),
@@ -172,7 +172,7 @@ async def test_todetect(page):
         };
     }""")
 
-    print(f"\n  Overall Score: {data.get('score', '?')}")
+    print(f"\n  Overall Score: {data.get('score', '')}")
 
     if data.get("tables"):
         for i, table in enumerate(data["tables"]):
@@ -276,9 +276,9 @@ async def test_fingerprint(page):
         }
 
         return {
-            visitorId: visitorIdMatch ? visitorIdMatch[1] : "N/A",
+            visitorId: visitorIdMatch  visitorIdMatch[1] : "N/A",
             botDetected: botDetected && !notBot,
-            botStatus: botMatch ? botMatch[1] : (notBot ? "not detected" : (botDetected ? "detected" : "N/A")),
+            botStatus: botMatch  botMatch[1] : (notBot  "not detected" : (botDetected  "detected" : "N/A")),
             cards: [...new Set(cards)].slice(0, 30),
             tables: tables.slice(0, 5),
             sections: sections.slice(0, 15),
@@ -286,9 +286,9 @@ async def test_fingerprint(page):
         };
     }""")
 
-    print(f"\n  Visitor ID:  {data.get('visitorId', '?')}")
-    print(f"  Bot Status:  {data.get('botStatus', '?')}")
-    print(f"  Bot Detected: {data.get('botDetected', '?')}")
+    print(f"\n  Visitor ID:  {data.get('visitorId', '')}")
+    print(f"  Bot Status:  {data.get('botStatus', '')}")
+    print(f"  Bot Detected: {data.get('botDetected', '')}")
 
     if data.get("sections"):
         print(f"\n  Sections:")
@@ -315,7 +315,7 @@ async def main():
     os.makedirs(RESULTS_DIR, exist_ok=True)
 
     print("=" * 60)
-    print("  damru Benchmark â€” CreepJS + todetect.net + fingerprint.com")
+    print("  damru Benchmark - CreepJS + todetect.net + fingerprint.com")
     print("=" * 60)
     t_start = time.monotonic()
 
@@ -379,19 +379,19 @@ async def main():
 
         cr = results.get("creepjs", {})
         print(f"  CreepJS:")
-        print(f"    Headless:      {cr.get('headless', '?')}")
-        print(f"    Stealth:       {cr.get('stealth', '?')}")
-        print(f"    Like Headless: {cr.get('likeHeadless', '?')}")
-        print(f"    Lies:          {cr.get('lies', '?')}")
+        print(f"    Headless:      {cr.get('headless', '')}")
+        print(f"    Stealth:       {cr.get('stealth', '')}")
+        print(f"    Like Headless: {cr.get('likeHeadless', '')}")
+        print(f"    Lies:          {cr.get('lies', '')}")
 
         td = results.get("todetect", {})
         print(f"\n  todetect.net:")
-        print(f"    Score: {td.get('score', '?')}")
+        print(f"    Score: {td.get('score', '')}")
 
         fp = results.get("fingerprint", {})
         print(f"\n  fingerprint.com:")
-        print(f"    Bot Status:  {fp.get('botStatus', '?')}")
-        print(f"    Visitor ID:  {fp.get('visitorId', '?')}")
+        print(f"    Bot Status:  {fp.get('botStatus', '')}")
+        print(f"    Visitor ID:  {fp.get('visitorId', '')}")
 
         print(f"\n  Screenshots: {RESULTS_DIR}")
         print(f"  Report: {out_path}")
