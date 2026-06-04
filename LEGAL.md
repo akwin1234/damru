@@ -51,7 +51,7 @@ Repositories that use the `damru` name without being a GitHub fork or without cl
 
 ## Commercial Licensing
 
-Commercial use requires a separate written license from the Damru maintainers. Send licensing requests to `contact@damru.dev` or use the official community channel listed in the README.
+Commercial licenses are available for paid/business use, SaaS use, hosted services, enterprise deployments, custom engineering, and support. To buy or request a commercial license, contact `contact@damru.dev` or use the official community channel listed in the README.
 
 ## Enforcement
 
