@@ -7,7 +7,7 @@
 
   [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
   [![Playwright](https://img.shields.io/badge/playwright-1.40--1.59-green.svg?style=for-the-badge&logo=playwright&logoColor=white)](https://playwright.dev/python/)
-  [![Platform](https://img.shields.io/badge/Platform-WSL2%20%7C%20Linux-lightgrey.svg?style=for-the-badge&logo=linux&logoColor=white)](#minimum-system-requirements)
+  [![Platform](https://img.shields.io/badge/Platform-Ubuntu%2024.04%20%7C%20WSL2-lightgrey.svg?style=for-the-badge&logo=ubuntu&logoColor=white)](#minimum-system-requirements)
   [![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-red.svg?style=for-the-badge)](https://polyformproject.org/licenses/noncommercial/1.0.0)
 
   <p>
