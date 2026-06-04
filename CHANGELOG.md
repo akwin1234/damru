@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Merged physical ADB safety behavior: auto-detection now prefers TCP Redroid endpoints, then `emulator-*`, and refuses physical-looking USB serials by default unless `DAMRU_ALLOW_PHYSICAL=1` is explicitly set for a disposable test device.
+- Added focused ADB unit tests for TCP preference, emulator fallback, physical USB refusal, and explicit physical override.
 - Updated README/docs for the current Ubuntu 24.04 and Ubuntu WSL2 beta path, minimum capacity planning, preflight, local UI, viewer workflows, image/APK handling, WSL kernel behavior, proof results, and legal/fork policy.
 - Verified the current tree on a disposable Ubuntu WSL2 distro and a native Ubuntu 24.04 VPS: preflight, two Redroid workers, `quick-check`, and `open-url https://example.com` passed on both.
 - Fixed WSL `wsl:` ADB serial handling when Damru is already running inside Linux/WSL, so commands such as `quick-check --serial wsl:127.0.0.1:5600` do not try to launch `wsl.exe` from inside WSL.

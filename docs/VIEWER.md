@@ -26,7 +26,7 @@ python -m damru view --serial wsl:127.0.0.1:5600
 python -m damru view --serial wsl:127.0.0.1:5600 --no-control
 ```
 
-If `--serial` is omitted, Damru uses the first online ADB device reported by `damru devices`. Windows/WSL Redroid workers appear as `wsl:127.0.0.1:5600`, `wsl:127.0.0.1:5601`, and so on.
+If `--serial` is omitted, Damru uses virtual-device auto-detection: TCP endpoints first, then `emulator-*` serials. Windows/WSL Redroid workers appear as `wsl:127.0.0.1:5600`, `wsl:127.0.0.1:5601`, and so on. Physical-looking USB serials are refused by default; `DAMRU_ALLOW_PHYSICAL=1` is only for disposable test devices.
 
 ## Live Viewer
 

@@ -258,18 +258,35 @@ class ADB:
         return devices
 
     async def detect_device(self) -> str:
-        """Auto-detect and return serial of first online device.
+        """Auto-detect and return serial of first online virtual device.
 
-        Prefers emulator-* serials, then first available.
+        Damru mutates Android system state and must not auto-select USB phones.
+        By default, only TCP ADB endpoints and emulator-* serials are eligible.
+        Set DAMRU_ALLOW_PHYSICAL=1 only for an intentionally disposable target.
         """
         devices = await self.list_devices()
         online = [d for d in devices if d["status"] == "device"]
         if not online:
             raise ADBError("No Android devices found. Start an emulator or connect a device.")
-        # Prefer emulator
+
+        allow_physical = os.environ.get("DAMRU_ALLOW_PHYSICAL") == "1"
+
+        # Prefer TCP Redroid/MuMu endpoints, then Android emulator serials.
+        for d in online:
+            if ":" in d["serial"]:
+                return d["serial"]
         for d in online:
             if d["serial"].startswith("emulator-"):
                 return d["serial"]
+
+        if not allow_physical:
+            serials = ", ".join(d["serial"] for d in online)
+            raise ADBError(
+                "Refusing to auto-select a physical USB ADB device. "
+                f"Online non-virtual serials: {serials}. "
+                "Start Redroid and pass serial='127.0.0.1:5600', or set "
+                "DAMRU_ALLOW_PHYSICAL=1 only for a disposable test device."
+            )
         return online[0]["serial"]
 
     async def ensure_server(self) -> None:

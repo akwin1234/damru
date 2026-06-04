@@ -63,7 +63,7 @@ While Damru technically lists multiple environments, **Redroid (Docker)** is the
 
 > [!CAUTION]
 > **Physical Device Warning**
-> Damru is designed strictly for containerized environments (Redroid). **It does not support physical Android devices.** Do not attempt to run Damru against your personal phone. If you choose to use a spare rooted device, you do so at your own risk. Damru's low-level OS patches and binary injections may brick or destabilize physical hardware.
+> Damru is designed strictly for containerized environments (Redroid). **It does not support physical Android devices.** Do not attempt to run Damru against your personal phone. Damru refuses to auto-select physical-looking USB ADB serials by default, because its low-level OS patches and binary injections may brick or destabilize physical hardware. `DAMRU_ALLOW_PHYSICAL=1` exists only for intentionally disposable test devices.
 
 **Why Redroid**
 Damru's most advanced stealth layers - including native GPU binary patching and OS-level `iptables` hooks-are optimized for the Redroid kernel. It provides a more stable environment for multi-container pools and is significantly more undetectable by modern anti-bot heuristics. MuMu Player support is currently an experimental, unfinished, and non-functional beta feature.
@@ -469,7 +469,8 @@ If your Redroid container fails to boot or Docker won't start in WSL, run these 
 
 > An ADB serial is a unique identifier for your Android device. 
 > - For **Redroid/Docker**, it is usually the network address: `localhost:5555` or an internal IP.
-> - Physical-device serials may appear in `adb devices`, but Damru does not support physical phones as automation targets.
+> - Damru auto-detection prefers TCP Redroid endpoints such as `127.0.0.1:5600`, then `emulator-*` serials.
+> - Physical-device serials may appear in `adb devices`, but Damru does not support physical phones as automation targets and refuses to auto-select USB-only serials by default. Set `DAMRU_ALLOW_PHYSICAL=1` only for a disposable test device.
 
 ### Step 4: Install Damru
 
@@ -854,7 +855,7 @@ We are aggressively building Damru into a fully autonomous infrastructure tool. 
 ## Frequently Asked Questions
 
 ### 1. Does Damru support physical Android devices
-**No.** Damru is designed strictly for containerized environments (Redroid). Its low-level OS patches, `resetprop` logic, and binary driver injections are optimized for Redroid's kernel and filesystem. **Do not attempt to use Damru on your personal phone.** If you use a spare rooted device, you do so entirely at your own risk.
+**No.** Damru is designed strictly for containerized environments (Redroid). Its low-level OS patches, `resetprop` logic, and binary driver injections are optimized for Redroid's kernel and filesystem. **Do not attempt to use Damru on your personal phone.** Auto-detection refuses physical-looking USB serials by default. `DAMRU_ALLOW_PHYSICAL=1` is only for intentionally disposable test devices, entirely at your own risk.
 
 ### 2. Can I use MuMu Player instead of Docker
 MuMu Player support is currently an **experimental, unfinished, and non-functional beta feature**. While the code structure for it exists, we highly recommend using **Redroid (Docker)** for any production or serious research work.
