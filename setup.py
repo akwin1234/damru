@@ -3,6 +3,8 @@ from setuptools import setup, find_packages
 setup(
     name="damru",
     version="0.1.0",
+    author="Damru Framework",
+    author_email="contact@damru.dev",
     packages=find_packages(include=["damru*"]),
     package_data={
         "damru.playwright_patch": ["*.js"],

@@ -7,6 +7,9 @@ name = "damru"
 version = "0.1.0"
 description = "Stealth browser automation on Android via ADB + root-level system prop spoofing"
 requires-python = ">=3.10"
+authors = [
+    {name = "Damru Framework", email = "contact@damru.dev"},
+]
 dependencies = [
     "playwright>=1.40,<1.60",
     "requests>=2.28",

@@ -13,7 +13,7 @@ Damru is currently in Beta. We provide security updates and patches primarily fo
 
 **Please do not report security vulnerabilities through public GitHub issues.**
 
-If you discover a vulnerability or a significant fingerprinting leak in Damru's stealth architecture, please email us directly via the contact information on the GitHub profile.
+If you discover a vulnerability or a significant fingerprinting leak in Damru's stealth architecture, please email `contact@damru.dev` directly.
 
 We will acknowledge receipt of your vulnerability report within 48 hours and strive to send you regular updates about our progress. If the vulnerability poses a critical risk to users deploying the framework, we will expedite the patch.
 

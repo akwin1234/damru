@@ -4,6 +4,8 @@ Damru is published under the PolyForm Noncommercial License 1.0.0. This file sum
 
 Official repository: https://github.com/akwin1234/damru
 
+Official contact: contact@damru.dev
+
 Damru is publicly visible source code, not public domain material.
 
 ## Covered Material
@@ -49,7 +51,7 @@ Repositories that use the `damru` name without being a GitHub fork or without cl
 
 ## Commercial Licensing
 
-Commercial use requires a separate written license from the Damru maintainers. Use the official community/contact channel listed in the README for licensing requests.
+Commercial use requires a separate written license from the Damru maintainers. Send licensing requests to `contact@damru.dev` or use the official community channel listed in the README.
 
 ## Enforcement
 
