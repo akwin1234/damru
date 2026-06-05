@@ -350,7 +350,20 @@ class AsyncDamru:
                     f"settings put global http_proxy {self._profile.android_http_proxy}",
                     allow_failure=True,
                 )
+                host, _, port = self._profile.android_http_proxy.rpartition(":")
+                if host and port.isdigit():
+                    await asyncio.gather(
+                        self._adb.shell(f"settings put global global_http_proxy_host {host}", allow_failure=True),
+                        self._adb.shell(f"settings put global global_http_proxy_port {port}", allow_failure=True),
+                    )
                 logger.info("System HTTP proxy: %s", self._profile.android_http_proxy)
+            else:
+                await asyncio.gather(
+                    self._adb.shell("settings put global http_proxy :0", allow_failure=True),
+                    self._adb.shell("settings delete global global_http_proxy_host", allow_failure=True),
+                    self._adb.shell("settings delete global global_http_proxy_port", allow_failure=True),
+                )
+                logger.debug("System HTTP proxy cleared")
 
         async def _fonts_setup():
             """Install extra fonts (one-time) then randomize (per-session)."""

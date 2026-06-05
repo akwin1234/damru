@@ -10,10 +10,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from damru import AsyncDamru
 from damru.utils import sleep, setup_logging
 
-PH_HTTP = "proxy.example:50000"
+PH_HTTP = os.environ.get("DAMRU_TEST_PROXY")
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "results", "todetect_fingerprint")
 
-async def test_todetect(page):
+async def _probe_todetect(page):
     print("\n" + "=" * 60)
     print("  TEST 1: todetect.net")
     print("=" * 60)
@@ -45,7 +45,7 @@ async def test_todetect(page):
         }
 
         return {
-            score: scoreMatch  scoreMatch[1] : percentMatch  percentMatch[1] + "%" : "N/A",
+            score: scoreMatch ? scoreMatch[1] : percentMatch ? percentMatch[1] + "%" : "N/A",
             tables: tables.slice(0, 5),
             pageText: all.substring(0, 2000),
         };
@@ -61,7 +61,7 @@ async def test_todetect(page):
     return data
 
 
-async def test_fingerprint(page):
+async def _probe_fingerprint(page):
     print("\n" + "=" * 60)
     print("  TEST 2: fingerprint.com/demo")
     print("=" * 60)
@@ -97,9 +97,9 @@ async def test_fingerprint(page):
             }
 
             return {
-                visitorId: visitorIdMatch  visitorIdMatch[1] : "N/A",
+                visitorId: visitorIdMatch ? visitorIdMatch[1] : "N/A",
                 botDetected: botDetected && !notBot,
-                botStatus: botMatch  botMatch[1] : (notBot  "not detected" : (botDetected  "detected" : "N/A")),
+                botStatus: botMatch ? botMatch[1] : (notBot ? "not detected" : (botDetected ? "detected" : "N/A")),
                 tables: tables.slice(0, 5),
                 pageText: all.substring(0, 2000),
             };
@@ -139,13 +139,13 @@ async def main():
         results = {}
 
         try:
-            results["todetect"] = await test_todetect(page)
+            results["todetect"] = await _probe_todetect(page)
         except Exception as e:
             print(f"  todetect ERROR: {e}")
             results["todetect"] = {"error": str(e)}
 
         try:
-            results["fingerprint"] = await test_fingerprint(page)
+            results["fingerprint"] = await _probe_fingerprint(page)
         except Exception as e:
             print(f"  fingerprint ERROR: {e}")
             results["fingerprint"] = {"error": str(e)}
@@ -153,7 +153,7 @@ async def main():
         report = {
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
             "mode": "auto (redroid, 2GB RAM)",
-            "proxy": PH_HTTP,
+            "proxy": "set" if PH_HTTP else "none",
             "total_time_s": round(time.monotonic() - t_start, 1),
             "results": results,
         }

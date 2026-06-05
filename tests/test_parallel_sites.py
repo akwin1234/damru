@@ -4,10 +4,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from damru import AsyncDamru
 from damru.utils import sleep, setup_logging
 
-PH_HTTP = "proxy.example:50000"
+PH_HTTP = os.environ.get("DAMRU_TEST_PROXY")
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "results", "parallel_sites")
 
-async def test_todetect():
+async def _probe_todetect():
     """Test todetect.net on container 0."""
     print("\n[TODETECT] Starting...")
     t_start = time.monotonic()
@@ -15,7 +15,6 @@ async def test_todetect():
     os.makedirs(todetect_dir, exist_ok=True)
 
     async with AsyncDamru(device="random", proxy=PH_HTTP, timezone="Asia/Manila", debug=True) as ctx:
-        print(f"[TODETECT] Using container: {ctx.adb.serial}")
         page = ctx.pages[0] if ctx.pages else await ctx.new_page()
 
         await page.goto("https://todetect.net/", wait_until="domcontentloaded", timeout=60000)
@@ -55,7 +54,7 @@ async def test_todetect():
     print(f"[TODETECT] Done in {time.monotonic() - t_start:.1f}s")
     return {"site": "todetect", "success": True, "time": time.monotonic() - t_start}
 
-async def test_fingerprint():
+async def _probe_fingerprint():
     """Test fingerprint.com on container 1."""
     print("\n[FINGERPRINT] Starting...")
     t_start = time.monotonic()
@@ -63,7 +62,6 @@ async def test_fingerprint():
     os.makedirs(fp_dir, exist_ok=True)
 
     async with AsyncDamru(device="random", proxy=PH_HTTP, timezone="Asia/Manila", debug=True) as ctx:
-        print(f"[FINGERPRINT] Using container: {ctx.adb.serial}")
         page = ctx.pages[0] if ctx.pages else await ctx.new_page()
 
         await page.goto("https://fingerprint.com/demo/", wait_until="domcontentloaded", timeout=60000)
@@ -127,8 +125,8 @@ async def main():
 
     # Run both tests in parallel
     results = await asyncio.gather(
-        test_todetect(),
-        test_fingerprint(),
+        _probe_todetect(),
+        _probe_fingerprint(),
         return_exceptions=True
     )
 

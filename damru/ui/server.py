@@ -595,11 +595,23 @@ def adb_devices(workers: list[dict[str, Any]] | None = None) -> list[dict[str, s
     allowed: set[str] = set()
     for worker in workers if workers is not None else docker_workers():
         name = str(worker.get("name") or "")
+        if str(worker.get("state") or "").lower() != "running":
+            continue
         match = re.search(r"(\d+)$", name)
         if not match:
             continue
         port = int(REDROID_BASE_PORT) + int(match.group(1))
         allowed.add(f"wsl:127.0.0.1:{port}")
+    present = {d.get("serial") for d in devices}
+    missing = sorted(allowed - present)
+    if missing:
+        for serial in missing:
+            try:
+                cli._ensure_adb_connected(serial)
+            except Exception:
+                pass
+        _CACHE.pop("adb-devices", None)
+        devices = _probe()
     return [d for d in devices if d.get("serial") in allowed]
 
 

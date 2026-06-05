@@ -14,11 +14,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from damru import AsyncDamru
 from damru.utils import sleep, setup_logging
 
-PH_HTTP = "proxy.example:50000"
+PH_HTTP = os.environ.get("DAMRU_TEST_PROXY")
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "results", "benchmark_sites")
 
 
-async def test_creepjs(page):
+async def _probe_creepjs(page):
     """Navigate to CreepJS and extract scores."""
     print("\n" + "=" * 60)
     print("  TEST 1: CreepJS")
@@ -53,11 +53,11 @@ async def test_creepjs(page):
         const fpMatch = all.match(/([a-f0-9]{16,})/i);
 
         return {
-            likeHeadless: likeHeadlessMatch  likeHeadlessMatch[1] + "%" : "N/A",
-            headless: headlessMatch  headlessMatch[1] + "%" : "N/A",
-            stealth: stealthMatch  stealthMatch[1] + "%" : "N/A",
-            lies: liesMatch  liesMatch[1] : "N/A",
-            trustScore: trustMatch  trustMatch[1] : "N/A",
+            likeHeadless: likeHeadlessMatch ? likeHeadlessMatch[1] + "%" : "N/A",
+            headless: headlessMatch ? headlessMatch[1] + "%" : "N/A",
+            stealth: stealthMatch ? stealthMatch[1] + "%" : "N/A",
+            lies: liesMatch ? liesMatch[1] : "N/A",
+            trustScore: trustMatch ? trustMatch[1] : "N/A",
         };
     }""")
 
@@ -70,7 +70,7 @@ async def test_creepjs(page):
     return data
 
 
-async def test_todetect(page):
+async def _probe_todetect(page):
     """Navigate to todetect.net and extract detection results."""
     print("\n" + "=" * 60)
     print("  TEST 2: todetect.net")
@@ -163,7 +163,7 @@ async def test_todetect(page):
         }
 
         return {
-            score: scoreMatch  scoreMatch[1] : percentMatch  percentMatch[1] + "%" : "N/A",
+            score: scoreMatch ? scoreMatch[1] : percentMatch ? percentMatch[1] + "%" : "N/A",
             tests: tests,
             statuses: statuses.slice(0, 30),
             tables: tables.slice(0, 5),
@@ -205,7 +205,7 @@ async def test_todetect(page):
     return data
 
 
-async def test_fingerprint(page):
+async def _probe_fingerprint(page):
     """Navigate to fingerprint.com/demo and extract results."""
     print("\n" + "=" * 60)
     print("  TEST 3: fingerprint.com/demo")
@@ -276,9 +276,9 @@ async def test_fingerprint(page):
         }
 
         return {
-            visitorId: visitorIdMatch  visitorIdMatch[1] : "N/A",
+            visitorId: visitorIdMatch ? visitorIdMatch[1] : "N/A",
             botDetected: botDetected && !notBot,
-            botStatus: botMatch  botMatch[1] : (notBot  "not detected" : (botDetected  "detected" : "N/A")),
+            botStatus: botMatch ? botMatch[1] : (notBot ? "not detected" : (botDetected ? "detected" : "N/A")),
             cards: [...new Set(cards)].slice(0, 30),
             tables: tables.slice(0, 5),
             sections: sections.slice(0, 15),
@@ -331,7 +331,7 @@ async def main():
 
         # Test 1: CreepJS
         try:
-            results["creepjs"] = await test_creepjs(page)
+            results["creepjs"] = await _probe_creepjs(page)
         except Exception as e:
             print(f"  CreepJS ERROR: {e}")
             results["creepjs"] = {"error": str(e)}
@@ -342,7 +342,7 @@ async def main():
 
         # Test 2: todetect.net
         try:
-            results["todetect"] = await test_todetect(page)
+            results["todetect"] = await _probe_todetect(page)
         except Exception as e:
             print(f"  todetect.net ERROR: {e}")
             results["todetect"] = {"error": str(e)}
@@ -353,7 +353,7 @@ async def main():
 
         # Test 3: fingerprint.com/demo
         try:
-            results["fingerprint"] = await test_fingerprint(page)
+            results["fingerprint"] = await _probe_fingerprint(page)
         except Exception as e:
             print(f"  fingerprint.com ERROR: {e}")
             results["fingerprint"] = {"error": str(e)}
@@ -362,7 +362,7 @@ async def main():
         report = {
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
             "mode": "auto (redroid, baked image)",
-            "proxy": PH_HTTP,
+            "proxy": "set" if PH_HTTP else "none",
             "total_time_s": round(time.monotonic() - t_start, 1),
             "results": results,
         }
