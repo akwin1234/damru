@@ -19,7 +19,7 @@ def test_ui_navigate_passes_proxy_to_cli():
         },
     )
 
-    assert "open-url" in cmd
+    assert "stealth-open-url" in cmd
     assert "--proxy" in cmd
     assert cmd[cmd.index("--proxy") + 1] == "http://user:pass@proxy.example:10000"
 

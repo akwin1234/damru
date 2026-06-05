@@ -77,6 +77,8 @@ class AsyncDamru:
         locale: Optional[str] = None,
         chrome_package: Optional[str] = None,
         restore_props: bool = True,
+        keep_chrome_on_exit: bool = False,
+        force_cold_start: bool = False,
         debug: bool = False,
     ):
         self._device_name = device
@@ -87,6 +89,8 @@ class AsyncDamru:
         self._locale = locale
         self._chrome_package = chrome_package
         self._restore_props = restore_props
+        self._keep_chrome_on_exit = keep_chrome_on_exit
+        self._force_cold_start = force_cold_start
         self._debug = debug
 
         # Initialized during __aenter__
@@ -237,7 +241,7 @@ class AsyncDamru:
         # #==============================================================#
 
         self._chrome = ChromeManager(self._adb, package=self._chrome_package)
-        warm_start = await self._chrome.has_preferences()
+        warm_start = (not self._force_cold_start) and await self._chrome.has_preferences()
         if warm_start:
             logger.info("WARM START - fast reuse (skip pm clear/FRE/TTS setup)")
         else:
@@ -738,8 +742,9 @@ class AsyncDamru:
         if self._cdp:
             await self._cdp.disconnect()
 
-        # Stop Chrome (clears all session data for next fingerprint)
-        if self._chrome:
+        # Stop Chrome by default. UI/viewer launches can keep Chrome open so
+        # the user can inspect the already-navigated page after the CLI exits.
+        if self._chrome and not self._keep_chrome_on_exit:
             await self._chrome.force_stop()
 
         # Restore renderer.config if GPU was spoofed via renderer.config (MuMu mode).

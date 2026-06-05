@@ -2500,6 +2500,50 @@ def _open_url(args: argparse.Namespace) -> int:
     print(f"Opened URL in Chrome ({launched_package}) on {serial}: {url}")
     return 0
 
+def _stealth_open_url(args: argparse.Namespace) -> int:
+    serial = _resolve_serial(args.serial)
+    if not serial:
+        print("No online ADB device found. Use --serial or start a Redroid device first.", file=sys.stderr)
+        return 1
+    url = str(args.url or "").strip()
+    if not re.match(r"^https?://", url, re.IGNORECASE):
+        print("--url must start with http:// or https://", file=sys.stderr)
+        return 1
+    _ensure_adb_connected(serial)
+    _repair_runtime_internet(serial, quiet=True)
+
+    async def _run_stealth() -> str:
+        from .async_core import AsyncDamru
+
+        damru = AsyncDamru(
+            serial=serial,
+            proxy=getattr(args, "proxy", None),
+            http_proxy=getattr(args, "http_proxy", None),
+            keep_chrome_on_exit=True,
+            force_cold_start=True,
+            debug=getattr(args, "debug", False),
+        )
+        context = await damru.__aenter__()
+        try:
+            page = context.pages[0] if context.pages else await context.new_page()
+            await page.goto(url, wait_until="domcontentloaded", timeout=45000)
+            await page.wait_for_timeout(max(0, int(getattr(args, "settle_ms", 3000))))
+            title = await page.title()
+            return title
+        finally:
+            await damru.__aexit__(None, None, None)
+
+    try:
+        import asyncio
+        title = asyncio.run(_run_stealth())
+    except Exception as exc:
+        print(f"Stealth open failed: {exc}", file=sys.stderr)
+        return 1
+    print(f"Opened URL with Damru stealth session on {serial}: {url}")
+    if title:
+        print(f"Title: {title}")
+    return 0
+
 def _quick_stealth_check(args: argparse.Namespace) -> int:
     serial = _resolve_serial(args.serial)
     if not serial:
@@ -2818,6 +2862,15 @@ def build_parser() -> argparse.ArgumentParser:
     open_url.add_argument("--proxy", default=None, help="HTTP/SOCKS proxy URL; HTTP endpoint is applied to Android before navigation")
     open_url.add_argument("--http-proxy", default=None, help="explicit Android HTTP proxy host:port or URL")
     open_url.set_defaults(func=_open_url)
+
+    stealth_open_url = sub.add_parser("stealth-open-url", help="open a URL through a full Damru stealth session and leave Chrome visible")
+    stealth_open_url.add_argument("--serial", "-s", default=None, help="ADB serial; defaults to the first online device")
+    stealth_open_url.add_argument("--url", required=True, help="http:// or https:// URL to open")
+    stealth_open_url.add_argument("--proxy", default=None, help="HTTP/SOCKS proxy URL")
+    stealth_open_url.add_argument("--http-proxy", default=None, help="explicit Android HTTP proxy host:port or URL")
+    stealth_open_url.add_argument("--settle-ms", type=int, default=3000, help="milliseconds to wait after navigation before leaving Chrome open")
+    stealth_open_url.add_argument("--debug", action="store_true", help="enable debug logging")
+    stealth_open_url.set_defaults(func=_stealth_open_url)
 
     record = sub.add_parser("record", help="record a short MP4 video from an ADB device")
     record.add_argument("--serial", "-s", default=None, help="ADB serial; defaults to the first online device")

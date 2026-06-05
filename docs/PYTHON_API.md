@@ -214,7 +214,7 @@ For a local browser dashboard, run:
 python -m damru ui
 ```
 
-The UI is experimental and localhost-only by default. It wraps the same allowlisted CLI/backend actions: setup health, workers, Work Lab URL navigation, quick checks, screenshots, gallery cleanup, internet repair, random profile actions, browser viewer streaming, native `scrcpy` command copy, and logs. It is meant for setup/debugging/manual inspection, not as the primary automation API.
+The UI is experimental and localhost-only by default. It wraps the same allowlisted CLI/backend actions: setup health, workers, Work Lab URL navigation, quick checks, screenshots, gallery cleanup, internet repair, random profile actions, browser viewer streaming, native `scrcpy` command copy, and logs. Work Lab URL navigation uses a full Damru stealth session and then leaves Chrome visible, so it applies the same proxy, timezone, locale, UA/client hints, GPU, hardware, WebRTC, and TLS setup that automation sessions use. It is meant for setup/debugging/manual inspection, not as the primary automation API.
 
 ---
 

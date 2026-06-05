@@ -745,10 +745,10 @@ def build_command(action: str, payload: dict[str, Any]) -> tuple[str, list[str],
         if not re.match(r"^https?://", url, re.IGNORECASE):
             raise ValueError("Enter a URL that starts with http:// or https://.")
         proxy = str(payload.get("proxy") or "").strip()
-        cmd = package_command("open-url", "--serial", serial, "--url", url)
+        cmd = package_command("stealth-open-url", "--serial", serial, "--url", url)
         if proxy:
             cmd.extend(["--proxy", proxy])
-        return "Open URL", cmd, timeout, artifact
+        return "Open URL", cmd, COMMAND_TIMEOUTS.get("proof", 300), artifact
     if action == "record":
         serial = str(payload.get("serial") or "").strip()
         seconds = max(1, min(int(payload.get("time_limit") or 15), 180))
