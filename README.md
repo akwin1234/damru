@@ -39,6 +39,7 @@
 - [Python API Documentation](docs/PYTHON_API.md)
 - [Device Profiles](docs/DEVICE_PROFILES.md)
 - [Viewer, Screenshots, and Video](docs/VIEWER.md)
+- [Local UI Guide](docs/UI.md)
 - [WSL2 Kernel Requirements](docs/WSL_KERNEL.md)
 - [Download Custom OS Image](#download-custom-os-image)
 - [Quickstart Guide](#first-time-user-deployment-guide-wsl2--linux)
@@ -599,6 +600,16 @@ python -m damru ui
 ```
 
 Open the printed `http://127.0.0.1:<port>` URL. The UI is local-only by default and uses an allowlisted backend; it does not expose arbitrary shell execution. The dashboard shows WSL controls only on Windows and native Ubuntu controls on Linux. Good setup checks collapse by default so failures stay visible. Work Lab can open URLs through a full Damru stealth session, run quick stealth checks, capture screenshots, clear the gallery, repair internet, apply random profiles, and stream a browser viewer for the selected worker. UI URL navigation is slower than a raw Android `am start` because it applies proxy, timezone, locale, UA/client hints, GPU, hardware, WebRTC, and TLS setup before leaving Chrome visible for inspection. For smoother manual control, use **Copy native command** in Work Lab and paste it in a terminal to launch `scrcpy` for the selected worker.
+
+Full UI documentation with every page screenshot is in [docs/UI.md](docs/UI.md).
+
+| Dashboard | Workers |
+| :---: | :---: |
+| <img src="docs/assets/ui/dashboard.png" alt="Damru UI dashboard" width="420"> | <img src="docs/assets/ui/workers.png" alt="Damru UI workers page" width="420"> |
+
+| Work Lab |
+| :---: |
+| <img src="docs/assets/ui/work-lab.png" alt="Damru UI Work Lab" width="620"> |
 
 ### Use Redroid Like an Emulator Window
 

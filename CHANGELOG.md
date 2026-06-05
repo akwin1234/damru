@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added UI documentation and screenshots for Dashboard, Setup, Workers, Work Lab, Settings, and Logs.
 - Expanded the raw Chrome APK bundle to 19 validated Chrome split-APK versions from `143.0.7499.52` through `148.0.7778.217`; Chrome 149 is intentionally excluded until a compatible English/x86/x86_64 bundle is available.
 - Made random profile actions rotate Chrome APK versions when the validated APK bundle is present, while keeping Chrome first-run prompts suppressed and stale tabs cleared.
 - Verified the APK matrix across install, exact Chrome `versionName`, `quick-check`, Chrome launch/PID, DNS, CDP probes, and representative full spoof sessions for Chrome 146/147/148 builds.

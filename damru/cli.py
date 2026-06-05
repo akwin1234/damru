@@ -496,13 +496,20 @@ def _repair_runtime_internet(serial: str | None = None, quiet: bool = False) -> 
         )
         ok = ok and dns_probe.returncode == 0 and ip_probe.returncode == 0
     if serial:
-        dns_prop = _run_adb_text(serial, "shell", "getprop", "net.dns1", timeout=8)
         boot_prop = _run_adb_text(serial, "shell", "getprop", "sys.boot_completed", timeout=8)
         state = _run_adb_text(serial, "get-state", timeout=8)
-        ok = ok and state.returncode == 0 and "device" in (state.stdout or "") and (boot_prop.stdout or "").strip() == "1" and bool((dns_prop.stdout or "").strip())
+        ok = ok and state.returncode == 0 and "device" in (state.stdout or "") and (boot_prop.stdout or "").strip() == "1" and _android_dns_present(serial)
     if not quiet:
         _status(ok, "Runtime internet", f"serial={serial}" if serial else "host/Docker")
     return ok
+
+def _android_dns_present(serial: str) -> bool:
+    dns1 = (_run_adb_text(serial, "shell", "getprop", "net.dns1", timeout=8).stdout or "").strip()
+    dns2 = (_run_adb_text(serial, "shell", "getprop", "net.dns2", timeout=8).stdout or "").strip()
+    if dns1 or dns2:
+        return True
+    connectivity = _run_adb_text(serial, "shell", "dumpsys", "connectivity", timeout=12)
+    return "DnsAddresses: [ /" in ((connectivity.stdout or "") + (connectivity.stderr or ""))
 
 def _repair_wsl_worker_adbd_port(serial: str) -> None:
     """Repair per-worker adbd TCP port when WSL host-network ADB is down."""
@@ -2588,7 +2595,7 @@ def _quick_stealth_check(args: argparse.Namespace) -> int:
         "adb_online": _run_adb_text(serial, "get-state", timeout=8).stdout.strip() == "device",
         "boot_completed": prop("sys.boot_completed") == "1",
         "chrome_installed": _chrome_package_installed(serial, "com.android.chrome"),
-        "dns_present": bool(prop("net.dns1")),
+        "dns_present": _android_dns_present(serial),
         "timezone_present": bool(prop("persist.sys.timezone")),
         "locale_present": bool(prop("persist.sys.locale") or prop("persist.sys.language")),
         "model_present": bool(prop("ro.product.model")),

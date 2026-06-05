@@ -1669,12 +1669,13 @@ chmod 755 "$target"
         port = 5699  # Use a high port to avoid conflicts
 
         logger.info("=== BAKING DAMRU IMAGE ===")
-        logger.info("Base image: %s", REDROID_IMAGE)
+        base_image = REDROID_BASE_IMAGE if image_name == REDROID_IMAGE else REDROID_IMAGE
+        logger.info("Base image: %s", base_image)
         logger.info("Target image: %s", image_name)
 
         # Step 1: Start temp container
         await self._ensure_binderfs()
-        await self.ensure_image(REDROID_IMAGE)
+        await self.ensure_image(base_image)
         await self._run_cmd(
             self._docker_cmd("rm", "-f", temp_name),
             timeout=10, allow_failure=True,
@@ -1686,7 +1687,7 @@ chmod 755 "$target"
                 "--privileged",
                 "-v", "/dev/binderfs:/dev/binderfs",
                 "-p", f"{port}:5555",
-                REDROID_IMAGE,
+                base_image,
                 "androidboot.use_memfd=true",
                 f"androidboot.redroid_gpu_mode={REDROID_GPU_MODE}",
                 "androidboot.redroid_net_dns1=1.1.1.1",
@@ -1719,9 +1720,9 @@ chmod 755 "$target"
             logger.info("Installing Chrome from %s...", apk_path)
             await self.install_chrome(serial, apk_path)
 
-            # Step 3: Install eSpeak-NG
-            logger.info("Installing eSpeak-NG...")
-            await root.ensure_espeak_tts()
+            # Step 3: Install local TTS engines/voices
+            logger.info("Installing local TTS engines...")
+            await root.ensure_speech_voices()
 
             # Step 4: Push resetprop binary
             logger.info("Pushing resetprop binary...")
