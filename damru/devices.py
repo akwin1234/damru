@@ -1101,12 +1101,36 @@ def pick_random_android_version(device: AndroidDevice) -> Tuple[int, int]:
 
 # ---------------------------------------------------------------------------
 # Chrome for Android version database — verified sub-versions.
-# Sources: Chrome Releases Blog + APKMirror (Android APKs only).
-# Desktop-only patch numbers excluded (Android often differs by 1).
-# Only versions realistically in use as of Feb 2026 (last ~4 months).
+# Sources: Chrome Releases Blog + APKMirror (Android x86/x86_64 APKs only).
+# Desktop-only patch numbers excluded (Android often differs by 1). Keep this
+# aligned with validated folders under chrome-apks/ so UA/client hints match
+# the real installed Chrome binary when APK rotation is used.
 # Each entry: (full_version_string, weight) — higher weight = more common.
 # ---------------------------------------------------------------------------
 CHROME_VERSIONS: List[Tuple[str, int]] = [
+    # --- Chrome 149 (Build 7827) ---
+    # APKMirror x86/x86_64 pages currently publish non-English 1-lang splits
+    # only, so keep 149 out of auto UA rotation until an English-compatible
+    # bundle is validated for Redroid.
+    # --- Chrome 148 (Build 7778) ---
+    ("148.0.7778.217", 24),
+    ("148.0.7778.180", 14),
+    ("148.0.7778.178", 8),
+    ("148.0.7778.168", 6),
+    ("148.0.7778.120", 4),
+    # --- Chrome 147 (Build 7727) ---
+    ("147.0.7727.138", 14),
+    ("147.0.7727.101", 8),
+    ("147.0.7727.49", 4),
+    # --- Chrome 146 (Build 7680) ---
+    ("146.0.7680.177", 12),
+    ("146.0.7680.166", 8),
+    ("146.0.7680.164", 6),
+    ("146.0.7680.154", 5),
+    ("146.0.7680.153", 5),
+    ("146.0.7680.119", 4),
+    ("146.0.7680.65", 2),
+    ("146.0.7680.31", 1),
     # --- Chrome 145 (Build 7632) — CURRENT STABLE, Feb 2026 ---
     ("145.0.7632.75", 30),   # latest security patch (Feb 15)
     ("145.0.7632.46", 4),    # broad stable (Feb 13)

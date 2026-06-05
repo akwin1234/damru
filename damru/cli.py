@@ -2195,6 +2195,7 @@ def _random_profile(args: argparse.Namespace) -> int:
         from .adb import ADB
         from .chrome import ChromeManager
         from .devices import get_random_device
+        from .docker import RedroidManager
         from .profiles import build_profile
         from .proxy import build_accept_language
         from .root import RootOps
@@ -2217,6 +2218,27 @@ def _random_profile(args: argparse.Namespace) -> int:
         await chrome.detect_package(retries=8, delay=1.0)
         await chrome.force_stop()
         await chrome.clear_all_data()
+        chrome_note = ""
+        docker = RedroidManager()
+        current_chrome = await docker.get_installed_chrome_version(serial)
+        try:
+            apk_path = docker.find_chrome_apk(None)
+        except Exception:
+            apk_path = None
+            chrome_note = "; chrome=kept (APK rotation unavailable)"
+        if apk_path:
+            for _ in range(8):
+                candidate = docker.find_chrome_apk(None)
+                if Path(candidate).name != current_chrome:
+                    apk_path = candidate
+                    break
+            await docker.uninstall_chrome(serial)
+            await docker.install_chrome(serial, apk_path)
+            installed_chrome = await docker.get_installed_chrome_version(serial)
+            await chrome.detect_package(retries=8, delay=1.0)
+            await chrome.force_stop()
+            await chrome.clear_all_data()
+            chrome_note = f"; chrome={installed_chrome or Path(apk_path).name}"
         await root.apply_device_props(device, safe_only=True, parallel=True)
         await root.apply_version_release(device)
         await root.apply_timezone(profile.timezone)
@@ -2231,7 +2253,7 @@ def _random_profile(args: argparse.Namespace) -> int:
             await root.apply_webrtc_block(chrome.package)
         await chrome.force_stop()
         proxy_note = f"; proxy={applied_proxy}" if applied_proxy else ""
-        return f"{profile.description}; {profile.screen_width}x{profile.screen_height}@{profile.density_dpi}; tz={profile.timezone}; locale={profile.locale}{proxy_note}"
+        return f"{profile.description}; {profile.screen_width}x{profile.screen_height}@{profile.density_dpi}; tz={profile.timezone}; locale={profile.locale}{proxy_note}{chrome_note}"
 
     try:
         import asyncio

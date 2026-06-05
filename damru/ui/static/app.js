@@ -43,7 +43,7 @@ const confirmMeta = {
   "clear-captures": { title: "Clear gallery?", body: "Damru will delete screenshots, recordings, proof folders, and JSON reports from the local capture folder only." },
   "clear-logs": { title: "Clear finished logs?", body: "Damru will remove finished UI job records from this dashboard. Running jobs are kept." },
   "fix-internet": { title: "Fix internet?", body: "Damru will repair WSL routing, Docker NAT, and Android DNS for the selected worker." },
-  "random-profile": { title: "Apply random stealth profile?", body: "Damru will pick a compatible Android profile, apply system props, screen, locale, timezone, and Chrome settings, then stop Chrome for the next launch." },
+  "random-profile": { title: "Apply random stealth profile?", body: "Damru will pick a compatible Android profile, rotate Chrome from the APK bundle when available, apply system props, screen, locale, timezone, and Chrome settings, then stop Chrome for the next launch." },
 };
 
 const state = {
@@ -114,7 +114,7 @@ function confirmAction(action, payload = {}) {
     meta = { title: "Fix internet for all workers?", body: "Damru will repair WSL routing, Docker NAT, host DNS, and any reachable Android worker DNS." };
   }
   if (action === "random-profile" && payload.all) {
-    meta = { title: "Apply random profiles to all workers?", body: "Damru will apply a different random Android profile to each running Damru worker, then stop Chrome so the next launch uses it." };
+    meta = { title: "Apply random profiles to all workers?", body: "Damru will apply a different random Android profile to each running Damru worker, rotate Chrome from the APK bundle when available, then stop Chrome so the next launch uses it." };
   }
   if (!meta) return Promise.resolve(true);
   return new Promise((resolve) => {
