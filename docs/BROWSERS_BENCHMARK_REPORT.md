@@ -1,0 +1,62 @@
+# Browsers Benchmark Report
+
+This report records a Damru run against the external stealth benchmark project:
+
+https://github.com/techinz/browsers-benchmark
+
+The benchmark was run with Damru Redroid on WSL2 Ubuntu using an Android 14 runtime, a Samsung Galaxy S23 profile, and a residential HTTP proxy. Proxy credentials, local paths, local usernames, and IP addresses are intentionally excluded from this report.
+
+## Result
+
+Final bypass score: **10 / 10**
+
+Final bypass rate: **100%**
+
+Sanitized machine-readable result: [assets/benchmark/browsers-benchmark-final-clean.json](assets/benchmark/browsers-benchmark-final-clean.json)
+
+| Target | Site | Result |
+| --- | --- | --- |
+| Google Search | `https://www.google.com/search?q=what+is+my+user+agent` | Pass |
+| Cloudflare | `https://community.cloudflare.com` | Pass |
+| DataDome | `https://datadome.co/customers-stories/` | Pass |
+| DataDome / Hermès | `https://www.hermes.com/` | Pass |
+| Amazon | `https://a.co/d/21FTKNR` | Pass |
+| Ticketmaster / Imperva | `https://www.ticketmaster.com/` | Pass |
+| Akamai Bot Manager | `https://www.mrporter.com` | Pass |
+| PerimeterX / HUMAN | `https://www.priceline.com` | Pass |
+| Kasada | `https://www.wizzair.com` | Pass |
+| Reddit | `https://www.reddit.com/` | Pass |
+
+## Browser Data
+
+| Check | Result |
+| --- | --- |
+| CreepJS | Completed without benchmark error |
+| WebRTC candidate IP | Blank, by design, to avoid non-proxy UDP IP leaks |
+| IP check | Completed through the configured residential proxy; exit IP redacted |
+
+## reCAPTCHA Note
+
+The benchmark project's `recaptcha_score` target is not included in the proxy bypass score. reCAPTCHA v3 scores are strongly affected by proxy reputation, recent refresh frequency, and Google-side rate limiting. A direct/no-proxy antcpt score can be captured separately for proof, but any screenshot must redact the visible IP address before publishing.
+
+In the final proxy benchmark report above, reCAPTCHA was skipped rather than counted as a Damru browser failure.
+
+Manual UI proof: separate antcpt checks run through the Damru UI returned **reCAPTCHA v3 score 0.9** in both direct and proxy modes. Any published screenshot must redact the visible IP address.
+
+## Stability Fixes From This Run
+
+- DataImpulse-style rotating proxy URLs are normalized into a sticky session at Damru browser-session startup, so GeoIP, Android proxy bridge, and Chrome use the same exit during that session.
+- Sticky sessions are no longer cached for the whole Python process. A new Damru browser session gets a new sticky session, which avoids repeatedly reusing a bad proxy exit.
+- Random profile selection now respects the real Android runtime version, preventing Android 15 profiles from being selected on an Android 14 Redroid runtime.
+
+## Repro Shape
+
+The final proof run used the external benchmark adapter with:
+
+```powershell
+$env:DAMRU_BENCH_DEVICE='Samsung Galaxy S23'
+$env:DAMRU_BENCH_SKIP='recaptcha_score'
+python C:\path\to\browsers-benchmark\run_damru_benchmark.py
+```
+
+Use a valid residential proxy in `DAMRU_BENCH_PROXY` for proxy-mode testing. Do not commit proxy credentials or raw screenshots that expose IP addresses or site challenge tokens.

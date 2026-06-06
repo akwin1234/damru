@@ -78,6 +78,14 @@ Browser smoke:
 - Both native Linux workers reported `navigator.hardwareConcurrency == 8`.
 - Latest two-worker `quick-check` reported ADB online, boot completed, Chrome installed, DNS present, fingerprint present, locale present, model present, and timezone present for both workers.
 
+## External Stealth Benchmark
+
+On 2026-06-06, Damru Redroid was also run against the external `techinz/browsers-benchmark` project. The sanitized report records a 10/10 proxy-mode bypass run across Google Search, Cloudflare, DataDome, Amazon, Ticketmaster/Imperva, Akamai, PerimeterX/HUMAN, Kasada, and Reddit.
+
+Report: [BROWSERS_BENCHMARK_REPORT.md](BROWSERS_BENCHMARK_REPORT.md)
+
+Machine-readable sanitized result: [assets/benchmark/browsers-benchmark-final-clean.json](assets/benchmark/browsers-benchmark-final-clean.json)
+
 Proof assets from the native Ubuntu VPS run with a US proxy are stored in [`docs/assets/proof/`](assets/proof/):
 
 - [Example.com screenshot](assets/proof/ubuntu-example-page.png)

@@ -1,0 +1,32 @@
+{
+  "benchmark_project": "https://github.com/techinz/browsers-benchmark",
+  "runner": "damru-redroid",
+  "environment": "WSL2 Ubuntu, Redroid Docker, Android 14 runtime",
+  "device_profile": "Samsung Galaxy S23",
+  "proxy": "residential HTTP proxy, credentials redacted",
+  "recaptcha_score": "excluded from proxy benchmark; score is proxy-reputation and rate-limit sensitive",
+  "manual_recaptcha_ui_proof": {
+    "score": 0.9,
+    "modes_observed": ["direct", "proxy"],
+    "source": "manual Damru UI antcpt checks",
+    "privacy_note": "publish screenshot only after redacting visible IP address"
+  },
+  "started_at": "2026-06-06T19:07:36+05:30",
+  "bypass_rate": 100.0,
+  "bypass": [
+    {"target": "google_search", "url": "https://www.google.com/search?q=what+is+my+user+agent", "bypass": true, "error": null},
+    {"target": "cloudflare_protected", "url": "https://community.cloudflare.com", "bypass": true, "error": null},
+    {"target": "datadome_protected", "url": "https://datadome.co/customers-stories/", "bypass": true, "error": null},
+    {"target": "datadome_protected_2", "url": "https://www.hermes.com/", "bypass": true, "error": null},
+    {"target": "amazon_product", "url": "https://a.co/d/21FTKNR", "bypass": true, "error": null},
+    {"target": "ticketmaster", "url": "https://www.ticketmaster.com/", "bypass": true, "error": null},
+    {"target": "akamai_protected", "url": "https://www.mrporter.com", "bypass": true, "error": null},
+    {"target": "perimeterx_protected", "url": "https://www.priceline.com", "bypass": true, "error": null},
+    {"target": "kasada_protected", "url": "https://www.wizzair.com", "bypass": true, "error": null},
+    {"target": "reddit", "url": "https://www.reddit.com/", "bypass": true, "error": null}
+  ],
+  "browser_data": [
+    {"target": "creepjs", "url": "https://abrahamjuliot.github.io/creepjs/", "error": null, "creepjs_trust_score": 0, "creepjs_bot_score": 0, "creepjs_webrtc_ip": ""},
+    {"target": "ipify", "url": "https://api.ipify.org?format=json", "error": null, "ip": "redacted_proxy_exit"}
+  ]
+}

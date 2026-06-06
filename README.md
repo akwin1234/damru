@@ -120,6 +120,13 @@ Fresh Ubuntu/WSL verification proof is tracked in [docs/PROOF.md](docs/PROOF.md)
 - Individual site proof screenshots: [Amazon](docs/assets/proof/sites/amazon.png), [Foot Locker / DataDome target](docs/assets/proof/sites/datadome-footlocker.png), [Fingerprint Pro](docs/assets/proof/sites/fingerprint-pro.png), [Sannysoft](docs/assets/proof/sites/sannysoft.png), and [CreepJS](docs/assets/proof/sites/creepjs.png)
 - [Sanitized site proof metadata](docs/assets/proof/sites/proof-sites.json)
 
+External benchmark proof: [docs/BROWSERS_BENCHMARK_REPORT.md](docs/BROWSERS_BENCHMARK_REPORT.md) records a sanitized Damru Redroid run against [`techinz/browsers-benchmark`](https://github.com/techinz/browsers-benchmark), with proxy credentials and IPs removed.
+
+- **Final browser benchmark score:** 10/10 bypass targets, **100%** bypass rate.
+- **Targets passed:** Google Search, Cloudflare, DataDome, Amazon, Ticketmaster/Imperva, Akamai, PerimeterX/HUMAN, Kasada, and Reddit.
+- **Browser data:** CreepJS completed without benchmark error, WebRTC candidate IP stayed blank by design, and IP check completed through the configured residential proxy.
+- **Manual reCAPTCHA proof:** Damru UI antcpt checks returned **reCAPTCHA v3 score 0.9** in both direct and proxy modes; publish screenshots only after redacting the visible IP.
+
 #### Screenshot Proof Gallery
 
 | Fingerprint Pro | CreepJS |

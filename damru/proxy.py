@@ -19,7 +19,6 @@ from .utils import logger
 # GeoIP cache: proxy URL -> {timezone, locale, country_code, ip}. Disabled by
 # default for rotating proxies; callers may opt in only for static proxies.
 _geo_cache: Dict[str, Dict[str, str]] = {}
-_sticky_proxy_cache: Dict[str, str] = {}
 
 _COUNTRY_LOCALE_VARIANTS: Dict[str, List[str]] = {
     # CLDR exceptional reservations / unknown territory fallbacks
@@ -234,9 +233,6 @@ def make_sticky_proxy_url(proxy: Optional[str], ttl_minutes: int = 30) -> Option
     """
     if not proxy or "://" not in proxy:
         return proxy
-    if proxy in _sticky_proxy_cache:
-        return _sticky_proxy_cache[proxy]
-
     parsed = urlparse(proxy)
     host = (parsed.hostname or "").lower()
     username = unquote(parsed.username or "")
@@ -259,7 +255,6 @@ def make_sticky_proxy_url(proxy: Optional[str], ttl_minutes: int = 30) -> Option
         netloc = f"{netloc}:{parsed.port}"
 
     sticky = urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
-    _sticky_proxy_cache[proxy] = sticky
     logger.info("DataImpulse sticky proxy session enabled (ttl=%dm)", ttl_minutes)
     return sticky
 

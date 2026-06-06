@@ -30,7 +30,7 @@ from .chrome import ChromeManager
 from .devices import AndroidDevice, get_device, get_random_device, pick_random_android_version, pick_random_chrome_version
 from .netfix import wsl_runtime_network_repair_script
 from .profiles import DamruProfile, build_profile
-from .proxy import build_accept_language, resolve_locale_for_geo
+from .proxy import build_accept_language, make_sticky_proxy_url, resolve_locale_for_geo
 from .root import RootOps
 from .utils import logger, setup_logging, sleep
 
@@ -148,6 +148,11 @@ class AsyncDamru:
         import time as _time
         _t0 = _time.monotonic()
 
+        # Provider rotating gateways can change exit IP between Python GeoIP,
+        # proxy bridge, and Chrome. Normalize once so every layer uses the same
+        # sticky upstream for the whole browser session.
+        self._proxy = make_sticky_proxy_url(self._proxy)
+
         # #==============================================================#
         # |  PHASE 1: Device detection (sequential - each needs prior) |
         # #==============================================================#
@@ -185,7 +190,7 @@ class AsyncDamru:
         if self._device_name and self._device_name != "random":
             target_device = get_device(self._device_name)
         else:
-            target_device = get_random_device()
+            target_device = get_random_device(android_version=real_android.strip() or None)
         logger.info("Target device: %s (Android %s, %s, %s)",
                      target_device.name, target_device.android_version,
                      target_device.chipset, target_device.webgl_renderer)

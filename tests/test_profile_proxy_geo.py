@@ -170,6 +170,19 @@ def test_dataimpulse_proxy_gets_sticky_session(monkeypatch):
     assert sticky == "socks5://user;sessid.damruabc12345;sessttl.30:pass@proxy.dataimpulse.com:824"
 
 
+def test_dataimpulse_sticky_session_is_not_process_cached(monkeypatch):
+    tokens = iter(["aaa11111", "bbb22222"])
+    monkeypatch.setattr("damru.proxy.secrets.token_hex", lambda n: next(tokens))
+
+    proxy = "http://user:pass@proxy.dataimpulse.com:823"
+
+    first = make_sticky_proxy_url(proxy)
+    second = make_sticky_proxy_url(proxy)
+
+    assert ";sessid.damruaaa11111;" in first
+    assert ";sessid.damrubbb22222;" in second
+    assert first != second
+
 def test_non_dataimpulse_proxy_is_not_changed():
     proxy = "socks5://user:pass@proxy.example:824"
     assert make_sticky_proxy_url(proxy) == proxy
