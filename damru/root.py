@@ -39,6 +39,8 @@ def _detect_gpu_family(gles_string: str) -> str:
         return "mali"
     if "xclipse" in low:
         return "xclipse"
+    if "powervr" in low or "imagination" in low:
+        return "powervr"
     return "unknown"
 
 # Path where we push the standalone resetprop binary on device.
@@ -1179,6 +1181,8 @@ class RootOps:
         "nvidia": 0x10DE,
         "intel": 0x8086,
         "amd": 0x1002,
+        "imagination": 0x1010,
+        "imagination technologies": 0x1010,
     }
     _VULKAN_DEVICE_IDS = {
         # Real IDs vary by SKU/driver; these are plausible family-level values
@@ -1217,6 +1221,7 @@ class RootOps:
                 "adreno": "Adreno (TM) 740",
                 "mali": "Mali-G715",
                 "xclipse": "Xclipse 920",
+                "powervr": "PowerVR GE8320",
             }.get(device.gpu_family, renderer)
             renderer = short[:max_len]
         return renderer
@@ -1270,6 +1275,7 @@ class RootOps:
                 "adreno": "Adreno (TM) 740",
                 "mali": "Mali-G715",
                 "xclipse": "Xclipse 920",
+                "powervr": "PowerVR GE8320",
             }.get(device.gpu_family, target_renderer)
             target_renderer = short_renderer[:max_renderer_len]
 
@@ -1281,7 +1287,12 @@ class RootOps:
         if target_vendor_id is None:
             # Try matching by gpu_family
             family = device.gpu_family
-            family_vendor_map = {"adreno": "qualcomm", "mali": "arm", "xclipse": "samsung"}
+            family_vendor_map = {
+                "adreno": "qualcomm",
+                "mali": "arm",
+                "xclipse": "samsung",
+                "powervr": "imagination",
+            }
             vendor_key = family_vendor_map.get(family, "")
             target_vendor_id = self._VULKAN_VENDOR_IDS.get(vendor_key)
 
@@ -1300,6 +1311,7 @@ class RootOps:
             "adreno": "Adreno",
             "mali": "ARM",
             "xclipse": "Xclipse",
+            "powervr": "PowerVR",
         }
         driver_name = _DRIVER_NAMES.get(device.gpu_family, target_renderer.split()[0])
         target_device_id = self._VULKAN_DEVICE_IDS.get(device.gpu_family)

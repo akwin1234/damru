@@ -12,7 +12,7 @@ Welcome to the Damru knowledge base. This directory holds project documentation,
 *   **Current validation**: On June 4, 2026, disposable Ubuntu WSL2 with Damru's bundled WSL kernel and native Ubuntu 24.04 VPS were both tested with fresh/reset setup flows, preflight, unit tests, two Redroid workers, `quick-check`, and `open-url https://example.com`. Debian 13 VPS was tested separately; Docker worked, but Redroid multi-container support failed because the stock Debian VPS kernel had `CONFIG_ANDROID_BINDERFS` disabled.
 *   **[`PROOF.md`](PROOF.md)**: Sanitized WSL/native Linux verification notes plus proof assets: [Android screen recording](assets/proof/ubuntu-redroid-proof.mp4), Example.com proof, and individual site screenshots for Amazon, Foot Locker/DataDome, Fingerprint Pro, Sannysoft, and CreepJS.
 *   **[`BROWSERS_BENCHMARK_REPORT.md`](BROWSERS_BENCHMARK_REPORT.md)**: Sanitized external `techinz/browsers-benchmark` report showing a 10/10 Damru Redroid proxy-mode bypass run, with proxy credentials and IPs removed.
-*   **[`DEVICE_PROFILES.md`](DEVICE_PROFILES.md)**: Full generated reference for the 49 Android device profiles available in `damru/devices.py`.
+*   **[`DEVICE_PROFILES.md`](DEVICE_PROFILES.md)**: Full generated reference for the 51 Android device profiles available in `damru/devices.py`.
 *   **[`VIEWER.md`](VIEWER.md)**: Optional screenshot, video recording, and scrcpy live-view workflows.
 *   **[`UI.md`](UI.md)**: Local dashboard guide with screenshots for Dashboard, Setup, Workers, Work Lab, Settings, and Logs.
 *   **[`WSL_KERNEL.md`](WSL_KERNEL.md)**: WSL2 kernel requirements for Docker bridge/NAT networking and Redroid binderfs.

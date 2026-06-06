@@ -75,7 +75,7 @@ Damru's most advanced stealth layers - including native GPU binary patching and 
 ## Core Features
 
 *   **Zero JS Injection**: All spoofing is executed at the OS, Binary, and CDP levels. No brittle `Object.defineProperty` hacks.
-*   **Massive Device Database**: Built-in profiles for 49 real Android devices (Samsung, Pixel, Xiaomi, OnePlus, Nothing, Honor, Vivo, POCO, etc.) with realistic hardware specifications.
+*   **Massive Device Database**: Built-in profiles for 51 real Android devices (Samsung, Pixel, Xiaomi, OnePlus, Nothing, Honor, Vivo, POCO, Motorola, Redmi, etc.) with realistic hardware specifications.
 *    **Display & Resolution Spoofing**: Natively overrides screen dimensions and DPI via Android's Window Manager (`wm size/density`) for physical accuracy.
 *    **Browser Version & Client Hints Randomization**: Dynamically selects from the validated Chrome APK bundle, rotates compatible Chrome builds with random profiles, and generates matching `sec-ch-ua` Client Hints including Chromium GREASE brand permutations.
 *    **TLS/JA3 Randomization**: Generates ~184 unique TLS fingerprints from a single binary by dynamically toggling cipher suites and experimental flags.
@@ -186,7 +186,7 @@ damru-project/
 |   +-- async_core.py      # Async entry points (AsyncDamru)
 |   +-- core.py            # Sync entry points (Damru)
 |   +-- root.py            # OS/Binary patching logic (resetprop/iptables/display)
-|   +-- devices.py         # 49 Real Device Specifications Database
+|   +-- devices.py         # 51 Real Device Specifications Database
 |   +-- chrome.py          # Browser lifecycle & Preferences patching
 |   +-- bypass.py          # CDN TLS/WAF edge-layer TLS impersonation
 |   +-- pool.py            # Multi-container orchestration (DamruPool)
@@ -763,7 +763,7 @@ from damru import AsyncDamru
 async def main():
     print("Launching Damru...")
     
-    # device="random" picks from 49 real Android device profiles.
+    # device="random" picks from 51 real Android device profiles.
     # Leave timezone/locale unset so Damru follows the active proxy exit.
     async with AsyncDamru(
         device="random", 

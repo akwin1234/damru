@@ -162,7 +162,7 @@ class AndroidDevice:
 
     @property
     def gpu_family(self) -> str:
-        """GPU family: 'adreno', 'mali', 'xclipse', or 'unknown'.
+        """GPU family: 'adreno', 'mali', 'xclipse', 'powervr', or 'unknown'.
 
         Used to filter devices by emulator GPU compatibility.
         MuMu emulates Adreno, so only 'adreno' devices are safe there.
@@ -175,6 +175,8 @@ class AndroidDevice:
             return "mali"
         if "samsung" in v or "xclipse" in r:
             return "xclipse"
+        if "imagination" in v or "powervr" in r:
+            return "powervr"
         return "unknown"
 
     def system_props(self, safe_only: bool = True) -> Dict[str, str]:
@@ -990,6 +992,34 @@ DEVICES: List[AndroidDevice] = [
         chipset="Google Tensor G4",
         supported_android_versions=(14, 15),
     ),
+    # ---- Motorola Moto G (5S) Plus (Snapdragon 625 → Adreno 506) ----
+    AndroidDevice(
+        name="Motorola Moto G (5S) Plus",
+        brand="motorola", manufacturer="motorola",
+        model="Moto G (5S) Plus", device="sanders", product="sanders_retail",
+        build_fingerprint="motorola/sanders_retail/sanders:8.1.0/OPS28.65-36-14/63857:user/release-keys",
+        android_version="8.1.0", sdk_version=27,
+        build_id="OPS28.65-36-14", security_patch="2020-01-05",
+        screen_width=1080, screen_height=1920, density_dpi=480,
+        hardware_concurrency=8, device_memory=2, max_touch_points=5,
+        webgl_vendor="Qualcomm", webgl_renderer="Adreno (TM) 506",
+        chipset="Snapdragon 625",
+        supported_android_versions=(8,),
+    ),
+    # ---- Xiaomi Redmi 9A (MediaTek Helio G25 → PowerVR GE8320) ----
+    AndroidDevice(
+        name="Xiaomi Redmi 9A",
+        brand="Redmi", manufacturer="Xiaomi",
+        model="M2006C3LG", device="dandelion", product="dandelion_global",
+        build_fingerprint="Redmi/dandelion_global/dandelion:11/RP1A.200720.011/V12.5.6.0.RCDMIXM:user/release-keys",
+        android_version="11", sdk_version=30,
+        build_id="RP1A.200720.011", security_patch="2022-07-01",
+        screen_width=720, screen_height=1600, density_dpi=320,
+        hardware_concurrency=8, device_memory=2, max_touch_points=5,
+        webgl_vendor="Imagination Technologies", webgl_renderer="PowerVR Rogue GE8320",
+        chipset="MediaTek Helio G25",
+        supported_android_versions=(10, 11),
+    ),
 ]
 
 # Build lookup index by name/model
@@ -1040,7 +1070,7 @@ def get_random_device(
 
     Args:
         android_version: Filter to devices matching this Android version.
-        gpu_family: Filter by GPU family ('adreno', 'mali', 'xclipse').
+        gpu_family: Filter by GPU family ('adreno', 'mali', 'xclipse', 'powervr').
             On MuMu (Adreno emulator), pass 'adreno' to avoid GPU mismatch.
     """
     pool = DEVICES
@@ -1088,12 +1118,12 @@ def pick_random_android_version(device: AndroidDevice) -> Tuple[int, int]:
     Many real users don't update immediately, so this gives a realistic
     spread of OS versions for the same device model.
     """
-    _VERSION_TO_SDK = {12: 31, 13: 33, 14: 34, 15: 35, 16: 36}
+    _VERSION_TO_SDK = {8: 27, 9: 28, 10: 29, 11: 30, 12: 31, 13: 33, 14: 34, 15: 35, 16: 36}
 
     if device.supported_android_versions:
         ver = random.choice(device.supported_android_versions)
     else:
-        ver = int(device.android_version)
+        ver = int(device.android_version.split(".", 1)[0])
 
     sdk = _VERSION_TO_SDK.get(ver, device.sdk_version)
     return (ver, sdk)
