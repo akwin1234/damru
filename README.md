@@ -75,7 +75,7 @@ Damru's most advanced stealth layers - including native GPU binary patching and 
 ## Core Features
 
 *   **Zero JS Injection**: All spoofing is executed at the OS, Binary, and CDP levels. No brittle `Object.defineProperty` hacks.
-*   **Massive Device Database**: Built-in profiles for 49 real Android devices (Samsung, Pixel, Xiaomi, OnePlus, Nothing, Honor, Vivo, POCO, etc.) with realistic hardware specifications.
+*   **Massive Device Database**: Built-in profiles for 51 real Android devices (Samsung, Pixel, Xiaomi, OnePlus, Nothing, Honor, Vivo, POCO, Motorola, Redmi, etc.) with realistic hardware specifications.
 *    **Display & Resolution Spoofing**: Natively overrides screen dimensions and DPI via Android's Window Manager (`wm size/density`) for physical accuracy.
 *    **Browser Version & Client Hints Randomization**: Dynamically selects from the validated Chrome APK bundle, rotates compatible Chrome builds with random profiles, and generates matching `sec-ch-ua` Client Hints including Chromium GREASE brand permutations.
 *    **TLS/JA3 Randomization**: Generates ~184 unique TLS fingerprints from a single binary by dynamically toggling cipher suites and experimental flags.
@@ -187,7 +187,7 @@ damru-project/
 |   +-- async_core.py      # Async entry points (AsyncDamru)
 |   +-- core.py            # Sync entry points (Damru)
 |   +-- root.py            # OS/Binary patching logic (resetprop/iptables/display)
-|   +-- devices.py         # 49 Real Device Specifications Database
+|   +-- devices.py         # 51 Real Device Specifications Database
 |   +-- chrome.py          # Browser lifecycle & Preferences patching
 |   +-- bypass.py          # CDN TLS/WAF edge-layer TLS impersonation
 |   +-- pool.py            # Multi-container orchestration (DamruPool)
@@ -562,6 +562,7 @@ python -m damru wsl-kernel status # inspect bundled/active WSL kernel state
 python -m damru benchmark       # run the benchmark command
 python -m damru bake-image      # bake a warm Redroid image
 python -m damru devices         # list ADB devices from Linux/WSL
+python -m damru force-profile   # force a named profile onto one ADB worker
 python -m damru open-url        # open a URL in Android Chrome on one ADB worker
 python -m damru stealth-open-url # apply Damru stealth, then open a URL with detached/CDP-safe navigation
 python -m damru quick-check     # run a fast local Android/Chrome sanity check
@@ -571,6 +572,15 @@ python -m damru view            # open optional scrcpy live viewer
 python -m damru install-viewer  # check/install optional scrcpy tooling
 python -m damru ui              # open the experimental local web dashboard
 ```
+
+Use `force-profile` when an already-running worker needs a specific Android identity before a manual/debug harness attaches to it:
+
+```bash
+python -m damru force-profile --serial 127.0.0.1:5600 --device xiaomi_redmi_9a
+python -m damru force-profile --serial 127.0.0.1:5600 --device motorola_moto_g_5s_plus --no-chrome --clear-proxy
+```
+
+The command applies Android props, release string, timezone, locale, display size/density, CPU core spoofing, and Chrome command-line/preferences by default. `--no-chrome` keeps it to Android-level changes for WebView Shell or other non-Chrome harnesses. By default it preserves an existing Android system proxy; pass `--clear-proxy` for clean direct-network debug runs. Full Damru sessions still own GPU, memory preload, and CDP runtime overrides because those depend on the browser package and active DevTools context.
 
 ### Fleet Preflight
 
@@ -767,7 +777,7 @@ from damru import AsyncDamru
 async def main():
     print("Launching Damru...")
     
-    # device="random" picks from 49 real Android device profiles.
+    # device="random" picks from 51 real Android device profiles.
     # Leave timezone/locale unset so Damru follows the active proxy exit.
     async with AsyncDamru(
         device="random", 

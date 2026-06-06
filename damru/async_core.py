@@ -1214,8 +1214,8 @@ class AsyncDamru:
         # Use real emulator Android version to match Workers (can't override
         # Worker UA via CDP - Emulation domain is page-target only).
         if android_version:
-            android_ver = int(android_version)
-            _VERSION_TO_SDK = {12: 31, 13: 33, 14: 34, 15: 35, 16: 36}
+            android_ver = int(android_version.split(".", 1)[0])
+            _VERSION_TO_SDK = {8: 27, 9: 28, 10: 29, 11: 30, 12: 31, 13: 33, 14: 34, 15: 35, 16: 36}
             sdk_ver = _VERSION_TO_SDK.get(android_ver, device.sdk_version)
         else:
             android_ver, sdk_ver = pick_random_android_version(device)

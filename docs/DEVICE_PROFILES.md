@@ -12,9 +12,16 @@ async with AsyncDamru(device="samsung_galaxy_s24_ultra") as browser:
     ...
 ```
 
+For an existing rooted worker that is already running, force one profile by name, model, or slug:
+
+```bash
+python -m damru force-profile --serial 127.0.0.1:5600 --device xiaomi_redmi_9a
+python -m damru force-profile --serial 127.0.0.1:5600 --device "Moto G (5S) Plus" --no-chrome --clear-proxy
+```
+
 GPU families matter most for emulator compatibility. MuMu is Adreno-oriented; Redroid is the supported path for full automation.
 
-Total profiles: 49
+Total profiles: 51
 
 | # | Profile | Slug | Model | Android | SDK | GPU family | GPU renderer | Chipset | Screen | RAM | Cores | Screen variants |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -67,6 +74,8 @@ Total profiles: 49
 | 47 | Samsung Galaxy S21 FE | `samsung_galaxy_s21_fe` | SM-G990B | 12, 13, 14 | 34 | adreno | Adreno (TM) 660 | Snapdragon 888 | 1080x2340 @420dpi | 8GB | 8 | - |
 | 48 | Xiaomi Redmi Note 12 5G | `xiaomi_redmi_note_12_5g` | 22111317G | 12, 13, 14 | 34 | adreno | Adreno (TM) 619 | Snapdragon 4 Gen 1 | 1080x2400 @420dpi | 4GB | 8 | - |
 | 49 | Google Pixel 9 Pro XL | `google_pixel_9_pro_xl` | Pixel 9 Pro XL | 14, 15 | 35 | mali | Mali-G715-Immortalis MC10 | Google Tensor G4 | 1344x2992 @560dpi | 8GB | 8 | - |
+| 50 | Motorola Moto G (5S) Plus | `motorola_moto_g_5s_plus` | Moto G (5S) Plus | 8.1.0 | 27 | adreno | Adreno (TM) 506 | Snapdragon 625 | 1080x1920 @480dpi | 2GB | 8 | - |
+| 51 | Xiaomi Redmi 9A | `xiaomi_redmi_9a` | M2006C3LG | 10, 11 | 30 | powervr | PowerVR Rogue GE8320 | MediaTek Helio G25 | 720x1600 @320dpi | 2GB | 8 | - |
 
 ## Notes
 

@@ -35,6 +35,11 @@ def test_ui_random_profile_passes_proxy_to_cli():
     assert cmd[cmd.index("--proxy") + 1] == "http://user:pass@proxy.example:10000"
 
 
+def test_com_br_url_hints_pt_br_locale():
+    assert cli._locale_hint_for_url("https://www.example.com.br/") == "pt-BR"
+    assert cli._locale_hint_for_url("https://www.example.com/") is None
+
+
 def test_apply_android_proxy_writes_no_auth_host_port(monkeypatch):
     calls = []
 
