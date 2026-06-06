@@ -178,7 +178,7 @@ result = await force_device_profile(
 print(result.description)
 ```
 
-`force-profile` applies Android props, release string, timezone, locale, display size/density, CPU core spoofing, and Chrome command-line/preferences by default. Pass `--no-chrome` or `configure_chrome=False` for WebView Shell or other non-Chrome harnesses, and `--clear-proxy` or `clear_proxy=True` when a debug run should not inherit the worker's current Android HTTP proxy. GPU spoofing, memory preload, and CDP overrides remain part of full Damru sessions because they are package/runtime specific.
+`force-profile` applies Android props, release string, timezone, locale, display size/density, CPU core spoofing, and Chrome command-line/preferences by default. Locale writes include modern `persist.sys.locale`/`system_locales` plus legacy `persist.sys.language` and `persist.sys.country`, so Android Chrome/WebView-family processes do not keep a stale `en-US` language. Pass `--no-chrome` or `configure_chrome=False` only for non-Chrome harnesses that cannot use Chrome preferences, and `--clear-proxy` or `clear_proxy=True` when a debug run should not inherit the worker's current Android HTTP proxy. GPU spoofing, memory preload, and CDP overrides remain part of full Damru sessions because they are package/runtime specific.
 
 ---
 
@@ -303,7 +303,7 @@ async with AsyncDamru(
     await page.goto("https://demo.fingerprint.com/playground")
 ```
 
-Leave `timezone` and `locale` unset unless you intentionally need fixed values. Damru will set Android timezone, Chrome timezone, `Accept-Language`, and `Intl` locale from the proxy exit.
+Leave `timezone` and `locale` unset unless you intentionally need fixed values. Damru will set Android timezone, Chrome timezone, `Accept-Language`, and `Intl` locale from the proxy exit. CLI `stealth-open-url` also hints `pt-BR` for `.com.br` URLs when no explicit locale is provided.
 
 ---
 

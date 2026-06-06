@@ -2464,6 +2464,17 @@ def _apply_android_proxy(serial: str, proxy: str | None = None, http_proxy: str 
             raise RuntimeError((result.stderr or result.stdout or "Failed to apply Android proxy.").strip())
     return system_proxy
 
+def _locale_hint_for_url(url: str) -> str | None:
+    try:
+        from urllib.parse import urlparse
+
+        host = (urlparse(url).hostname or "").lower()
+    except Exception:
+        return None
+    if host.endswith(".com.br"):
+        return "pt-BR"
+    return None
+
 def _open_url(args: argparse.Namespace) -> int:
     serial = _resolve_serial(args.serial)
     if not serial:
@@ -2588,6 +2599,7 @@ def _stealth_open_url(args: argparse.Namespace) -> int:
             serial=serial,
             proxy=getattr(args, "proxy", None),
             http_proxy=getattr(args, "http_proxy", None),
+            locale=getattr(args, "locale", None) or _locale_hint_for_url(url),
             keep_chrome_on_exit=True,
             force_cold_start=True,
             debug=getattr(args, "debug", False),
@@ -2951,6 +2963,7 @@ def build_parser() -> argparse.ArgumentParser:
     stealth_open_url.add_argument("--url", required=True, help="http:// or https:// URL to open")
     stealth_open_url.add_argument("--proxy", default=None, help="HTTP/SOCKS proxy URL")
     stealth_open_url.add_argument("--http-proxy", default=None, help="explicit Android HTTP proxy host:port or URL")
+    stealth_open_url.add_argument("--locale", default=None, help="explicit BCP-47 locale; .com.br URLs default to pt-BR when omitted")
     stealth_open_url.add_argument("--settle-ms", type=int, default=3000, help="milliseconds to wait after navigation before leaving Chrome open")
     stealth_open_url.add_argument("--debug", action="store_true", help="enable debug logging")
     stealth_open_url.set_defaults(func=_stealth_open_url)

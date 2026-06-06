@@ -27,6 +27,17 @@ from .devices import AndroidDevice
 from .utils import logger, sleep
 
 
+def _locale_language_country(locale: str) -> tuple[str, str]:
+    parts = [part for part in (locale or "").replace("_", "-").split("-") if part]
+    language = (parts[0] if parts else "en").lower()
+    country = ""
+    for part in parts[1:]:
+        if len(part) == 2 and part.isalpha():
+            country = part.upper()
+            break
+    return language, country
+
+
 def _detect_gpu_family(gles_string: str) -> str:
     """Determine GPU family from a GLES renderer string.
 
@@ -359,7 +370,13 @@ class RootOps:
         Sets both the system property and the Android settings value
         so Chrome picks up the new locale immediately without reboot.
         """
-        await self.set_prop("persist.sys.locale", locale)
+        language, country = _locale_language_country(locale)
+        prop_tasks = [
+            self.set_prop("persist.sys.locale", locale),
+            self.set_prop("persist.sys.language", language),
+            self.set_prop("persist.sys.country", country),
+        ]
+        await asyncio.gather(*prop_tasks)
         # Android settings locale takes effect immediately for apps
         await self.adb.shell(
             f"settings put system system_locales {locale}",
