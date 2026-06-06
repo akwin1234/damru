@@ -2271,6 +2271,46 @@ def _random_profile(args: argparse.Namespace) -> int:
     print(f"Random stealth profile applied on {serial}: {detail}")
     return 0
 
+def _force_profile(args: argparse.Namespace) -> int:
+    serial = _resolve_serial(args.serial)
+    if not serial:
+        print("No online ADB device found. Use --serial or start a Redroid device first.", file=sys.stderr)
+        return 1
+    _repair_runtime_internet(serial, quiet=True)
+
+    async def _apply():
+        from .profile_apply import force_device_profile
+
+        return await force_device_profile(
+            serial,
+            args.device,
+            proxy=getattr(args, "proxy", None),
+            http_proxy=getattr(args, "http_proxy", None),
+            timezone=getattr(args, "timezone", None),
+            locale=getattr(args, "locale", None),
+            configure_chrome=not getattr(args, "no_chrome", False),
+            clear_chrome=not getattr(args, "no_clear_chrome", False),
+            rotate_chrome=getattr(args, "rotate_chrome", False),
+            apply_cpu=not getattr(args, "no_cpu", False),
+            clear_proxy=getattr(args, "clear_proxy", False),
+        )
+
+    try:
+        import asyncio
+        result = asyncio.run(_apply())
+    except Exception as exc:
+        print(f"Force profile failed: {exc}", file=sys.stderr)
+        return 1
+
+    proxy_note = f"; proxy={result.android_http_proxy}" if result.android_http_proxy else ""
+    chrome_note = f"; {result.chrome_note}" if result.chrome_note else ""
+    print(
+        f"Forced profile applied on {serial}: {result.description}; "
+        f"{result.screen_width}x{result.screen_height}@{result.density_dpi}; "
+        f"tz={result.timezone}; locale={result.locale}{proxy_note}{chrome_note}"
+    )
+    return 0
+
 def _ui_stealth_check_all(args: argparse.Namespace) -> int:
     serials = _running_damru_worker_serials()
     if not serials:
@@ -2868,6 +2908,20 @@ def build_parser() -> argparse.ArgumentParser:
     random_profile.add_argument("--proxy", default=None, help="proxy URL used for geo/timezone/locale and Android HTTP proxy")
     random_profile.add_argument("--http-proxy", default=None, help="explicit Android HTTP proxy host:port or URL")
     random_profile.set_defaults(func=_random_profile)
+
+    force_profile = sub.add_parser("force-profile", help="apply a named stealth profile to an ADB worker")
+    force_profile.add_argument("--serial", "-s", default=None, help="ADB serial; defaults to the first online device")
+    force_profile.add_argument("--device", "-d", required=True, help="device profile name, model, or slug")
+    force_profile.add_argument("--proxy", default=None, help="proxy URL used for geo/timezone/locale")
+    force_profile.add_argument("--http-proxy", default=None, help="explicit Android HTTP proxy host:port or URL")
+    force_profile.add_argument("--timezone", default=None, help="explicit IANA timezone, e.g. America/Sao_Paulo")
+    force_profile.add_argument("--locale", default=None, help="explicit BCP-47 locale, e.g. pt-BR")
+    force_profile.add_argument("--no-chrome", action="store_true", help="skip Chrome command-line/preferences setup")
+    force_profile.add_argument("--no-clear-chrome", action="store_true", help="keep existing Chrome data")
+    force_profile.add_argument("--rotate-chrome", action="store_true", help="rotate Chrome from the validated APK bundle")
+    force_profile.add_argument("--no-cpu", action="store_true", help="skip CPU core spoofing")
+    force_profile.add_argument("--clear-proxy", action="store_true", help="clear Android system HTTP proxy instead of preserving it")
+    force_profile.set_defaults(func=_force_profile)
 
     stealth_all = sub.add_parser("ui-stealth-check-all", help=argparse.SUPPRESS)
     stealth_all.add_argument("--output-root", required=True, help=argparse.SUPPRESS)

@@ -12,6 +12,13 @@ async with AsyncDamru(device="samsung_galaxy_s24_ultra") as browser:
     ...
 ```
 
+For an existing rooted worker that is already running, force one profile by name, model, or slug:
+
+```bash
+python -m damru force-profile --serial 127.0.0.1:5600 --device xiaomi_redmi_9a
+python -m damru force-profile --serial 127.0.0.1:5600 --device "Moto G (5S) Plus" --no-chrome --clear-proxy
+```
+
 GPU families matter most for emulator compatibility. MuMu is Adreno-oriented; Redroid is the supported path for full automation.
 
 Total profiles: 51

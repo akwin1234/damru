@@ -159,6 +159,27 @@ print(f"Cores: {pixel.cores}, RAM: {pixel.ram_gb}GB")
 random_phone = get_random_device(android_version="13")
 ```
 
+To force a specific profile onto an already-running rooted worker without opening a full Damru Playwright session, use the CLI or the async helper:
+
+```bash
+python -m damru force-profile --serial 127.0.0.1:5600 --device pixel_8_pro
+python -m damru force-profile --serial 127.0.0.1:5600 --device xiaomi_redmi_9a --no-chrome --clear-proxy
+```
+
+```python
+from damru import force_device_profile
+
+result = await force_device_profile(
+    "127.0.0.1:5600",
+    "pixel_8_pro",
+    timezone="America/New_York",
+    locale="en-US",
+)
+print(result.description)
+```
+
+`force-profile` applies Android props, release string, timezone, locale, display size/density, CPU core spoofing, and Chrome command-line/preferences by default. Pass `--no-chrome` or `configure_chrome=False` for WebView Shell or other non-Chrome harnesses, and `--clear-proxy` or `clear_proxy=True` when a debug run should not inherit the worker's current Android HTTP proxy. GPU spoofing, memory preload, and CDP overrides remain part of full Damru sessions because they are package/runtime specific.
+
 ---
 
 ## Advanced Configuration

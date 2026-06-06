@@ -561,6 +561,7 @@ python -m damru wsl-kernel status # inspect bundled/active WSL kernel state
 python -m damru benchmark       # run the benchmark command
 python -m damru bake-image      # bake a warm Redroid image
 python -m damru devices         # list ADB devices from Linux/WSL
+python -m damru force-profile   # force a named profile onto one ADB worker
 python -m damru open-url        # open a URL in Android Chrome on one ADB worker
 python -m damru quick-check     # run a fast local Android/Chrome sanity check
 python -m damru screenshot      # capture Android display PNG through ADB
@@ -569,6 +570,15 @@ python -m damru view            # open optional scrcpy live viewer
 python -m damru install-viewer  # check/install optional scrcpy tooling
 python -m damru ui              # open the experimental local web dashboard
 ```
+
+Use `force-profile` when an already-running worker needs a specific Android identity before a manual/debug harness attaches to it:
+
+```bash
+python -m damru force-profile --serial 127.0.0.1:5600 --device xiaomi_redmi_9a
+python -m damru force-profile --serial 127.0.0.1:5600 --device motorola_moto_g_5s_plus --no-chrome --clear-proxy
+```
+
+The command applies Android props, release string, timezone, locale, display size/density, CPU core spoofing, and Chrome command-line/preferences by default. `--no-chrome` keeps it to Android-level changes for WebView Shell or other non-Chrome harnesses. By default it preserves an existing Android system proxy; pass `--clear-proxy` for clean direct-network debug runs. Full Damru sessions still own GPU, memory preload, and CDP runtime overrides because those depend on the browser package and active DevTools context.
 
 ### Fleet Preflight
 

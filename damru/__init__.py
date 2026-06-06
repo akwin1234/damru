@@ -19,6 +19,8 @@ __all__ = [
     "get_device",
     "get_random_device",
     "list_device_names",
+    "force_device_profile",
+    "AppliedDeviceProfile",
 ]
 
 _LAZY_EXPORTS = set(__all__)
@@ -68,6 +70,7 @@ def _load_exports() -> None:
     from .core import Damru
     from .devices import AndroidDevice, get_device, get_random_device, list_device_names
     from .pool import DamruPool, DamruPoolSync
+    from .profile_apply import AppliedDeviceProfile, force_device_profile
 
     globals().update(
         {
@@ -80,6 +83,8 @@ def _load_exports() -> None:
             "get_device": get_device,
             "get_random_device": get_random_device,
             "list_device_names": list_device_names,
+            "force_device_profile": force_device_profile,
+            "AppliedDeviceProfile": AppliedDeviceProfile,
         }
     )
 
