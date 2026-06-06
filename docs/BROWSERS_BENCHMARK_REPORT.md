@@ -4,6 +4,10 @@ This report records a Damru run against the external stealth benchmark project:
 
 https://github.com/techinz/browsers-benchmark
 
+Adapter code used for Damru Redroid runs:
+
+[../scripts/run_browsers_benchmark_damru.py](../scripts/run_browsers_benchmark_damru.py)
+
 The benchmark was run with Damru Redroid on WSL2 Ubuntu using an Android 14 runtime, a Samsung Galaxy S23 profile, and a residential HTTP proxy. Proxy credentials, local paths, local usernames, and IP addresses are intentionally excluded from this report.
 
 ## Result
@@ -43,6 +47,8 @@ In the final proxy benchmark report above, reCAPTCHA was skipped rather than cou
 
 Manual UI proof: separate antcpt checks run through the Damru UI returned **reCAPTCHA v3 score 0.9** in both direct and proxy modes. Any published screenshot must redact the visible IP address.
 
+We tried automating this target repeatedly, but automated score extraction was unreliable because the page can remain in a detecting/error state after proxy reputation changes, repeated refreshes, or Google-side rate limits. The manual UI result is therefore recorded separately from the automated benchmark score.
+
 ## Stability Fixes From This Run
 
 - DataImpulse-style rotating proxy URLs are normalized into a sticky session at Damru browser-session startup, so GeoIP, Android proxy bridge, and Chrome use the same exit during that session.
@@ -55,8 +61,8 @@ The final proof run used the external benchmark adapter with:
 
 ```powershell
 $env:DAMRU_BENCH_DEVICE='Samsung Galaxy S23'
-$env:DAMRU_BENCH_SKIP='recaptcha_score'
-python C:\path\to\browsers-benchmark\run_damru_benchmark.py
+$env:DAMRU_REPO='C:\path\to\damru'
+python C:\path\to\damru\scripts\run_browsers_benchmark_damru.py
 ```
 
 Use a valid residential proxy in `DAMRU_BENCH_PROXY` for proxy-mode testing. Do not commit proxy credentials or raw screenshots that expose IP addresses or site challenge tokens.

@@ -123,6 +123,7 @@ Fresh Ubuntu/WSL verification proof is tracked in [docs/PROOF.md](docs/PROOF.md)
 External benchmark proof: [docs/BROWSERS_BENCHMARK_REPORT.md](docs/BROWSERS_BENCHMARK_REPORT.md) records a sanitized Damru Redroid run against [`techinz/browsers-benchmark`](https://github.com/techinz/browsers-benchmark), with proxy credentials and IPs removed.
 
 - **Final browser benchmark score:** 10/10 bypass targets, **100%** bypass rate.
+- **Adapter code:** [scripts/run_browsers_benchmark_damru.py](scripts/run_browsers_benchmark_damru.py).
 - **Targets passed:** Google Search, Cloudflare, DataDome, Amazon, Ticketmaster/Imperva, Akamai, PerimeterX/HUMAN, Kasada, and Reddit.
 - **Browser data:** CreepJS completed without benchmark error, WebRTC candidate IP stayed blank by design, and IP check completed through the configured residential proxy.
 - **Manual reCAPTCHA proof:** Damru UI antcpt checks returned **reCAPTCHA v3 score 0.9** in both direct and proxy modes; publish screenshots only after redacting the visible IP.
