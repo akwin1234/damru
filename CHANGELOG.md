@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Expanded the built-in Android profile database from 51 to 155 profiles by importing 104 additional regional devices from the `r.txt` research set. Malformed entries, existing duplicate devices, `UNKNOWN` fingerprints, obvious placeholder fingerprints, and incomplete critical records were skipped; all imported profiles passed Sannysoft on WSL Redroid with a runtime-only DataImpulse proxy after retrying transient proxy/network timeouts, and representative Adreno/Mali/PowerVR profiles passed the full CreepJS, BrowserScan, Sannysoft, and Cloudflare benchmark sample.
 - Rebuilt the baked Redroid image from the clean Redroid base instead of stacking on an older `damru-redroid:latest`; the current export is about 943 MB and includes the validated Chrome/WebView/TTS/resetprop assets.
 - Fixed `quick-check` DNS readiness so it accepts Android DNS from the active resolver state instead of requiring only `net.dns1`, which prevented false DNS failures on freshly imported images.
 - Updated UI Workers and Logs pages with compact pagination and clearer ADB-empty wording when Docker workers exist but ADB is still reconnecting.
@@ -102,7 +103,7 @@
 - Made `install-deps` verify Docker and binderfs after setup and fail clearly when WSL kernel netfilter modules are missing.
 - Made `check-env` report the missing `xt_addrtype` WSL kernel module when Docker cannot start.
 - Made Chrome APK discovery check the current working directory so pip-installed users can keep `chrome-apks/` beside their project.
-- Added `docs/DEVICE_PROFILES.md` with the full generated list of 49 built-in Android profiles.
+- Added `docs/DEVICE_PROFILES.md` with the generated built-in Android profile list; the current regenerated list now contains 155 profiles.
 - Removed the WSL sudo-password requirement from the Windows Docker/Redroid setup path.
 - Updated README, API docs, docs index, and automation notes for the new CLI/setup/check behavior.
 - Added `install-deps --sudo-password-stdin` for noninteractive setup runs that need sudo authentication.

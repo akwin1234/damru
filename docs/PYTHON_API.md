@@ -146,14 +146,14 @@ with DamruPoolSync(mode="auto", max_devices=5, proxies=["socks5://..."]) as pool
 ## Device Management
 
 ### `AndroidDevice` Database
-Access the physical specifications of the built-in device profiles. The full generated list is in [DEVICE_PROFILES.md](DEVICE_PROFILES.md).
+Access the physical specifications of the 155 built-in device profiles. The full generated list is in [DEVICE_PROFILES.md](DEVICE_PROFILES.md). Profiles can be selected by exact marketing name, model, or slug; `device="random"` still rotates from the same validated pool.
 
 ```python
 from damru import list_device_names, get_device, get_random_device
 
 # Get hardware specs for a specific phone
 pixel = get_device("pixel_8_pro")
-print(f"Cores: {pixel.cores}, RAM: {pixel.ram_gb}GB")
+print(f"Cores: {pixel.hardware_concurrency}, RAM: {pixel.device_memory}GB")
 
 # Select a random Android 13 profile
 random_phone = get_random_device(android_version="13")
@@ -163,6 +163,7 @@ To force a specific profile onto an already-running rooted worker without openin
 
 ```bash
 python -m damru force-profile --serial 127.0.0.1:5600 --device pixel_8_pro
+python -m damru force-profile --serial 127.0.0.1:5600 --device "Xiaomi POCO F5"
 python -m damru force-profile --serial 127.0.0.1:5600 --device xiaomi_redmi_9a --no-chrome --clear-proxy
 ```
 
