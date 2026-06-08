@@ -1,4 +1,5 @@
 import subprocess
+import types
 
 import damru.cli as cli
 from damru.proxy_runtime import android_proxy_host_from_route, proxy_bridge_upstream
@@ -99,3 +100,113 @@ def test_socks_proxy_uses_bridge_without_port_guessing():
 
 def test_proxy_runtime_derives_docker_gateway_from_android_route():
     assert android_proxy_host_from_route("172.17.0.0/16 dev eth0 proto kernel scope link src 172.17.0.2") == "172.17.0.1"
+
+
+def test_stealth_open_url_keeps_session_alive_through_native_open(monkeypatch):
+    events = []
+
+    class FakePage:
+        url = "about:blank"
+
+        async def goto(self, url, wait_until=None, timeout=None):
+            events.append(("goto", url))
+            self.url = url
+
+        async def title(self):
+            return "Damru"
+
+    class FakeContext:
+        def __init__(self):
+            self.pages = [FakePage()]
+
+        async def new_page(self):
+            page = FakePage()
+            self.pages.append(page)
+            return page
+
+        async def new_cdp_session(self, page):
+            events.append(("cdp-session", page.url))
+
+            class Session:
+                async def send(self, *args, **kwargs):
+                    events.append(("cdp-send", args[0] if args else None))
+
+            return Session()
+
+    class FakeDamru:
+        def __init__(self, **kwargs):
+            events.append(("init", kwargs.get("serial"), kwargs.get("locale")))
+            device = types.SimpleNamespace(hardware_concurrency=8)
+            self._profile = types.SimpleNamespace(locale="en-US", device=device)
+            self._sync_ua_payload = {"userAgent": "UA"}
+            self._spoofed_chrome_version = "148.0.7778.217"
+            self._spoofed_android_version = 14
+            self._context = FakeContext()
+
+        async def __aenter__(self):
+            events.append(("enter",))
+            return self._context
+
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            events.append(("exit",))
+
+        async def disconnect_cdp(self):
+            events.append(("disconnect",))
+
+        async def reconnect_cdp(self):
+            events.append(("reconnect",))
+            self._context = FakeContext()
+            return self._context
+
+        async def _apply_timezone_override(self):
+            events.append(("tz",))
+
+        async def _apply_locale_override(self, locale):
+            events.append(("locale", locale))
+
+        async def _apply_devtools_evasion(self):
+            events.append(("devtools",))
+
+        async def _apply_hardware_overrides(self, device):
+            events.append(("hardware", device.hardware_concurrency))
+
+        async def _apply_touch_emulation(self, device):
+            events.append(("touch", device.hardware_concurrency))
+
+        async def _apply_network_emulation(self):
+            events.append(("network",))
+
+        async def _apply_storage_quota_override(self, device):
+            events.append(("storage", device.hardware_concurrency))
+
+        async def _apply_ua_override(self, device, chrome_version=None, android_version=None):
+            events.append(("ua", chrome_version, android_version))
+
+        async def _arm_worker_core_override(self, cores):
+            events.append(("workers", cores))
+
+    def fake_run_adb_text(serial, *args, timeout=30):
+        events.append(("adb", serial, args))
+        return _cp(0, stdout="Starting: Intent")
+
+    monkeypatch.setattr("damru.async_core.AsyncDamru", FakeDamru)
+    monkeypatch.setattr(cli, "_run_adb_text", fake_run_adb_text)
+    monkeypatch.setattr(cli, "_ensure_adb_connected", lambda serial: events.append(("ensure", serial)))
+    monkeypatch.setattr(cli, "_repair_runtime_internet", lambda serial, quiet=True: events.append(("repair", serial)))
+
+    args = cli.build_parser().parse_args([
+        "stealth-open-url",
+        "--serial",
+        "wsl:127.0.0.1:5600",
+        "--url",
+        "https://example.com",
+        "--mode",
+        "cdp",
+    ])
+
+    assert cli._stealth_open_url(args) == 0
+    assert ("disconnect",) in events
+    assert any(e[0] == "reconnect" for e in events)
+    assert events.index(("disconnect",)) < next(i for i, e in enumerate(events) if e[0] == "adb")
+    for kind in ("hardware", "touch", "network", "storage", "tz", "ua", "workers"):
+        assert any(e[0] == kind for e in events)

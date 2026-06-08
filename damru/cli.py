@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import contextlib
 import hashlib
 import html
 import importlib.util
@@ -2602,9 +2603,7 @@ def _stealth_open_url(args: argparse.Namespace) -> int:
     _repair_runtime_internet(serial, quiet=True)
 
     async def _run_stealth() -> str:
-        from .adb import ADB
         from .async_core import AsyncDamru
-        from .cdp import CDPConnection
 
         mode = str(getattr(args, "mode", "cdp") or "cdp").lower()
 
@@ -2626,50 +2625,41 @@ def _stealth_open_url(args: argparse.Namespace) -> int:
                 # Android Chrome perform a native VIEW intent. In cdp mode we
                 # reconnect after the page settles so automation can inspect it.
                 await page.goto("about:blank", wait_until="domcontentloaded", timeout=15000)
-            elif mode == "playwright":
-                await page.goto(url, wait_until="domcontentloaded", timeout=45000)
-                await page.wait_for_timeout(max(0, int(getattr(args, "settle_ms", 3000))))
-                return await page.title()
-            else:
-                raise RuntimeError(f"Unsupported stealth-open-url mode: {mode}")
-        finally:
-            await damru.__aexit__(None, None, None)
+                await damru.disconnect_cdp()
 
-        package = "com.android.chrome"
-        activities = (
-            "com.google.android.apps.chrome.Main",
-            "org.chromium.chrome.browser.ChromeTabbedActivity",
-        )
-        last_error = ""
-        for activity_name in activities:
-            result = _run_adb_text(
-                serial,
-                "shell",
-                "am",
-                "start",
-                "-W",
-                "--activity-clear-top",
-                "-n",
-                f"{package}/{activity_name}",
-                "-a",
-                "android.intent.action.VIEW",
-                "-d",
-                url,
-                timeout=45,
-            )
-            output = "\n".join(part for part in (result.stdout, result.stderr) if part).strip()
-            failed = result.returncode != 0 or "Error:" in output or "Exception" in output
-            if not failed:
-                await asyncio.sleep(max(0, int(getattr(args, "settle_ms", 3000))) / 1000)
-                if mode == "native":
-                    return "native Android Chrome navigation"
+                package = "com.android.chrome"
+                activities = (
+                    "com.google.android.apps.chrome.Main",
+                    "org.chromium.chrome.browser.ChromeTabbedActivity",
+                )
+                last_error = ""
+                for activity_name in activities:
+                    result = _run_adb_text(
+                        serial,
+                        "shell",
+                        "am",
+                        "start",
+                        "-W",
+                        "--activity-clear-top",
+                        "-n",
+                        f"{package}/{activity_name}",
+                        "-a",
+                        "android.intent.action.VIEW",
+                        "-d",
+                        url,
+                        timeout=45,
+                    )
+                    output = "\n".join(part for part in (result.stdout, result.stderr) if part).strip()
+                    failed = result.returncode != 0 or "Error:" in output or "Exception" in output
+                    if failed:
+                        last_error = output or last_error
+                        continue
 
-                adb = ADB(serial=serial)
-                await adb.ensure_server()
-                cdp = CDPConnection(adb)
-                await cdp.setup_port_forward()
-                try:
-                    context2 = await cdp.connect()
+                    await asyncio.sleep(max(0, int(getattr(args, "settle_ms", 3000))) / 1000)
+                    if mode == "native":
+                        return "native Android Chrome navigation"
+
+                    context2 = await damru.reconnect_cdp()
                     pages = list(context2.pages)
                     target_page = None
                     for candidate in pages:
@@ -2681,12 +2671,48 @@ def _stealth_open_url(args: argparse.Namespace) -> int:
                         target_page = pages[-1] if pages else None
                     if target_page is None:
                         return "native navigation; CDP reattached with no pages"
+
+                    target_device = getattr(getattr(damru, "_profile", None), "device", None)
+                    if target_device is not None:
+                        with contextlib.suppress(Exception):
+                            await asyncio.gather(
+                                damru._apply_devtools_evasion(),
+                                damru._apply_hardware_overrides(target_device),
+                                damru._apply_touch_emulation(target_device),
+                                damru._apply_network_emulation(),
+                                damru._apply_storage_quota_override(target_device),
+                                damru._apply_timezone_override(),
+                                damru._apply_ua_override(
+                                    target_device,
+                                    chrome_version=getattr(damru, "_spoofed_chrome_version", None),
+                                    android_version=getattr(damru, "_spoofed_android_version", None),
+                                ),
+                                damru._arm_worker_core_override(target_device.hardware_concurrency),
+                            )
+
+                    with contextlib.suppress(Exception):
+                        await damru._apply_timezone_override()
+                    profile_locale = getattr(getattr(damru, "_profile", None), "locale", None)
+                    if profile_locale:
+                        with contextlib.suppress(Exception):
+                            await damru._apply_locale_override(profile_locale)
+                    sync_payload = getattr(damru, "_sync_ua_payload", None)
+                    if sync_payload:
+                        with contextlib.suppress(Exception):
+                            s = await context2.new_cdp_session(target_page)
+                            await s.send("Emulation.setUserAgentOverride", sync_payload)
+
                     title = await target_page.title()
                     return title or "native navigation; CDP reattached"
-                finally:
-                    await cdp.disconnect()
-            last_error = output or last_error
-        raise RuntimeError(last_error or "Chrome could not handle native URL navigation")
+                raise RuntimeError(last_error or "Chrome could not handle native URL navigation")
+            elif mode == "playwright":
+                await page.goto(url, wait_until="domcontentloaded", timeout=45000)
+                await page.wait_for_timeout(max(0, int(getattr(args, "settle_ms", 3000))))
+                return await page.title()
+            else:
+                raise RuntimeError(f"Unsupported stealth-open-url mode: {mode}")
+        finally:
+            await damru.__aexit__(None, None, None)
 
     try:
         import asyncio
