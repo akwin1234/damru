@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Added experimental `DAMRU_CONTAINER_RUNTIME=containerd` support for Redroid auto workers through `ctr`: host networking, `/dev/binderfs` bind mount, PID-shift init wrapper, unique ADB port remap, `adb root`, Android DNS repair, runtime-aware worker actions, and runtime-aware preflight checks. Docker remains the default runtime.
+- Hardened WebRTC leak prevention for Docker and experimental containerd workers by making Chrome use native `disable_non_proxied_udp` policy while keeping Android `iptables` as defense in depth; live containerd benchmark retest now reports CreepJS WebRTC blocked, and BrowserScan parses the correct Bot Detection score instead of a stray percentage.
 
 - Made `stealth-open-url` default to `--mode reattach`: apply full Damru stealth, detach CDP for the protected native Chrome navigation, then reconnect CDP so the loaded page can be inspected or automated. `--mode cdp`, `--mode native`, and `--mode playwright` remain available for specific debugging needs.
 - Added profile tiers: default random selection now uses only the 100-profile premium pool (51 original verified + 49 high-confidence new profiles), while medium and experimental profiles remain available by explicit name or opt-in `profile_tier` / `--profile-tier`.

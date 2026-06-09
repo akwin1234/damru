@@ -31,7 +31,7 @@ Test date: 2026-06-01
 
 - Docker bridge/NAT was unavailable; Damru used Docker host networking.
 - Windows host-network Redroid used per-worker ADB port remapping after boot. Each worker briefly used Android's default `5555` port while starting, so workers were started/remapped sequentially.
-- Android kernel `iptables` filter table was unavailable in this environment, so Damru logged a warning and skipped the kernel WebRTC UDP block. Chrome WebRTC policy and CDP protections remained active, but kernel-level WebRTC leak protection was degraded.
+- Android kernel `iptables` filter table was unavailable in this environment, so Damru logged a warning and skipped the kernel WebRTC UDP block. Chrome's native `disable_non_proxied_udp` WebRTC policy and CDP protections remained active; kernel-level blocking was defense in depth only.
 - Public benchmark sites can time out independently of Damru. The example smoke test treats external benchmark outages as unavailable instead of a Damru failure.
 
 Local artifacts from this run were written to:

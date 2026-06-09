@@ -44,17 +44,21 @@ async def _extract_creepjs(page: Page) -> Dict[str, Any]:
     except Exception:
         pass
     await sleep(5)  # Extra time for rendering
-    return await page.evaluate("""() => {
+    return await page.evaluate(r"""() => {
         const all = document.body.innerText;
         const likeHeadlessMatch = all.match(/(\\d+)%\\s*like headless/i);
         const headlessMatch = all.match(/(\\d+)%\\s*headless:/i);
         const stealthMatch = all.match(/(\\d+)%\\s*stealth:/i);
         const liesMatch = all.match(/lies[:\\s]*(\\d+)/i);
+        const webrtcMatch = all.match(/WebRTC[\\s\\S]*?(host connection:[\\s\\S]*?)(?:Timezone|Intl|Headless)/i);
+        const webrtcText = webrtcMatch ? webrtcMatch[1].trim() : "";
+        const webrtcBlocked = /blocked/i.test(webrtcText) && !/(\\d{1,3}\\.){3}\\d{1,3}/.test(webrtcText);
         return {
             likeHeadless: likeHeadlessMatch ? likeHeadlessMatch[1] + "%" : "N/A",
             headless: headlessMatch ? headlessMatch[1] + "%" : "N/A",
             stealth: stealthMatch ? stealthMatch[1] + "%" : "N/A",
             lies: liesMatch ? liesMatch[1] : "N/A",
+            webrtcBlocked,
         };
     }""")
 
@@ -72,11 +76,30 @@ async def _extract_browserscan(page: Page) -> Dict[str, Any]:
                 )
             except Exception:
                 pass
-            return await page.evaluate("""() => {
+            return await page.evaluate(r"""() => {
                 const all = document.body.innerText;
-                const scoreMatch = all.match(/(\\d+)\\s*%/);
+                const lines = all.split("\n").map(x => x.trim()).filter(Boolean);
+                let score = "N/A";
+                const botIndex = lines.findIndex(x => /^Bot Detection:?$/i.test(x));
+                if (botIndex >= 0) {
+                    for (const line of lines.slice(botIndex + 1, botIndex + 8)) {
+                        const m = line.match(/^(\d+)\s*%$/);
+                        if (m) { score = m[1] + "%"; break; }
+                    }
+                }
+                if (score === "N/A") {
+                    const scoreMatch = all.match(/(\\d+)\\s*%/);
+                    score = scoreMatch ? scoreMatch[1] + "%" : "N/A";
+                }
+                const issues = [];
+                for (let i = 0; i < lines.length; i++) {
+                    if (/^-\d+\s*%$/.test(lines[i])) {
+                        issues.push({name: lines[i - 1] || "", penalty: lines[i], detail: lines[i + 1] || ""});
+                    }
+                }
                 return {
-                    score: scoreMatch ? scoreMatch[1] + "%" : "N/A",
+                    score,
+                    issues,
                 };
             }""")
         except Exception as exc:
@@ -261,7 +284,13 @@ async def run_benchmark(
                     logger.debug("Benchmark warm-up navigation skipped: %s", exc)
                 await sleep(2)
 
+        try:
+            await page.close()
+        except Exception:
+            pass
+
         for test_cfg in selected:
+            page = await context.new_page()
             name = test_cfg["name"]
             result = TestResult(name=name)
             t0 = time.monotonic()
@@ -347,6 +376,10 @@ async def run_benchmark(
 
             result.duration_s = round(time.monotonic() - t0, 1)
             results.append(result)
+            try:
+                await page.close()
+            except Exception:
+                pass
 
     return results
 

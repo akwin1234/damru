@@ -63,7 +63,7 @@ Bridge/NAT requirements:
 
 - Docker bridge/NAT must work inside the selected WSL distro.
 - The bundled Damru WSL kernel includes the binderfs and netfilter pieces needed by Docker bridge/NAT and Redroid.
-- If Android inside Redroid also lacks the `iptables` filter table, Damru skips the kernel WebRTC UDP block and keeps the Chrome WebRTC policy/CDP protections active. That is stable, but kernel-level WebRTC leak protection is degraded on that kernel.
+- If Android inside Redroid also lacks the `iptables` filter table, Damru skips the kernel WebRTC UDP block and keeps Chrome's native `disable_non_proxied_udp` WebRTC policy plus CDP protections active. That is stable; kernel-level WebRTC blocking is defense in depth.
 
 ## Bundled Damru Kernel Installer
 

@@ -125,9 +125,11 @@ def _build_chrome_flags(
         # navigator.languages must NOT contain q-values — only lang tags.
         # Chrome auto-assigns q-weights in the HTTP Accept-Language header.
         f"--accept-lang={','.join(p.split(';')[0].strip() for p in accept_lang.split(','))}",
-        # WebRTC: keep enabled but hide private IPs (match Chrome Preferences).
-        # DO NOT use disable_non_proxied_udp — shows WebRTC as "disabled" (tell).
-        "--force-webrtc-ip-handling-policy=default_public_interface_only",
+        # WebRTC: keep the API enabled, but block non-proxied UDP candidates.
+        # Android Redroid workers can run in host-network namespaces where
+        # iptables owner matching does not catch Chrome's STUN packets reliably
+        # across Docker/containerd. Chrome's native policy is the stable guard.
+        "--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
         "--enforce-webrtc-ip-permission-check",
         # Rendering
         "--force-color-profile=srgb",

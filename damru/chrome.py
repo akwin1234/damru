@@ -415,13 +415,12 @@ class ChromeManager:
         prefs["intl"]["selected_languages"] = selected
 
         # --- WebRTC IP handling policy ---
-        # "default_public_interface_only" hides private/local IPs (10.x, 172.x)
-        # but allows STUN to discover the public exit IP (proxy IP).
-        # DO NOT use "disable_non_proxied_udp" — it shows WebRTC as "disabled"
-        # which is a fingerprint tell (no real device has WebRTC disabled).
+        # Keep WebRTC available, but prevent Chrome from emitting non-proxied
+        # UDP/STUN candidates. Kernel iptables still runs as defense in depth,
+        # but host-network Redroid/containerd can bypass Android UID matching.
         if "webrtc" not in prefs:
             prefs["webrtc"] = {}
-        prefs["webrtc"]["ip_handling_policy"] = "default_public_interface_only"
+        prefs["webrtc"]["ip_handling_policy"] = "disable_non_proxied_udp"
 
         # --- DNS leak prevention ---
         # Disable DNS prefetching - Chrome prefetches DNS for links on page,

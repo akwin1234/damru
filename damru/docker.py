@@ -1847,7 +1847,7 @@ chmod 755 "$target"
                 prefs = {}
 
             # Universal privacy/security settings (same for all sessions)
-            prefs.setdefault("webrtc", {})["ip_handling_policy"] = "default_public_interface_only"
+            prefs.setdefault("webrtc", {})["ip_handling_policy"] = "disable_non_proxied_udp"
             prefs.setdefault("dns_prefetching", {})["enabled"] = False
             prefs.setdefault("net", {})["network_prediction_options"] = 2
             prefs.setdefault("safebrowsing", {})["enabled"] = False

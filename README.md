@@ -107,7 +107,7 @@ The botting landscape is littered with tools that *used* to work: `puppeteer-ste
 | **Worker Stealth** | Workers often leak the real hardware concurrency of the host. | **Worker Interception**. Uses CDP `Target.setAutoAttach` to force overrides on all Threads/Workers. |
 | **TLS/JA3 Hash** | Fixed TLS fingerprint based on the Chrome binary version. | **TLS Randomization**. Produces ~184 unique JA3 hashes via dynamic cipher blacklisting. |
 | **Screen Dimensions** | Viewing desktop Chrome as mobile via viewport scaling (leaks real screen size). | **OS-Level Display**. Modifies Android `wm size/density` natively. |
-| **Network Identity** | Frequently leaks WebRTC private IPs and IPv6 fingerprints. | **OS-Level IP Tables**. Blocks WebRTC leaks and IPv6 at the Android kernel level. |
+| **Network Identity** | Frequently leaks WebRTC private IPs and IPv6 fingerprints. | **Chrome WebRTC policy + Android firewall**. Blocks non-proxied UDP/STUN candidates and disables IPv6 at the Android kernel level. |
 | **Mobile Emulation** | Desktop Chrome pretending to be mobile via viewport scaling. | **Real Android OS**. Runs inside Redroid (Android 14) or MuMu Player. It *is* mobile. |
 
 ### Proof of Stealth: Benchmark Comparisons
@@ -171,7 +171,7 @@ Damru's core philosophy is **Zero JavaScript Injection**. Instead of trying to o
 6.  **Layer 6: Chrome Preferences & Flag Patching**
     Damru modifies Chrome's underlying `Preferences` JSON and launch flags to force specific Locales, randomize TLS cipher suites (~184 JA3 variants), and disable DNS-over-HTTPS to force resolution through proxy ISP DNS.
 7.  **Layer 7: OS-Level Evasions**
-    Using Android `iptables`, Damru blocks WebRTC private IP leaks and completely disables IPv6. It also neutralizes DevTools timing detection by bypassing `debugger` pauses natively via CDP.
+Using Chrome's native WebRTC IP policy plus Android `iptables` defense in depth, Damru blocks non-proxied UDP/STUN candidates and completely disables IPv6. It also neutralizes DevTools timing detection by bypassing `debugger` pauses natively via CDP.
 8.  **Layer 8: Display & Density Spoofing (`wm size/density`)**
     To avoid "Resolution Mismatch" detections, Damru modifies the Android Window Manager natively. It uses `wm size` and `wm density` to force the OS to report physically accurate screen dimensions and pixel densities for the targeted device (e.g., Pixel 8's 1344x2992 @560dpi).
 
