@@ -14,10 +14,20 @@
     <strong>Community:</strong>
     <a href="https://discord.gg/GsxFdjdrT">Discord server</a> recommended | <a href="https://www.reddit.com/r/Damru">r/Damru</a>
   </p>
-  <p><strong>Support development:</strong> Damru is a research-heavy, one-of-a-kind Android automation stack that consumes real AI credits, RAM, hardware time, and weeks of testing. If it saves you time, please consider donating at <a href="https://damru.dev/">damru.dev</a>.</p>
   <p><strong>Contact:</strong> <a href="mailto:contact@damru.dev">contact@damru.dev</a></p>
   <p><strong>Official repository:</strong> <a href=https://github.com/akwin1234/damru>github.com/akwin1234/damru</a></p>
 </div>
+
+<table align="center">
+  <tr>
+    <td align="center">
+      <h3>Keep Damru Research Public</h3>
+      <p><strong>Damru is built through expensive anti-detect research:</strong> AI credits, RAM-heavy Redroid rebuilds, proxy tests, benchmark runs, and long debugging loops.</p>
+      <p>If Damru saves you hours or helps your research, a donation keeps new stealth fixes, APK rotation, WebView hardening, and proof tests moving.</p>
+      <a href="https://damru.dev/"><img src="https://img.shields.io/badge/Donate%20Now-Keep%20Damru%20Alive-ff6b2b?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Donate to Damru"></a>
+    </td>
+  </tr>
+</table>
 
 <br/>
 
@@ -912,6 +922,20 @@ The `damru-redroid-latest.tar` image is a full Android 14 operating system expor
 
 ### 5. Why "Zero JS Injection"
 Standard stealth tools are caught by anti-bots because their JavaScript injections leave traces (timing, prototype pollution). Damru lies from the outside-in (OS, Binary, and Protocol levels), making it mathematically invisible to scripts.
+
+---
+
+## Support Damru
+
+Damru is not a wrapper around a normal browser. It is a native Android automation stack with patched profiles, Chrome/WebView version alignment, rooted Redroid workers, TLS experiments, proxy validation, benchmark proof runs, and a local UI. Keeping that working takes paid compute, AI research credits, proxy testing, storage, RAM, and time.
+
+If Damru helped you avoid days of setup, debugging, fingerprint leaks, or broken Android automation, please support the project:
+
+<div align="center">
+  <a href="https://damru.dev/"><img src="https://img.shields.io/badge/Donate%20to%20Damru-Fund%20the%20next%20stealth%20fix-ff6b2b?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Donate to Damru"></a>
+</div>
+
+Your support helps keep the best research public instead of locked behind a private SaaS.
 
 ---
 
