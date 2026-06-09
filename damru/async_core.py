@@ -540,7 +540,10 @@ class AsyncDamru:
         if not socket_ready:
             logger.warning("Devtools socket not detected after retries, attempting connection anyway")
 
-        self._cdp = CDPConnection(self._adb)
+        self._cdp = CDPConnection(
+            self._adb,
+            remote_socket=getattr(self._chrome, "devtools_socket_name", "chrome_devtools_remote"),
+        )
         await self._cdp.setup_port_forward()
         try:
             self._context = await self._cdp.connect()

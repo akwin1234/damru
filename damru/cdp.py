@@ -24,14 +24,15 @@ class CDPError(Exception):
 class CDPConnection:
     """Manage CDP connection to Chrome on Android over ADB port forwarding."""
 
-    def __init__(self, adb: ADB):
+    def __init__(self, adb: ADB, remote_socket: str = "chrome_devtools_remote"):
         self.adb = adb
+        self.remote_socket = remote_socket
         self._local_port: Optional[int] = None
         self._browser: Optional[Browser] = None
         self._pw_instance = None
 
     async def setup_port_forward(self, local_port: Optional[int] = None) -> int:
-        """Forward a local TCP port to chrome_devtools_remote.
+        """Forward a local TCP port to the browser DevTools socket.
 
         Auto-selects a free port if local_port is None.
         """
@@ -42,9 +43,9 @@ class CDPConnection:
         port = local_port or find_free_port()
         await self.adb.remove_forward(port)
         await sleep(0.2)
-        await self.adb.forward(port, "localabstract:chrome_devtools_remote")
+        await self.adb.forward(port, f"localabstract:{self.remote_socket}")
         self._local_port = port
-        logger.debug("Port forward: localhost:%d -> chrome_devtools_remote", port)
+        logger.debug("Port forward: localhost:%d -> %s", port, self.remote_socket)
         return port
 
     async def _endpoint_ready(self, port: int) -> bool:

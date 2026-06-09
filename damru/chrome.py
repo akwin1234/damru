@@ -36,6 +36,7 @@ class ChromeManager:
     def __init__(self, adb: ADB, package: Optional[str] = None):
         self.adb = adb
         self.package = package or "com.android.chrome"
+        self.devtools_socket_name = "chrome_devtools_remote"
 
     async def detect_package(self, retries: int = 30, delay: float = 2.0) -> str:
         """Find which Chrome variant is installed.
@@ -145,18 +146,21 @@ class ChromeManager:
         logger.debug("Chromium command-line for %s: %s", self.package, cmd_line[:200])
 
     async def launch(self, url: str = "about:blank", startup_delay: float = 4.0) -> None:
-        """Launch Chrome via am start.
+        """Launch Chromium-based browser via am start.
 
         After pm clear, Chrome needs extra startup time to initialize
         fresh profile data and render the FRE screen (~4s).
         On warm reuse (no pm clear), Chrome starts faster (~2s).
         """
         package = await self.detect_package(retries=30, delay=2.0)
-        activities = [
-            "com.google.android.apps.chrome.Main",
-            "org.chromium.chrome.browser.ChromeTabbedActivity",
-            "org.chromium.chrome.browser.ChromeTabbedActivity2",
-        ]
+        if self._is_webview_shell():
+            activities = [".WebViewBrowserActivity"]
+        else:
+            activities = [
+                "com.google.android.apps.chrome.Main",
+                "org.chromium.chrome.browser.ChromeTabbedActivity",
+                "org.chromium.chrome.browser.ChromeTabbedActivity2",
+            ]
         last_error = ""
         launched = False
         for launch_probe in range(4):
@@ -323,18 +327,25 @@ class ChromeManager:
         return True
 
     async def wait_for_devtools_socket(self, timeout: float = 15.0) -> bool:
-        """Poll for chrome_devtools_remote socket to become available."""
+        """Poll for the browser DevTools socket to become available."""
         import time
         start = time.monotonic()
         while time.monotonic() - start < timeout:
             out = await self.adb.shell(
-                "cat /proc/net/unix 2>/dev/null | grep chrome_devtools_remote",
+                "cat /proc/net/unix 2>/dev/null",
                 allow_failure=True,
             )
-            if "chrome_devtools_remote" in out:
+            if self._is_webview_shell():
+                for line in out.splitlines():
+                    if "webview_devtools_remote_" not in line:
+                        continue
+                    self.devtools_socket_name = line.rsplit("@", 1)[-1].strip()
+                    return True
+            elif "chrome_devtools_remote" in out:
+                self.devtools_socket_name = "chrome_devtools_remote"
                 return True
             await sleep(1.0)
-        logger.warning("Chrome devtools socket not found after %.1fs", timeout)
+        logger.warning("Browser devtools socket not found after %.1fs", timeout)
         return False
 
     async def clear_all_data(self) -> None:
