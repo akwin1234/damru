@@ -1,0 +1,3125 @@
+### Damru CLI Setup Commands
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/README.md
+
+Run these commands for guided first-run configuration and dependency installation.
+
+```bash
+python -m damru setup
+```
+
+```bash
+python -m damru install-deps
+```
+
+```bash
+python -m damru install-image
+```
+
+```bash
+python -m damru install-apks --download
+```
+
+```bash
+python -m damru fix-wsl
+```
+
+```bash
+python -m damru fix-internet
+```
+
+```bash
+python -m damru force-profile --device <slug>
+```
+
+```bash
+python -m damru check-env
+```
+
+```bash
+python -m damru check preflight --json
+```
+
+--------------------------------
+
+### Run Damru Setup
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/AUTOMATION_GAPS_PLAN.md
+
+Guides configuration and can run dependency setup for Damru.
+
+```bash
+python -m damru setup
+```
+
+--------------------------------
+
+### Setup with WSL Kernel Installation
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/WSL_KERNEL.md
+
+Automated setup for fresh Windows/WSL machines that includes installing the WSL kernel. Requires confirmation for risks.
+
+```powershell
+python -m damru setup --install-wsl-kernel -y --confirm-wsl-kernel-risk
+```
+
+--------------------------------
+
+### Verify Damru Environment Setup
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Run Damru setup commands to install dependencies, download necessary images, and check the environment. The 'setup' command handles dependency installation and APK asset management.
+
+```bash
+python -m damru setup
+python -m damru install-image
+python -m damru check-env
+```
+
+--------------------------------
+
+### Install Damru by Cloning Repository
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+For developers, clone the repository, set up a virtual environment, and install Damru in editable mode. This method also includes skipping dependency installation during setup.
+
+```bash
+git clone https://github.com/akwin1234/damru.git
+cd damru
+python3 -m venv venv
+source venv/bin/activate
+python -m pip install -U pip setuptools wheel
+pip install -e .
+python -m damru setup --skip-deps
+```
+
+--------------------------------
+
+### Damru CLI Commands Overview
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+A list of common Damru CLI commands for setup, environment validation, dependency installation, system fixes, benchmarking, and device management.
+
+```bash
+python -m damru setup           # guided first-run setup and config writer
+python -m damru check-env       # validate Linux/WSL dependencies and assets
+python -m damru check preflight # fast read-only readiness checks for fleets
+python -m damru install-deps    # install common Linux/WSL dependencies
+python -m damru fix-wsl         # retry safe WSL Docker/binderfs/netfilter fixes
+python -m damru fix-internet    # repair WSL/Docker/Android DNS and internet checks
+python -m damru wsl-kernel status # inspect bundled/active WSL kernel state
+python -m damru benchmark       # run the benchmark command
+python -m damru bake-image      # bake a warm Redroid image
+python -m damru devices         # list ADB devices from Linux/WSL
+python -m damru force-profile   # force a named profile onto one ADB worker
+python -m damru open-url        # open a URL in Android Chrome on one ADB worker
+python -m damru stealth-open-url # apply Damru stealth, native-load URL, then reattach CDP for inspection
+python -m damru quick-check     # run a fast local Android/Chrome sanity check
+python -m damru screenshot      # capture Android display PNG through ADB
+python -m damru record          # capture Android display MP4 through ADB
+python -m damru view            # open optional scrcpy live viewer
+python -m damru install-viewer  # check/install optional scrcpy tooling
+python -m damru ui              # open the experimental local web dashboard
+```
+
+--------------------------------
+
+### Install Viewer and Check Environment
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PROOF.md
+
+Installs the Damru viewer and checks the environment configuration for WSL.
+
+```powershell
+python -m damru install-viewer -y
+python -m damru check-env --viewer
+```
+
+--------------------------------
+
+### Install Essential Packages on Ubuntu
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Installs necessary packages including adb, wget, curl, git, and jq for system preparation.
+
+```bash
+sudo apt update && sudo apt upgrade -y
+sudo apt install adb wget curl git jq -y
+```
+
+--------------------------------
+
+### Verified Commands for Fresh WSL Distro
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/WSL_KERNEL.md
+
+A sequence of commands to set up, install dependencies, fix the WSL environment, install a Redroid image, perform preflight checks, start workers, and run quick checks and open a URL. This is part of a validation process.
+
+```powershell
+$env:DAMRU_REDROID_BASE_PORT = "5900"
+python -m damru install-deps -y
+python -m damru fix-wsl
+python -m damru install-image --tar /mnt/c/path/to/damru-redroid-latest.tar
+python -m damru check preflight --json --timeout 3
+python -m damru ui-worker start --count 2
+python -m damru quick-check --serial 127.0.0.1:5900 --output /tmp/damru-wsl-quick-5900.json
+python -m damru quick-check --serial 127.0.0.1:5901 --output /tmp/damru-wsl-quick-5901.json
+python -m damru open-url --serial 127.0.0.1:5900 --url https://example.com
+```
+
+--------------------------------
+
+### Setup Damru with Sudo Password via Stdin
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Automate Damru setup on native Linux by providing the sudo password via standard input. This is useful for non-interactive scripted installations.
+
+```bash
+printf '%s\n' 'your-sudo-password' | python -m damru setup -y --sudo-password-stdin
+```
+
+--------------------------------
+
+### Scripted Damru Setup
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Perform a scripted setup for Damru, specifying the WSL distribution and username. This is useful for automated or custom installations.
+
+```bash
+python -m damru setup -y --wsl-distro Ubuntu --wsl-username your-wsl-user
+```
+
+--------------------------------
+
+### Install Damru Dependencies and Image
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Installs necessary dependencies and the Damru OS image. The image is auto-detected locally or downloaded if not found.
+
+```bash
+python -m damru install-deps -y
+python -m damru install-image
+```
+
+--------------------------------
+
+### Set Up Damru Development Environment
+
+Source: https://github.com/akwin1234/damru/blob/main/CONTRIBUTING.md
+
+Clone the repository, set up a virtual environment, install dependencies, and check the environment configuration.
+
+```bash
+git clone https://github.com/akwin1234/damru.git
+cd damru
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+python -m damru install-deps -y
+python -m damru check-env
+```
+
+--------------------------------
+
+### Install and Verify Viewer Tooling
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Installs and checks the environment for Damru's viewer capabilities. Ensure this is run before attempting to use viewer features.
+
+```bash
+python -m damru install-viewer
+python -m damru check-env --viewer
+```
+
+--------------------------------
+
+### Recommended Damru Installation Flow
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/IMAGE_AUTOPULL_FIX.md
+
+Use this sequence for installing dependencies, the baked Redroid image, and performing initial checks.
+
+```bash
+python -m damru install-deps -y
+python -m damru install-image
+python -m damru check preflight
+python -m damru check-env
+```
+
+--------------------------------
+
+### Install Dependencies with Sudo Password via Stdin
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Automate dependency installation for Damru on native Linux by providing the sudo password via standard input. This is useful for non-interactive scripted installations.
+
+```bash
+printf '%s\n' 'your-sudo-password' | python -m damru install-deps -y --sudo-password-stdin
+```
+
+--------------------------------
+
+### Install Docker Engine
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Downloads and installs the Docker engine using the official installation script. It also adds the current user to the docker group.
+
+```bash
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+sudo usermod -aG docker $USER
+```
+
+--------------------------------
+
+### Install Viewer Components
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/VIEWER.md
+
+Installs necessary viewer components, such as scrcpy, for Damru. The command may vary depending on the operating system.
+
+```bash
+python -m damru install-viewer
+```
+
+--------------------------------
+
+### Start Custom WebView App
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Starts a custom Android WebView application. This command is used after applying profile hardening to test the embedded WebView.
+
+```bash
+adb -s 127.0.0.1:5600 shell am start -n com.example.webview/.MainActivity -a android.intent.action.VIEW -d https://example.com
+```
+
+--------------------------------
+
+### Install Damru Dependencies and Image
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Installs Damru's dependencies, loads the Redroid Docker image, and checks the environment. These commands are idempotent.
+
+```bash
+python -m damru install-deps
+python -m damru install-image
+python -m damru check-env
+```
+
+--------------------------------
+
+### Launch Damru UI
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/AUTOMATION_GAPS_PLAN.md
+
+Starts the Damru User Interface. Note that the UI is currently marked as experimental.
+
+```bash
+python -m damru ui
+```
+
+--------------------------------
+
+### Install Damru Dependencies and Check Environment on Linux
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PROOF.md
+
+Installs Damru dependencies and checks the environment configuration for native Linux.
+
+```bash
+/tmp/damru-linux-proof/venv/bin/python -m damru install-deps -y
+/tmp/damru-linux-proof/venv/bin/python -m damru check-env --viewer
+```
+
+--------------------------------
+
+### Start Redroid Workers
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/WSL_KERNEL.md
+
+Starts a specified number of Redroid workers. This is part of the setup and testing process.
+
+```bash
+python -m damru ui-worker start --count 2
+```
+
+--------------------------------
+
+### Damru Install Image with Download Option
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PYTHON_API.md
+
+Use this command to install a Damru image, with an option to download the tarball if it's not locally available.
+
+```bash
+python -m damru install-image --download
+```
+
+--------------------------------
+
+### Perform Deep Environment Check with Viewer
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/AUTOMATION_GAPS_PLAN.md
+
+Validates environment setup, including optional viewer checks. This check is slower than preflight.
+
+```bash
+python -m damru check-env --viewer
+```
+
+--------------------------------
+
+### Install Damru on Windows with Pip
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Use this command to upgrade packaging tools before installing Damru if you encounter installation errors on older Windows Python versions.
+
+```powershell
+python -m pip install -U pip setuptools wheel
+pip install git+https://github.com/akwin1234/damru.git
+```
+
+--------------------------------
+
+### Start Custom WebView Activity
+
+Source: https://github.com/akwin1234/damru/blob/main/chrome-apks/README.md
+
+Initiate an Android activity for a custom WebView application. This command is used after applying Android-level hardening to test the embedded WebView.
+
+```bash
+adb -s 127.0.0.1:5600 shell am start -n com.example.webview/.MainActivity -d https://example.com
+```
+
+--------------------------------
+
+### Preflight Check and UI Worker Start on Linux
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PROOF.md
+
+Performs a preflight check and starts UI workers for Damru on a native Linux system.
+
+```bash
+python -m damru check preflight --json --timeout 3
+python -m damru ui-worker start --count 2
+```
+
+--------------------------------
+
+### Configure Docker Daemon for Single Worker Setup
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/You are a senior Linux kernel, Docker networking,.md
+
+Starts the Docker daemon with specific flags to disable iptables, ip6tables, and bridge networking, suitable for a single-worker Redroid setup on WSL.
+
+```bash
+dockerd \
+  --iptables=false \
+  --ip6tables=false \
+  --bridge=none \
+  --host=unix:///var/run/docker.sock
+```
+
+--------------------------------
+
+### Install Binder Modules in Linux VM
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/You are a senior Linux kernel, Docker networking,.md
+
+Installs extra kernel modules and loads binder devices, typically required for Android-specific functionalities within a Linux environment.
+
+```bash
+apt install linux-modules-extra-$(uname -r)
+modprobe binder_linux devices="binder,hwbinder,vndbinder"
+```
+
+--------------------------------
+
+### Open Live Viewer
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/VIEWER.md
+
+Starts the live viewer for a specified device, which uses scrcpy to display and control the Android device. This is useful for debugging and manual inspection.
+
+```bash
+python -m damru view --serial wsl:127.0.0.1:5600
+```
+
+--------------------------------
+
+### Start UI Workers and Perform Quick Checks
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PROOF.md
+
+Starts Damru UI workers and performs quick checks on specified serial ports for WSL.
+
+```powershell
+python -m damru ui-worker start --count 2
+python -m damru quick-check --serial 127.0.0.1:5900 --output /tmp/damru-wsl-quick-5900.json
+python -m damru quick-check --serial 127.0.0.1:5901 --output /tmp/damru-wsl-quick-5901.json
+```
+
+--------------------------------
+
+### Install Dependencies and Fix WSL
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PROOF.md
+
+Installs Damru dependencies and applies fixes specific to the WSL environment.
+
+```powershell
+python -m damru install-deps -y
+python -m damru fix-wsl
+```
+
+--------------------------------
+
+### Install Damru in Editable Mode with Development Dependencies
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PROOF.md
+
+Installs Damru in editable mode, including development dependencies, within a virtual environment.
+
+```bash
+/tmp/damru-linux-proof/venv/bin/python -m pip install -e .[dev]
+```
+
+--------------------------------
+
+### Damru CLI Preflight and Environment Checks
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Commands to run fast readiness checks and verify the environment setup for Damru. These are useful before running more intensive operations.
+
+```bash
+python -m damru check preflight
+python -m damru check-env
+python -m damru quick-check --serial 127.0.0.1:5600
+```
+
+--------------------------------
+
+### Docker Network and Info Checks
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/You are a senior Linux kernel, Docker networking,.md
+
+Verify Docker installation and network capabilities by creating a test bridge network and inspecting Docker daemon information.
+
+```bash
+docker info
+docker network create bridge test
+docker run --rm -p 5600:5555 ...
+```
+
+--------------------------------
+
+### Install Bundled WSL Kernel
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/WSL_KERNEL.md
+
+Installs the Damru bundled WSL kernel. Requires confirmation for risks and a WSL shutdown to apply changes. Followed by environment checks.
+
+```powershell
+python -m damru wsl-kernel install --yes --confirm-wsl-kernel-risk
+wsl --shutdown
+python -m damru fix-wsl
+python -m damru check-env --viewer
+```
+
+--------------------------------
+
+### Install Damru Dependencies
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/AUTOMATION_GAPS_PLAN.md
+
+Installs Linux/WSL packages, Docker, ADB, binderfs tools, and applies Damru's Playwright patch. The -y flag assumes yes to all prompts.
+
+```bash
+python -m damru install-deps -y
+```
+
+--------------------------------
+
+### WSL2 Kernel Module Configuration
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/WSL_KERNEL.md
+
+Example of how to configure WSL2 to load custom kernel modules using the .wslconfig file.
+
+```ini
+[wsl2]
+kernelModules=C:\Program Files\WSL\tools\modules.vhd
+loadDefaultKernelModules=true
+```
+
+--------------------------------
+
+### Start Damru Container
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Run the Damru Android container with specified volume mounts, port mappings, and Android boot parameters. This command starts the container in detached mode and makes it privileged.
+
+```bash
+docker run -itd --rm --privileged \
+    -v ~/data:/data \
+    -p 5555:5555 \
+    damru-redroid:latest \
+    androidboot.redroid_width=1080 \
+    androidboot.redroid_height=2400 \
+    androidboot.redroid_dpi=480
+```
+
+--------------------------------
+
+### Example Python Script
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/WSL_FALLBACK_TEST_RESULTS.md
+
+This is the final full run script for the legacy WSL fallback test. It passed all tests, indicating successful execution of the Damru functionalities within the specified environment.
+
+```python
+import damru
+
+# This is a placeholder for the actual example.py content.
+# The original document only mentions that 'example.py' passed tests.
+# No actual code for example.py was provided in the source text.
+print("example.py executed successfully.")
+
+```
+
+--------------------------------
+
+### Docker Startup with Disabled Features
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/WSL_KERNEL.md
+
+Starting Docker with specific flags to bypass bridge and IP masquerading, which may still fail on limited kernels.
+
+```text
+Failed to create bridge docker0 via netlink: operation not supported
+```
+
+--------------------------------
+
+### Install WSL Kernel with Fix-WSL
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/WSL_KERNEL.md
+
+Installs the bundled WSL kernel using the 'fix-wsl' command, useful if normal repair fails. Requires WSL shutdown to apply.
+
+```powershell
+python -m damru fix-wsl --install-kernel --yes --confirm-wsl-kernel-risk
+wsl --shutdown
+```
+
+--------------------------------
+
+### Install Damru via Pip
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Install Damru into a Python virtual environment using pip. This is the recommended method for modern Ubuntu systems to avoid conflicts with system Python.
+
+```bash
+sudo apt install -y python3-venv
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -U pip setuptools wheel
+pip install git+https://github.com/akwin1234/damru.git
+```
+
+--------------------------------
+
+### Damru WSL Kernel Installer Configuration
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/WSL_KERNEL.md
+
+Configuration settings applied by the Damru WSL kernel installer, including networking and DNS settings.
+
+```text
+dnsTunneling=true
+networkingMode=NAT
+```
+
+--------------------------------
+
+### Install Damru Baked Image
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/AUTOMATION_GAPS_PLAN.md
+
+Loads or downloads the 'damru-redroid:latest' image when available.
+
+```bash
+python -m damru install-image
+```
+
+--------------------------------
+
+### Example APK Asset Bundle Structure
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Illustrates the expected directory layout for the extracted APK asset bundle. This structure is used by Damru to manage Chrome, WebView, and TTS assets.
+
+```text
+chrome-apks/
+  148.0.7778.178/
+    base.apk
+    split_chrome.apk
+    google_trichrome_library.apk
+    webview.apk
+    vanadium_trichrome_library.apk
+  google_tts.apk
+  espeak.apk
+  rhvoice.apk
+  magisk.apk
+```
+
+--------------------------------
+
+### Check Docker Information and Network List
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/You are a senior Linux kernel, Docker networking,.md
+
+Retrieves detailed information about the Docker installation and lists all Docker networks, useful for verifying Docker's operational status.
+
+```bash
+sudo docker info
+sudo docker network ls
+```
+
+--------------------------------
+
+### Open Live Viewer Without Control
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/VIEWER.md
+
+Starts the live viewer for a specified device but disables user control (keyboard, mouse, touch events). Use this when you only need to watch the device.
+
+```bash
+python -m damru view --serial wsl:127.0.0.1:5600 --no-control
+```
+
+--------------------------------
+
+### Docker Daemon with Nftables Backend Failure
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/You are a senior Linux kernel, Docker networking,.md
+
+Attempting to start the Docker daemon with the nftables backend on WSL2 results in errors related to missing NAT table rules and the 'xt_addrtype' module.
+
+```bash
+dockerd --host=unix:///var/run/docker.sock
+```
+
+--------------------------------
+
+### Check Damru Environment
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/UI.md
+
+Use the Damru CLI to perform an environment check. This is useful for verifying the setup and configuration of Damru.
+
+```bash
+python -m damru check-env
+```
+
+--------------------------------
+
+### Check WSL Version and Networking Status
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/You are a senior Linux kernel, Docker networking,.md
+
+Retrieve detailed information about the installed WSL version, its current status, and registered distributions.
+
+```powershell
+wsl --version
+wsl --status
+wsl -l -v
+```
+
+--------------------------------
+
+### Raw/Unbaked Damru Flow for Baking and Debugging
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/IMAGE_AUTOPULL_FIX.md
+
+This flow is for advanced use cases like baking custom images, debugging, or APK recovery. It involves installing APKs, baking an image, saving it, and then installing the image.
+
+```bash
+python -m damru install-apks --download
+python -m damru bake-image --image damru-redroid:latest
+docker save damru-redroid:latest -o damru-redroid-latest.tar
+sha256sum damru-redroid-latest.tar > damru-redroid-latest.tar.sha256
+python -m damru install-image --tar damru-redroid-latest.tar
+python -m damru quick-check --serial 127.0.0.1:5600
+```
+
+--------------------------------
+
+### WSL2 Configuration for Damru
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Configure WSL distribution and username for Damru's Linux setup. The password field is kept for compatibility but is not actively used with the current `wsl -u root` approach.
+
+```python
+# damru/config.py
+WSL_DISTRO = "Ubuntu"
+WSL_USERNAME = "your-wsl-user"
+WSL_PASSWORD = ""  # Kept for compatibility; current WSL setup uses wsl -u root
+```
+
+--------------------------------
+
+### Run Fleet Preflight Checks
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Execute read-only readiness checks across multiple hosts before starting Redroid workers. Use --json for tooling, --strict for CI failures on warnings, and --no-adb to skip ADB checks.
+
+```bash
+python -m damru check preflight
+```
+
+```bash
+python -m damru check preflight --json
+```
+
+```bash
+python -m damru check preflight --strict
+```
+
+```bash
+python -m damru check preflight --no-adb
+```
+
+--------------------------------
+
+### Sanitized Proof Metadata Example
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PROOF.md
+
+This JSON object represents sanitized metadata captured during a proof of concept run. It includes details about the browser environment, user agent, hardware specifications, and proxy information.
+
+```json
+{
+  "example_title": "Example Domain",
+  "android_user_agent": true,
+  "hardwareConcurrency": 8,
+  "maxTouchPoints": 5,
+  "browser_timezone": "America/New_York",
+  "proxy_country": "US",
+  "proxy_timezone": "America/New_York"
+}
+```
+
+--------------------------------
+
+### Install Linux Kernel Modules for Redroid
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/You are a senior Linux kernel, Docker networking,.md
+
+Installs necessary Linux kernel modules on a Debian/Ubuntu system for Redroid functionality, including binder and netfilter support. Ensure your kernel is up-to-date.
+
+```bash
+sudo apt update
+sudo apt install -y linux-modules-extra-$(uname -r)
+
+# Android kernel bits for Redroid
+sudo modprobe binder_linux devices="binder,hwbinder,vndbinder"
+# ashmem if needed and available:
+# sudo modprobe ashmem_linux
+
+# Sanity check netfilter
+sudo iptables -t filter -L
+sudo iptables -t nat -L
+```
+
+--------------------------------
+
+### Shutdown WSL
+
+Source: https://github.com/akwin1234/damru/blob/main/damru/wsl_kernel/README.md
+
+The user must restart WSL after installing or changing a WSL kernel. This command shuts down all running WSL instances.
+
+```powershell
+wsl --shutdown
+```
+
+--------------------------------
+
+### Create and Activate Python Virtual Environment
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PROOF.md
+
+Sets up a Python virtual environment for Damru on a native Linux system.
+
+```bash
+python3 -m venv /tmp/damru-linux-proof/venv
+/tmp/damru-linux-proof/venv/bin/python -m pip install -U pip setuptools wheel
+```
+
+--------------------------------
+
+### Define WSL Kernel Module Path
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/2.md
+
+Explicitly define the path to the stock Windows WSL installation's kernel modules if automatic loading fails. This is a configuration setting for WSL.
+
+```ini
+kernelModules=C:\\Program Files\\WSL\\tools\\modules.vhd
+```
+
+--------------------------------
+
+### Basic Async Usage with Damru
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Demonstrates standard asynchronous usage of Damru to launch a browser, navigate to a website, and take a screenshot. Use 'random' for device to pick from available profiles. Leave timezone/locale unset to follow the active proxy exit.
+
+```python
+import asyncio
+from damru import AsyncDamru
+
+async def main():
+    print("Launching Damru...")
+    
+# device="random" picks from 155 real Android device profiles.
+    # Leave timezone/locale unset so Damru follows the active proxy exit.
+    async with AsyncDamru(
+        device="random", 
+        proxy="socks5://your.proxy.ip:1080",
+        debug=True
+    ) as browser:
+        
+        # 'browser' is a standard Playwright BrowserContext!
+        page = await browser.new_page()
+        
+        print("Navigating to CreepJS to test stealth...")
+        await page.goto("https://abrahamjuliot.github.io/creepjs/")
+        await page.wait_for_timeout(10000)
+        await page.screenshot(path="creepjs_score.png")
+        print("Done! Check creepjs_score.png")
+
+asyncio.run(main())
+```
+
+--------------------------------
+
+### Setting Chrome APK Path Manually
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PYTHON_API.md
+
+Manually set the CHROME_APK environment variable to a specific Chrome split-APK version directory if automatic detection fails. This example shows a Linux/WSL path.
+
+```bash
+export CHROME_APK=/home/damru/chrome-apks/148.0.7778.178
+```
+
+--------------------------------
+
+### Run Multiple Redroid Containers with Bridge Networking
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/You are a senior Linux kernel, Docker networking,.md
+
+Creates a Docker network and runs two Redroid containers, each mapped to a distinct host port. This setup is suitable for multi-worker Redroid instances on a Linux VM or native Linux.
+
+```bash
+sudo docker network create redroid-net
+
+sudo docker run -d --privileged \
+  --network redroid-net \
+  -p 5555:5555 \
+  --name redroid1 \
+  redroid/redroid:14.0.0_64only-latest
+
+sudo docker run -d --privileged \
+  --network redroid-net \
+  -p 5556:5555 \
+  --name redroid2 \
+  redroid/redroid:14.0.0_64only-latest
+```
+
+--------------------------------
+
+### Docker Daemon with Host Network Fallback
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/You are a senior Linux kernel, Docker networking,.md
+
+This configuration starts the Docker daemon with iptables and bridge networking disabled, falling back to host networking. It's a workaround for environments where standard Docker networking fails.
+
+```bash
+dockerd --iptables=false --ip6tables=false --bridge=none --host=unix:///var/run/docker.sock
+```
+
+--------------------------------
+
+### Force WebRTC IP Handling Policy
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/2.md
+
+Inject Chromium command-line flags via WebDriver to enforce WebRTC IP handling policy, ensuring IP security regardless of the host kernel's firewall state. This is a fallback for compromised WSL setups.
+
+```python
+from selenium import webdriver
+
+options = webdriver.ChromeOptions()
+options.add_argument("--force-webrtc-ip-handling-policy=disable_non_proxied_udp")
+
+driver = webdriver.Chrome(options=options)
+```
+
+--------------------------------
+
+### Force Damru Profile on ADB Worker
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Use 'force-profile' to assign a specific Android identity to a running worker before attaching a harness. Examples show basic usage and options like --no-chrome and --clear-proxy.
+
+```bash
+python -m damru force-profile --serial 127.0.0.1:5600 --device xiaomi_redmi_9a
+python -m damru force-profile --serial 127.0.0.1:5600 --device motorola_moto_g_5s_plus --no-chrome --clear-proxy
+python -m damru force-profile --serial 127.0.0.1:5600 --device xiaomi_redmi_9a --browser-package org.chromium.webview_shell --locale pt-BR --timezone America/Sao_Paulo
+```
+
+--------------------------------
+
+### Configure Redroid ADB Port Binding via Environment Variable
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/2.md
+
+Modify the ADB port binding for Redroid containers by setting the persist.adb.tcp.port property using an environment variable during container startup. This helps avoid socket binding collisions in multi-container setups.
+
+```bash
+-e REDROID_PROP_persist.adb.tcp.port=5556
+```
+
+--------------------------------
+
+### Check Preflight Configuration
+
+Source: https://github.com/akwin1234/damru/blob/main/tests/README.md
+
+Perform a preflight check of the environment configuration, outputting results in JSON format and disabling ADB.
+
+```bash
+python -m damru check preflight --json --no-adb
+```
+
+--------------------------------
+
+### Run Live Environment Probes
+
+Source: https://github.com/akwin1234/damru/blob/main/tests/README.md
+
+Execute environment-heavy probes that require a Linux/WSL Redroid environment, Docker, ADB, and live websites.
+
+```bash
+python -m pytest --run-damru-probes -q
+```
+
+--------------------------------
+
+### Damru CLI Benchmark Tests
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Commands to run Damru's benchmark suite for proof and stealth checks. Allows specifying a device, proxy, and specific tests.
+
+```bash
+# Run all benchmark tests on a random device
+python -m damru benchmark --device random
+
+# Run specific tests with a proxy
+python -m damru benchmark --device samsung_galaxy_s24_ultra --proxy socks5://ip:port --tests creepjs cloudflare
+```
+
+--------------------------------
+
+### Load Custom OS Image (WSL2)
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Load a pre-baked Docker image for Damru within a WSL2 environment. Ensure the tarball is accessible and verify its integrity before loading.
+
+```bash
+sha256sum -c damru-redroid-latest.tar.sha256
+docker load -i damru-redroid-latest.tar
+```
+
+--------------------------------
+
+### Preflight Readiness Check with JSON Output
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/IMAGE_AUTOPULL_FIX.md
+
+Perform a fast, read-only preflight check of the environment. Use the --json flag for automation and specify a timeout.
+
+```bash
+python -m damru check preflight --json --timeout 3
+```
+
+--------------------------------
+
+### Perform Quick Checks and Open URL on Linux
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PROOF.md
+
+Executes quick checks and opens a URL on specified serial ports for Damru on Linux.
+
+```bash
+python -m damru quick-check --serial 127.0.0.1:5600 --output /tmp/damru-vps-quick-5600.json
+python -m damru quick-check --serial 127.0.0.1:5601 --output /tmp/damru-vps-quick-5601.json
+python -m damru open-url --serial 127.0.0.1:5600 --url https://example.com
+```
+
+--------------------------------
+
+### Build Damru Redroid Docker Image (CLI)
+
+Source: https://github.com/akwin1234/damru/blob/main/scripts/README.md
+
+The command-line interface equivalent for building the Damru Redroid Docker image.
+
+```bash
+python -m damru bake-image --image damru-redroid:latest
+```
+
+--------------------------------
+
+### Capture Proof Screenshots
+
+Source: https://github.com/akwin1234/damru/blob/main/scripts/README.md
+
+Captures sanitized viewport screenshots for proof targets. Runtime proxy values are read from environment variables only.
+
+```bash
+DAMRU_PROXY='socks5://user:pass@host:port' \
+DAMRU_HTTP_PROXY='172.17.0.1:18888' \
+python scripts/capture_proof.py --device pixel_8_pro --out docs/assets/proof/sites
+```
+
+--------------------------------
+
+### Initialize AsyncDamru with a Specific Device Profile
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/DEVICE_PROFILES.md
+
+Instantiate `AsyncDamru` using a device's exact name or slug. This is useful for targeting specific device configurations in your tests.
+
+```python
+async with AsyncDamru(device="Samsung Galaxy S24 Ultra") as browser:
+    ...
+```
+
+```python
+async with AsyncDamru(device="samsung_galaxy_s24_ultra") as browser:
+    ...
+```
+
+--------------------------------
+
+### Initialize AsyncDamru with Chrome APK
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Initialize the AsyncDamru client with the path to the Chrome APK. This allows Damru to use the specified APK for browser operations.
+
+```python
+from damru import AsyncDamru
+
+async with AsyncDamru(chrome_apk="/home/damru/chrome-apks/145.0.7632.75") as browser:
+    page = await browser.new_page()
+```
+
+--------------------------------
+
+### Run Damru Benchmark Suite
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Execute the built-in benchmark suite to verify Damru's stealth capabilities against anti-bot systems. This command helps reproduce benchmark results.
+
+```python
+python -m damru benchmark
+```
+
+--------------------------------
+
+### Async DamruPool Usage
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PYTHON_API.md
+
+Demonstrates how to initialize and use the asynchronous `DamruPool` in 'auto' mode for managing Docker containers. This is suitable for massive parallelization tasks.
+
+```python
+from damru import DamruPool
+
+# mode="auto" automatically starts and manages Redroid Docker containers
+async with DamruPool(mode="auto", max_devices=10) as pool:
+    # pool.session() provides an AsyncDamru context from an available container
+    async with pool.session() as browser:
+        page = await browser.new_page()
+        ...
+```
+
+--------------------------------
+
+### Run Damru Preflight Check
+
+Source: https://github.com/akwin1234/damru/blob/main/PREFLIGHT_IMPLEMENTATION_PLAN.txt
+
+Execute the basic preflight check command for Damru.
+
+```bash
+python -m damru check preflight
+```
+
+--------------------------------
+
+### Run Fast Unit Tests
+
+Source: https://github.com/akwin1234/damru/blob/main/tests/README.md
+
+Execute only the fast unit tests without requiring external environments like Docker or ADB.
+
+```bash
+python -m pytest -q
+```
+
+--------------------------------
+
+### Force Profile for WebView Shell
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/AUTOMATION_GAPS_PLAN.md
+
+Writes WebView command-line/preferences and applies native memory preload for WebView harness validation. Specify the serial, device type, and browser package.
+
+```bash
+python -m damru force-profile --serial 127.0.0.1:5600 --device pixel_8_pro --browser-package org.chromium.webview_shell
+```
+
+--------------------------------
+
+### Run Damru Preflight Check with JSON Output
+
+Source: https://github.com/akwin1234/damru/blob/main/PREFLIGHT_IMPLEMENTATION_PLAN.txt
+
+Execute the preflight check and output results in JSON format.
+
+```bash
+python -m damru check preflight --json
+```
+
+--------------------------------
+
+### Check Legacy Linux/WSL iptables
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/2.md
+
+Displays the initialized NAT and filter chains, verifying legacy iptables configuration.
+
+```bash
+sudo iptables -t nat -L
+```
+
+```bash
+sudo iptables -t filter -L
+```
+
+--------------------------------
+
+### Build Damru Redroid Docker Image
+
+Source: https://github.com/akwin1234/damru/blob/main/scripts/README.md
+
+Builds a warm `damru-redroid:latest` Docker image. Use this script inside Linux or WSL2.
+
+```bash
+python scripts/bake_image.py --image-name damru-redroid:latest
+docker save damru-redroid:latest -o damru-redroid-latest.tar
+sha256sum damru-redroid-latest.tar > damru-redroid-latest.tar.sha256
+```
+
+--------------------------------
+
+### Setting Chrome APK Path on Windows (WSL)
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PYTHON_API.md
+
+Manually set the CHROME_APK environment variable on Windows by using the WSL path to the extracted Chrome split-APK version directory.
+
+```bash
+export CHROME_APK=/mnt/c/Users/you/Downloads/damru/chrome-apks/148.0.7778.178
+```
+
+--------------------------------
+
+### Run Alpine Container with Port Publishing
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/You are a senior Linux kernel, Docker networking,.md
+
+Launches an Alpine Linux container and exposes a port, testing Docker's port publishing functionality which relies on NAT.
+
+```bash
+sudo docker run --rm -p 5600:5555 alpine:latest sleep 60
+```
+
+--------------------------------
+
+### List and Check Loaded Network Modules
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/You are a senior Linux kernel, Docker networking,.md
+
+Lists available kernel modules and checks if specific networking modules like iptables, NAT, and bridge are loaded.
+
+```bash
+ls -R /lib/modules/"$(uname -r)"
+lsmod | egrep 'iptable|ip_tables|nf_nat|xt_addrtype|br_netfilter|bridge'
+```
+
+--------------------------------
+
+### Initialize AsyncDamru Context
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PYTHON_API.md
+
+Use AsyncDamru as an asynchronous context manager to orchestrate stealth layers and obtain a Playwright BrowserContext. Requires specifying a device and optionally a proxy.
+
+```python
+from damru import AsyncDamru
+
+async with AsyncDamru(device="pixel_8_pro", proxy="socks5://...") as context:
+    page = await context.new_page()
+    await page.goto("https://creepjs.com")
+```
+
+--------------------------------
+
+### Bake Custom Damru OS Image
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Rebuilds the Damru OS image from source and saves it as a Docker tarball. Includes generating the SHA-256 checksum.
+
+```bash
+python -m damru bake-image --image damru-redroid:latest
+docker save damru-redroid:latest -o damru-redroid-latest.tar
+sha256sum damru-redroid-latest.tar > damru-redroid-latest.tar.sha256
+```
+
+--------------------------------
+
+### Run Browsers Benchmark with Damru
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/BROWSERS_BENCHMARK_REPORT.md
+
+This script executes the external benchmark using the Damru Redroid adapter. Ensure the DAMRU_BENCH_DEVICE and DAMRU_REPO environment variables are set, and a valid residential proxy is configured in DAMRU_BENCH_PROXY for proxy-mode testing.
+
+```powershell
+$env:DAMRU_BENCH_DEVICE='Samsung Galaxy S23'
+$env:DAMRU_REPO='C:\path\to\damru'
+python C:\path\to\damru\scripts\run_browsers_benchmark_damru.py
+```
+
+--------------------------------
+
+### Manually Load Linux/WSL Kernel Modules
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/2.md
+
+Tests the kmod subsystem by manually loading required Netfilter modules and checks for silent success.
+
+```bash
+sudo modprobe xt_addrtype && sudo modprobe ip_tables && sudo modprobe iptable_nat && sudo modprobe iptable_filter && sudo modprobe br_netfilter
+```
+
+--------------------------------
+
+### Accessing Android Device Profiles
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PYTHON_API.md
+
+Shows how to retrieve information about specific Android device profiles using `get_device` and how to select a random profile with specific criteria using `get_random_device`.
+
+```python
+from damru import list_device_names, get_device, get_devices_by_tier, get_random_device
+
+# Get hardware specs for a specific phone
+pixel = get_device("pixel_8_pro")
+print(f"Cores: {pixel.hardware_concurrency}, RAM: {pixel.device_memory}GB")
+
+# Select a random Android 13 profile
+random_phone = get_random_device(android_version="13")
+
+```
+
+--------------------------------
+
+### List Available Devices
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/VIEWER.md
+
+Lists all available Damru devices. This command helps in identifying the serial identifiers for connecting to specific workers.
+
+```bash
+python -m damru devices
+```
+
+--------------------------------
+
+### Run Browsers Benchmark with Damru
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Adapter script to run the techinz/browsers-benchmark against Damru. This script is used to generate external benchmark reports.
+
+```python
+scripts/run_browsers_benchmark_damru.py
+```
+
+--------------------------------
+
+### List Windows WSL Distributions
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/2.md
+
+Verifies that the target distribution (e.g., Ubuntu-26.04) is running on WSL version 2.
+
+```powershell
+wsl -l -v
+```
+
+--------------------------------
+
+### Manual Linux/WSL APK Extraction
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PYTHON_API.md
+
+Manually extract the Chrome APK bundle on Linux or WSL. Ensure the target directory exists and has the correct ownership.
+
+```bash
+sudo mkdir -p /home/damru && sudo chown "$USER:$USER" /home/damru && unzip chrome-apks.zip -d /home/damru/chrome-apks
+```
+
+--------------------------------
+
+### Run Damru CLI Commands
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PYTHON_API.md
+
+Execute various Damru commands from the command line for device management, screenshots, recording, and opening URLs.
+
+```bash
+python -m damru devices
+```
+
+```bash
+python -m damru screenshot --serial wsl:127.0.0.1:5600 --output screen.png
+```
+
+```bash
+python -m damru record --serial wsl:127.0.0.1:5600 --time-limit 30 --output clip.mp4
+```
+
+```bash
+python -m damru stealth-open-url --serial wsl:127.0.0.1:5600 --url https://example.com
+```
+
+```bash
+python -m damru view --serial wsl:127.0.0.1:5600 --no-control
+```
+
+--------------------------------
+
+### Check Nftables Ruleset
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/You are a senior Linux kernel, Docker networking,.md
+
+Displays the current ruleset for nftables, the successor to iptables, if it is being used.
+
+```bash
+sudo nft list ruleset
+```
+
+--------------------------------
+
+### Run Damru Unit Tests
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PROOF.md
+
+Executes the Damru unit test suite on a native Linux system.
+
+```bash
+/tmp/damru-linux-proof/venv/bin/python -m pytest -q
+```
+
+--------------------------------
+
+### Load iptables Modules on Standard Linux
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/You are a senior Linux kernel, Docker networking,.md
+
+This command attempts to load necessary iptables modules on a standard Linux distribution. It is provided for comparison, as these modules are typically unavailable in stock WSL2 kernels.
+
+```bash
+sudo modprobe ip_tables iptable_nat iptable_filter xt_addrtype br_netfilter
+```
+
+--------------------------------
+
+### Initialize Synchronous Damru Context
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PYTHON_API.md
+
+Use the synchronous Damru class as a context manager for traditional scripts or multi-threaded environments. Methods and parameters mirror AsyncDamru but without the 'await' keyword.
+
+```python
+from damru import Damru
+
+with Damru(device="pixel_7") as context:
+    page = context.new_page()
+    page.goto("https://bot.sannysoft.com")
+```
+
+--------------------------------
+
+### Download Raw APK Assets
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/AUTOMATION_GAPS_PLAN.md
+
+Downloads and extracts Chrome/WebView/TTS/resetprop assets to '/home/damru/chrome-apks'.
+
+```bash
+python -m damru install-apks --download
+```
+
+--------------------------------
+
+### Run Specific Test Files
+
+Source: https://github.com/akwin1234/damru/blob/main/tests/README.md
+
+Execute specific test files or modules, such as preflight CLI tests or image unit tests.
+
+```bash
+python -m pytest tests/test_preflight_cli.py -q
+```
+
+```bash
+python -m pytest tests/test_images_unit.py tests/test_root_webrtc.py -q
+```
+
+--------------------------------
+
+### Check nftables Stack
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/2.md
+
+Verifies the current state of the modern nftables routing table configuration.
+
+```bash
+nft list ruleset
+```
+
+--------------------------------
+
+### Custom WebView App Profile with Proxy
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PYTHON_API.md
+
+Apply Android-level profile hardening to a custom WebView app and launch it. This ensures the system WebView provider is aligned and applies necessary configurations without directly targeting Chrome.
+
+```bash
+python -m damru force-profile --serial 127.0.0.1:5600 --device pixel_8_pro --no-chrome --proxy socks5://user:pass@host:port
+adb -s 127.0.0.1:5600 shell am start -n com.example.webview/.MainActivity -a android.intent.action.VIEW -d https://example.com
+```
+
+--------------------------------
+
+### Run Damru Preflight Check in Strict Mode
+
+Source: https://github.com/akwin1234/damru/blob/main/PREFLIGHT_IMPLEMENTATION_PLAN.txt
+
+Execute the preflight check with strict validation rules, converting warnings to failures.
+
+```bash
+python -m damru check preflight --strict
+```
+
+--------------------------------
+
+### WebView Shell Profile with Proxy
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PYTHON_API.md
+
+Configure a WebView Shell with a specific proxy. This command applies profile hardening, patches preferences, and enables WebRTC blocking when a proxy is active.
+
+```bash
+python -m damru force-profile --serial 127.0.0.1:5600 --device pixel_8_pro --browser-package org.chromium.webview_shell --proxy socks5://user:pass@host:port
+adb -s 127.0.0.1:5600 shell am start -n org.chromium.webview_shell/.WebViewBrowserActivity -a android.intent.action.VIEW -d https://example.com
+```
+
+--------------------------------
+
+### Damru WSL Worker Network Mapping
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/WSL_KERNEL.md
+
+Illustrates how Damru maps WSL worker instances to specific network ports for ADB access.
+
+```text
+worker 0 -> wsl:127.0.0.1:5600
+worker 1 -> wsl:127.0.0.1:5601
+worker N -> wsl:127.0.0.1:(5600 + N)
+```
+
+--------------------------------
+
+### Validate Linux/WSL Module Availability
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/2.md
+
+Checks if the stock modules.vhdx is mounted by listing kernel and net module directories.
+
+```bash
+ls /lib/modules/$(uname -r)
+```
+
+--------------------------------
+
+### Connection Pooling with DamruPoolSync
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Demonstrates scaling scraping operations using DamruPoolSync for concurrent execution across multiple Docker containers. Proxies can be provided to the pool.
+
+```python
+from damru import DamruPoolSync
+
+proxies = [
+    "socks5://proxy1:1080",
+    "socks5://proxy2:1080",
+    "socks5://proxy3:1080"
+]
+
+with DamruPoolSync(mode="auto", max_devices=3, proxies=proxies) as pool:
+    for i in range(3):
+        with pool.session() as context:
+            page = context.new_page()
+            page.goto("https://example.com/api/scrape_target")
+            print(f"Worker {i} finished scraping: {page.title()}")
+```
+
+--------------------------------
+
+### Damru Pool and Redroid Settings
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Configure the operating mode for device management, the number of concurrent devices, and the Redroid Docker image to use.
+
+```python
+MODE = "auto"          # "auto" = manages Docker containers; "mumu" = local VMs; "manual" = ADB
+NUM_DEVICES = 10       # How many concurrent containers to spin up/maintain
+REDROID_IMAGE = "damru-redroid:latest"  # The Docker image to use
+```
+
+--------------------------------
+
+### Check Damru Preflight
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Performs read-only checks for Docker, ADB, binderfs, image, APK, resource, WSL kernel, port, and config. Outputs results in JSON format, suitable for fleet scripts.
+
+```python
+python -m damru check preflight
+```
+
+--------------------------------
+
+### Damru Configuration: Custom WSL2 Settings
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PYTHON_API.md
+
+Configure custom WSL2 settings for Damru before initialization. This includes specifying the WSL distribution and username.
+
+```python
+import damru.config
+
+# Custom WSL2 settings
+damru.config.WSL_DISTRO = "Ubuntu-22.04"
+damru.config.WSL_USERNAME = "my-wsl-user"
+damru.config.WSL_PASSWORD = ""  # compatibility only; setup asks for sudo when needed
+```
+
+--------------------------------
+
+### Run Damru Preflight Check with Custom Timeout
+
+Source: https://github.com/akwin1234/damru/blob/main/PREFLIGHT_IMPLEMENTATION_PLAN.txt
+
+Execute the preflight check with a specified timeout duration in seconds.
+
+```bash
+python -m damru check preflight --timeout N
+```
+
+--------------------------------
+
+### Apply Android Profile to WebView Shell
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/README.md
+
+Applies a Damru Android profile with WebView-specific hardening for harness validation. Use `--no-chrome` for custom apps embedding system WebView.
+
+```bash
+python -m damru force-profile --browser-package org.chromium.webview_shell
+```
+
+```bash
+python -m damru force-profile --no-chrome
+```
+
+--------------------------------
+
+### Attempting to Load Kernel Modules
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/You are a senior Linux kernel, Docker networking,.md
+
+These commands attempt to load necessary kernel modules for iptables and bridging functionality, which fail on the stock WSL2 kernel.
+
+```bash
+modprobe xt_addrtype
+modprobe ip_tables
+modprobe iptable_nat
+modprobe br_netfilter
+```
+
+--------------------------------
+
+### Check WSL Kernel Modules
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/You are a senior Linux kernel, Docker networking,.md
+
+Verify the availability of essential kernel modules for networking and iptables functionality within WSL.
+
+```bash
+uname -a
+zcat /proc/config.gz
+ls /lib/modules/$(uname -r)
+lsmod
+modprobe xt_addrtype
+modprobe ip_tables
+modprobe iptable_nat
+modprobe iptable_filter
+modprobe br_netfilter
+```
+
+--------------------------------
+
+### Explicit Chrome Pinning with Version Matching
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/IMAGE_AUTOPULL_FIX.md
+
+This command forces a specific Chrome version profile. It only succeeds if the specified version folder contains a matching webview.apk or TrichromeWebView.apk.
+
+```bash
+python -m damru force-profile --serial 127.0.0.1:5600 --device pixel_8_pro --rotate-chrome --chrome-version 148.0.7778.217
+```
+
+--------------------------------
+
+### Capture Full Android Display
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Captures the full Android display as a PNG image or a video clip with a specified time limit.
+
+```bash
+python -m damru screenshot --serial wsl:127.0.0.1:5600 --output screen.png
+python -m damru record --serial wsl:127.0.0.1:5600 --time-limit 30 --output clip.mp4
+```
+
+--------------------------------
+
+### Configure WSL2 Kernel Module Loading
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/2.md
+
+Enables loading of default kernel modules in WSL2 by modifying the .wslconfig file.
+
+```ini
+[wsl2]
+loadDefaultKernelModules=true
+```
+
+--------------------------------
+
+### Revert to Legacy iptables API on Ubuntu 26.04
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/2.md
+
+Force Ubuntu 26.04 userspace to use the legacy iptables API to resolve Docker's bridge driver initialization issues caused by the nftables backend. Ensure necessary modules are exposed before executing.
+
+```bash
+sudo update-alternatives --set iptables /usr/sbin/iptables-legacy
+sudo update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
+```
+
+--------------------------------
+
+### Test Docker Bridge Network Creation
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/2.md
+
+Creates a Docker bridge network to ensure it generates without iptables errors.
+
+```bash
+docker network create bridge test_net
+```
+
+--------------------------------
+
+### SOCKS5 to HTTP Proxy Bridge
+
+Source: https://github.com/akwin1234/damru/blob/main/scripts/README.md
+
+Provides a local HTTP CONNECT bridge for proof runs. It handles Android needing an unauthenticated HTTP proxy when the upstream proxy is authenticated SOCKS5. Credentials are read from the runtime environment.
+
+```bash
+UPSTREAM_PROXY='socks5://user:pass@host:port' \
+python scripts/socks_http_bridge.py --listen 0.0.0.0 --port 18888
+```
+
+--------------------------------
+
+### Validate Linux/WSL Kernel Configuration
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/2.md
+
+Confirms that essential Netfilter modules (NF_NAT, ADDRTYPE) are built and Binder is enabled.
+
+```bash
+zcat /proc/config.gz | grep -E "NF_NAT|ADDRTYPE|BINDER"
+```
+
+--------------------------------
+
+### Local Artifacts Directory Placeholder
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/WSL_FALLBACK_TEST_RESULTS.md
+
+This indicates the location where local artifacts from the test run were written. The actual directory path is dynamic and represented by a placeholder.
+
+```text
+<local-artifacts-dir>
+```
+
+--------------------------------
+
+### Create Docker Bridge Network
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/You are a senior Linux kernel, Docker networking,.md
+
+Attempts to create a Docker bridge network, which can fail if the necessary kernel modules or configurations are missing.
+
+```bash
+sudo docker network create test-bridge
+```
+
+--------------------------------
+
+### Check Environment and Bake Image
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Checks the Damru environment and bakes a Redroid image using the detected APK asset bundle. This is a common workflow after manual extraction.
+
+```bash
+python -m damru check-env
+python -m damru bake-image --image damru-redroid:latest
+```
+
+--------------------------------
+
+### Run Damru Preflight Check without ADB
+
+Source: https://github.com/akwin1234/damru/blob/main/PREFLIGHT_IMPLEMENTATION_PLAN.txt
+
+Execute the preflight check, disabling ADB checks.
+
+```bash
+python -m damru check preflight --no-adb
+```
+
+--------------------------------
+
+### Proxy, Timezone, and Locale Configuration
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Set optional proxy, timezone, and locale values. When unset (None), Damru automatically determines these based on the proxy exit node for consistent session behavior.
+
+```python
+PROXY = None        # Optional: SOCKS5/HTTP proxy URL for Python-side checks
+HTTP_PROXY = None   # Optional: Android system HTTP proxy as host:port
+TIMEZONE = None     # Auto from proxy exit when unset
+LOCALE = None       # Auto from proxy country when unset
+```
+
+--------------------------------
+
+### Docker IPvlan Network Creation
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/You are a senior Linux kernel, Docker networking,.md
+
+This command attempts to create an IPvlan network, which is a type of network driver for Docker. The operation fails on WSL2, indicating the 'ipvlan' feature is not supported.
+
+```bash
+docker network create -d ipvlan \
+  --subnet=172.27.160.0/20 \
+  --gateway=172.27.160.1 \
+  -o parent=eth0 \
+  damru-ipvlan
+```
+
+--------------------------------
+
+### Apply Damru WSL Fixes and Check Environment
+
+Source: https://github.com/akwin1234/damru/blob/main/damru/wsl_kernel/README.md
+
+After shutting down WSL, these commands are used to apply fixes and check the environment for Damru.
+
+```bash
+python -m damru fix-wsl
+```
+
+```bash
+python -m damru check-env --viewer
+```
+
+--------------------------------
+
+### Mount Binderfs for Redroid
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Creates the binderfs directory and mounts the binderfs filesystem, which is required for Android inside Docker. This mount is not persistent across reboots by default.
+
+```bash
+sudo mkdir -p /dev/binderfs
+sudo mount -t binder binder /dev/binderfs
+```
+
+--------------------------------
+
+### Configure Chrome APK Path
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PYTHON_API.md
+
+Set the path to a local Chrome APK if using a raw Redroid instance instead of a baked image.
+
+```python
+damru.config.CHROME_APK = "/custom/path/to/chrome.apk"
+```
+
+--------------------------------
+
+### Fix WSL Environment and Check
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/WSL_KERNEL.md
+
+Runs Damru's repair script for WSL and checks the environment. This command attempts to fix common issues like iptables, module loading, binderfs mounting, and Docker daemon startup.
+
+```bash
+python -m damru fix-wsl
+python -m damru check-env
+```
+
+--------------------------------
+
+### Sync DamruPoolSync Usage
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PYTHON_API.md
+
+Illustrates the usage of the synchronous `DamruPoolSync`, suitable for distributed task workers and multi-threading. It shows how to configure per-container proxy rotation.
+
+```python
+from damru import DamruPoolSync
+
+# proxies enables per-container proxy rotation
+with DamruPoolSync(mode="auto", max_devices=5, proxies=["socks5://..."]) as pool:
+    with pool.session() as context:
+        page = context.new_page()
+        page.goto("https://example.com")
+```
+
+--------------------------------
+
+### Check Linux/WSL Netfilter Tables
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/2.md
+
+Confirms the presence and names of Netfilter tables (nat, filter, mangle) in the kernel.
+
+```bash
+cat /proc/net/ip_tables_names
+```
+
+--------------------------------
+
+### Set Chrome APK Path
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Define the path to the Chrome APK as a constant. This is useful for setting up the environment before initializing Damru.
+
+```python
+CHROME_APK = "/mnt/c/Users/you/Downloads/damru/chrome-apks/145.0.7632.75"
+```
+
+--------------------------------
+
+### Inspect iptables and nftables Rulesets
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/You are a senior Linux kernel, Docker networking,.md
+
+Examine the current NAT and filter table rules in iptables, and list the active ruleset in nftables.
+
+```bash
+cat /proc/net/ip_tables_names
+iptables -t nat -L
+iptables -t filter -L
+nft list ruleset
+```
+
+--------------------------------
+
+### Validate Linux/WSL Loaded Modules
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/2.md
+
+Ensures that necessary networking modules like br_netfilter and iptable_nat are loaded.
+
+```bash
+lsmod
+```
+
+--------------------------------
+
+### Allowing Physical ADB Devices
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PYTHON_API.md
+
+Set the DAMRU_ALLOW_PHYSICAL environment variable to 1 to enable auto-detection of physical-looking USB serials for ADB. Use this only for disposable test devices.
+
+```bash
+export DAMRU_ALLOW_PHYSICAL=1
+```
+
+--------------------------------
+
+### Manually Extract Chrome APKs
+
+Source: https://github.com/akwin1234/damru/blob/main/chrome-apks/README.md
+
+Commands for manually extracting Chrome APKs to the specified directory. This includes creating the directory, setting ownership, and unzipping the archive.
+
+```bash
+sudo mkdir -p /home/damru
+sudo chown "$USER:$USER" /home/damru
+unzip damru-chrome-apks-latest.zip -d /home/damru/chrome-apks
+find /home/damru/chrome-apks -maxdepth 2 -name '*.apk' | head
+```
+
+--------------------------------
+
+### Connect via ADB
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Connect to the running Damru Android container using ADB and list connected devices to verify the connection. The default connection port is 5555.
+
+```bash
+adb connect localhost:5555
+adb devices
+```
+
+--------------------------------
+
+### DamruPool (Async)
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PYTHON_API.md
+
+Manages a pool of asynchronous device sessions, automatically handling Docker container lifecycles and port forwarding. It's designed for massive parallelization.
+
+```APIDOC
+## DamruPool (Async)
+
+### Description
+Manages a pool of asynchronous device sessions, automatically handling Docker container lifecycles and port forwarding. It's designed for massive parallelization.
+
+### Usage
+```python
+from damru import DamruPool
+
+# mode="auto" automatically starts and manages Redroid Docker containers
+async with DamruPool(mode="auto", max_devices=10) as pool:
+    # pool.session() provides an AsyncDamru context from an available container
+    async with pool.session() as browser:
+        page = await browser.new_page()
+        ...
+```
+
+### `__init__` Parameters
+
+#### Parameters
+- **max_devices** (`int`) - Optional - Number of concurrent instances/containers to maintain. Use `0` only in manual mode to use every detected ADB device. Defaults to config `NUM_DEVICES`.
+- **mode** (`str`) - Optional - Deployment mode: `"auto"` manages Redroid via Docker, `"manual"` uses existing ADB devices, and `"mumu"` is experimental. Redroid auto mode is the supported production path. Defaults to config `MODE`.
+- **proxy** (`str`) - Optional - One proxy shared by all sessions. Defaults to config `PROXY`.
+- **proxies** (`list[str]`) - Optional - Per-worker proxy list. Pool rotates through these by slot index. Defaults to config `PROXIES`.
+- **http_proxy** / **http_proxies** (`str` / `list[str]`) - Optional - Android system HTTP proxy override when it differs from the browser proxy. GeoIP is resolved through this path when present. Defaults to config values.
+- **device** (`str`) - Optional - Fixed device profile, or `None`/`"random"` for per-session random profiles. Defaults to config `DEVICE`.
+- **profile_tier** (`str`) - Optional - Random pool for sessions without a fixed `device`; medium/experimental/all are opt-in. Defaults to config `PROFILE_TIER` / `"premium"`.
+- **timezone** / **locale** (`str`) - Optional - Force timezone and locale instead of deriving them from proxy/profile data. Defaults to config values.
+- **chrome_apk** (`str`) - Optional - Chrome APK file or split-APK directory for raw/unbaked auto mode. Leave unset to auto-search the validated APK bundle and allow Chrome rotation during random profile actions. Defaults to config `CHROME_APK`.
+- **wsl_distro** (`str`) - Optional - Windows only: WSL distro that owns Docker/Redroid. Defaults to config `WSL_DISTRO`.
+```
+
+--------------------------------
+
+### Open Watch-Only Viewer
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Opens a live viewer for a Redroid worker in watch-only mode, disabling keyboard, mouse, and touch input.
+
+```bash
+python -m damru view --serial wsl:127.0.0.1:5600 --no-control
+```
+
+--------------------------------
+
+### Check WSL Kernel Version and iptable_nat Module
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/2.md
+
+Automation frameworks should query the kernel version and check for the presence of the iptable_nat module. This helps in providing specific error messages if the environment is not correctly configured.
+
+```bash
+uname -a
+lsmod | grep iptable_nat
+```
+
+--------------------------------
+
+### Set Base ADB Port for Testing
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/WSL_KERNEL.md
+
+Sets a custom base port for Redroid workers, useful for temporary side-by-side testing of multiple Damru WSL distros.
+
+```powershell
+$env:DAMRU_REDROID_BASE_PORT = "5700"
+```
+
+--------------------------------
+
+### Force Profile for Custom Android App with Proxy
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Applies hardening to a custom Android app embedding the system WebView, using a proxy. This command avoids Chrome-specific preferences and configures network settings.
+
+```bash
+python -m damru force-profile --serial 127.0.0.1:5600 --device pixel_8_pro --no-chrome --proxy socks5://user:pass@host:port
+```
+
+--------------------------------
+
+### Handle Damru Initialization Errors
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PYTHON_API.md
+
+Catch DamruError to handle specific failures during Damru initialization, such as ADB connection or binary patching issues.
+
+```python
+from damru import Damru, DamruError
+
+try:
+    with Damru() as browser:
+        ...
+except DamruError as e:
+    print(f"Damru failed to initialize: {e}")
+```
+
+--------------------------------
+
+### Handle Proxies with Authentication
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PYTHON_API.md
+
+Pass authenticated proxies directly to AsyncDamru. For Android system proxy compatibility, provide an HTTP CONNECT proxy separately.
+
+```python
+# Pass authenticated proxies directly to AsyncDamru
+async with AsyncDamru(proxy="socks5://user:pass@host:port") as browser:
+    ...
+```
+
+```python
+async with AsyncDamru(
+    proxy="socks5://user:pass@host:port",
+    http_proxy="127.0.0.1:18888",
+) as browser:
+    page = await browser.new_page()
+    await page.goto("https://demo.fingerprint.com/playground")
+```
+
+--------------------------------
+
+### Map Host Ports to Container ADB Port
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/You are a senior Linux kernel, Docker networking,.md
+
+This is the standard pattern on Linux for exposing multiple containers with ADB services. It maps different host ports to the container's default ADB port (5555). This is a workaround for scenarios where host networking is used and only one container can bind to the default port.
+
+```bash
+-p 5555:5555
+-p 5556:5555
+```
+
+--------------------------------
+
+### Inspect Hyper-V Virtual Switch Extensions
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/You are a senior Linux kernel, Docker networking,.md
+
+Examines Hyper-V virtual switch extensions, particularly those associated with WSL, to debug network configurations in a virtualized environment.
+
+```powershell
+Get-VMSwitch
+Get-VMSwitchExtension -VMSwitch (Get-VMSwitch | Where-Object {$_.Name -like '*WSL*'}) | Select-Object Name, Enabled
+```
+
+--------------------------------
+
+### View Windows NAT Mappings for WSL
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/2.md
+
+Displays Hyper-V virtual switch NAT translations that map to the WSL subsystem.
+
+```powershell
+Get-NetNat
+```
+
+--------------------------------
+
+### Run Redroid with Host GPU Passthrough
+
+Source: https://github.com/akwin1234/damru/blob/main/research/android-virtualization-alternatives.md
+
+This command attempts to pass through the host's GPU to the Redroid container using Docker. It requires the host's DRI devices and video group to be available within the container. Use this when direct hardware access is desired, but be aware it exposes the host's GPU identity.
+
+```bash
+docker run --device=/dev/dri --group-add video \
+  -v /tmp/.X11-unix:/tmp/.X11-unix \
+  redroid/redroid:14.0.0_64only-latest \
+  androidboot.redroid_gpu_mode=host
+```
+
+--------------------------------
+
+### Inspect Windows Network Configuration
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/You are a senior Linux kernel, Docker networking,.md
+
+Examine Windows network configurations including NAT, network interfaces, and firewall profiles relevant to WSL networking.
+
+```powershell
+Get-NetNat
+Get-NetAdapter
+Get-NetIPInterface
+Get-NetFirewallProfile
+```
+
+--------------------------------
+
+### Check Kernel Configuration for Netfilter and Bridge Modules
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/You are a senior Linux kernel, Docker networking,.md
+
+Verifies if the Linux kernel is configured with necessary Netfilter, IP tables, NAT, and bridge modules, which are crucial for Docker networking.
+
+```bash
+uname -a
+zcat /proc/config.gz | egrep 'NETFILTER|IP_NF|NF_NAT|XT_ADDRTYPE|BRIDGE'
+```
+
+--------------------------------
+
+### Check Existing IP Tables Rulesets
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/You are a senior Linux kernel, Docker networking,.md
+
+Displays the current filter and NAT rules configured in the IP tables, useful for diagnosing network filtering and routing issues.
+
+```bash
+cat /proc/net/ip_tables_names
+sudo iptables -t filter -L -n -v
+sudo iptables -t nat -L -n -v
+```
+
+--------------------------------
+
+### Repair WSL Networking
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/AUTOMATION_GAPS_PLAN.md
+
+Repairs safe Docker, binderfs, iptables, DNS, and WSL networking issues.
+
+```bash
+python -m damru fix-wsl
+```
+
+--------------------------------
+
+### DamruPoolSync (Sync)
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PYTHON_API.md
+
+The synchronous counterpart to DamruPool, suitable for distributed task workers and multi-threading frameworks. It also supports per-container proxy rotation.
+
+```APIDOC
+## DamruPoolSync (Sync)
+
+### Description
+The synchronous counterpart to DamruPool, suitable for distributed task workers and multi-threading frameworks. It also supports per-container proxy rotation.
+
+### Usage
+```python
+from damru import DamruPoolSync
+
+# proxies enables per-container proxy rotation
+with DamruPoolSync(mode="auto", max_devices=5, proxies=["socks5://..."]) as pool:
+    with pool.session() as context:
+        page = context.new_page()
+        page.goto("https://example.com")
+```
+```
+
+--------------------------------
+
+### Open Live Viewer for a Worker
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Opens a live viewer for a specific Redroid worker using its serial number. If omitted, Damru uses the first online ADB device.
+
+```bash
+python -m damru view --serial wsl:127.0.0.1:5600
+```
+
+--------------------------------
+
+### View Windows Network Address Translation (NAT) and Interfaces
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/You are a senior Linux kernel, Docker networking,.md
+
+Inspects Windows NAT configurations and network interfaces, which are part of the networking stack that WSL utilizes.
+
+```powershell
+Get-NetNat
+Get-NetAdapter
+Get-NetIPInterface
+```
+
+--------------------------------
+
+### Capture Screenshot
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/VIEWER.md
+
+Captures a screenshot of the Android device display and saves it to a file. Requires specifying the device serial and an output file path.
+
+```bash
+python -m damru screenshot --serial wsl:127.0.0.1:5600 --output screen.png
+```
+
+--------------------------------
+
+### Test Redroid Binding with Docker
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/2.md
+
+Validates Docker's ability to map a host port via NAT for Redroid container.
+
+```bash
+docker run --rm -p 5600:5555 --privileged damru-redroid:latest
+```
+
+--------------------------------
+
+### Record Device Screen
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/VIEWER.md
+
+Records a video of the Android device screen for a specified duration and saves it as an MP4 file. The `--time-limit` option controls the recording length.
+
+```bash
+python -m damru record --serial wsl:127.0.0.1:5600 --time-limit 30 --output clip.mp4
+```
+
+--------------------------------
+
+### Synchronous Usage with Damru
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Provides a synchronous wrapper for Damru, allowing for blocking operations. Useful for simpler scripts or when async is not required.
+
+```python
+from damru import Damru
+
+def run_sync():
+    with Damru(device="pixel_8_pro") as browser:
+        page = browser.new_page()
+        page.goto("https://bot.sannysoft.com/")
+        page.wait_for_timeout(5000)
+        page.screenshot(path="sannysoft.png")
+        print("Passed Sannysoft!")
+
+if __name__ == "__main__":
+    run_sync()
+```
+
+--------------------------------
+
+### Monitor Low-Level Spoofing Events
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PYTHON_API.md
+
+Enable debug mode in Damru to view exact root commands and CDP overrides for monitoring low-level spoofing events.
+
+```python
+# Enable debug mode to see exact root commands and CDP overrides
+async with AsyncDamru(debug=True) as browser:
+    ...
+```
+
+--------------------------------
+
+### Prevent Unsupported Multi-Worker Host Networking
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/2.md
+
+Automation frameworks must prevent the launch of multiple workers using host networking to avoid port collisions and panics. This involves parsing orchestration configurations.
+
+```bash
+# Example logic to check orchestration configuration
+if [[ "$ORCHESTRATION_CONFIG" == *"--network host"* && $NUM_WORKERS -gt 1 ]]; then
+  echo "Error: Multiple workers with --network host is not supported."
+  exit 1
+fi
+```
+
+--------------------------------
+
+### Docker Daemon with Legacy Iptables Backend Failure
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/You are a senior Linux kernel, Docker networking,.md
+
+Switching to the legacy iptables backend and restarting the Docker daemon also fails, indicating issues with the 'nat' table's existence or accessibility.
+
+```bash
+update-alternatives --set iptables /usr/sbin/iptables-legacy
+update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
+dockerd --host=unix:///var/run/docker.sock
+```
+
+--------------------------------
+
+### Force Device Profile via Python API
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PYTHON_API.md
+
+Programmatically force a device profile using the `force_device_profile` async helper. This function allows setting timezone and locale for the specified device connection.
+
+```python
+from damru import force_device_profile
+
+result = await force_device_profile(
+    "127.0.0.1:5600",
+    "pixel_8_pro",
+    timezone="America/New_York",
+    locale="en-US",
+)
+print(result.description)
+```
+
+--------------------------------
+
+### Run Damru Functional Test Suite
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Execute the comprehensive functional test suite for Damru. This suite includes various tests to ensure the stealth functionalities are working as expected.
+
+```python
+python example.py
+```
+
+--------------------------------
+
+### Attempt to Load Common Docker Netfilter Modules
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/You are a senior Linux kernel, Docker networking,.md
+
+Attempts to load essential Netfilter modules required for Docker's networking functionalities, such as address type checking, IP tables, NAT, and bridging.
+
+```bash
+sudo modprobe xt_addrtype
+sudo modprobe ip_tables
+sudo modprobe iptable_nat
+sudo modprobe iptable_filter
+sudo modprobe br_netfilter
+```
+
+--------------------------------
+
+### Check NAT Support in WSL Environment
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/You are a senior Linux kernel, Docker networking,.md
+
+A script snippet to check if the current environment supports iptables NAT functionality. It redirects output to /dev/null and checks the exit status to determine NAT support.
+
+```bash
+if ! iptables -t nat -L -n >/dev/null 2>&1; then
+    # mark environment as no-NAT
+fi
+```
+
+--------------------------------
+
+### AsyncDamru
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PYTHON_API.md
+
+The primary asynchronous context manager for Damru. It orchestrates stealth layers and returns a Playwright BrowserContext. It supports various initialization parameters for device, proxy, and configuration.
+
+```APIDOC
+## `AsyncDamru` (Recommended)
+
+The primary asynchronous context manager. It orchestrates the 8 layers of stealth and returns a Playwright `BrowserContext`.
+
+### Usage
+```python
+from damru import AsyncDamru
+
+async with AsyncDamru(device="pixel_8_pro", proxy="socks5://...") as context:
+    page = await context.new_page()
+    await page.goto("https://creepjs.com")
+```
+
+### `__init__` Parameters
+| Parameter | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `device` | `str` | `"random"` | Target device string (e.g., `"samsung_galaxy_s24_ultra"`). |
+| `profile_tier` | `str` | config `PROFILE_TIER` / `"premium"` | Random profile pool when `device` is unset or `"random"`: `premium`, `premium_verified`, `premium_new`, `medium`, `experimental`, `extended`, or `all`. Explicit named devices ignore this filter. |
+| `serial` | `str` | `None` | ADB identifier. If `None`, Damru auto-detects virtual devices only: TCP Redroid endpoints first, then `emulator-*`. Physical-looking USB serials are refused by default. |
+| `proxy` | `str` | `None` | Browser proxy URL used for GeoIP and Python-side proxy checks. SOCKS5 and HTTP URLs are accepted. |
+| `http_proxy` | `str` | `None` | Android system HTTP proxy as `host:port` or `http://user:pass@host:port`. Use this when Android Chrome must route through an HTTP CONNECT proxy or local bridge. |
+| `timezone` | `str` | `None` | Force a specific IANA timezone. Leave unset so Damru resolves it from the active proxy exit. |
+| `locale` | `str` | `None` | Force a specific BCP-47 locale. Leave unset so Damru chooses a realistic locale for the proxy country. |
+| `debug` | `bool` | `False` | Enables verbose console logging for debugging OS patches. |
+
+### Methods & Properties
+*   **`await new_page()`**: Creates a new stealth-hardened `Page`.
+*   **`browser`**: Access the underlying Playwright `Browser` object.
+*   **`pages`**: List of currently open `Page` objects.
+*   **`profile`**: Returns the active `DamruProfile` (Device specs, UA, etc.).
+```
+
+--------------------------------
+
+### Configure Chrome APK Path in Python
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Manually sets the path to the Chrome APK directory in Python code. This is used when automatic detection fails or a specific version is required.
+
+```python
+CHROME_APK = "/home/damru/chrome-apks/145.0.7632.75"
+```
+
+--------------------------------
+
+### Configure Docker Data Root in WSL2
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Steps to change the Docker data root directory to a secondary HDD within WSL2 to prevent filling up the primary SSD. This involves stopping Docker, moving data, creating a symlink, and restarting Docker.
+
+```bash
+wsl -d Ubuntu
+sudo service docker stop
+sudo mv /var/lib/docker /mnt/d/docker-data
+sudo ln -s /mnt/d/docker-data /var/lib/docker
+sudo service docker start
+```
+
+--------------------------------
+
+### Validate Windows WSL Version and Status
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/2.md
+
+Confirms the WSL version and kernel version, ensuring it is operational.
+
+```powershell
+wsl --version
+wsl --status
+```
+
+--------------------------------
+
+### List ADB Devices
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Lists available ADB devices, which is useful for identifying the serial number of your Redroid worker.
+
+```bash
+python -m damru devices
+```
+
+--------------------------------
+
+### Force Device Profile via CLI
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PYTHON_API.md
+
+Use the CLI to force a specific device profile onto a rooted worker. This command can be used with various options to customize the profile, such as specifying the device, disabling Chrome, clearing the proxy, or setting locale and timezone.
+
+```bash
+python -m damru force-profile --serial 127.0.0.1:5600 --device pixel_8_pro
+```
+
+```bash
+python -m damru force-profile --serial 127.0.0.1:5600 --device "Xiaomi POCO F5"
+```
+
+```bash
+python -m damru force-profile --serial 127.0.0.1:5600 --device xiaomi_redmi_9a --no-chrome --clear-proxy
+```
+
+```bash
+python -m damru force-profile --serial 127.0.0.1:5600 --device xiaomi_redmi_9a --browser-package org.chromium.webview_shell --locale pt-BR --timezone America/Sao_Paulo
+```
+
+--------------------------------
+
+### Open URL in Android Chrome via Damru
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PROOF.md
+
+Opens a specified URL in the Android Chrome browser on a Damru worker.
+
+```powershell
+python -m damru open-url --serial 127.0.0.1:5900 --url https://example.com
+```
+
+--------------------------------
+
+### Target Non-Default WSL Distro
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/WSL_KERNEL.md
+
+Configures Damru to target a specific WSL distribution by setting the DAMRU_WSL_DISTRO environment variable. Useful for testing or managing multiple distros.
+
+```powershell
+$env:DAMRU_WSL_DISTRO = "DamruFreshKernelTest"
+python -m damru check-env --viewer
+python -m damru fix-wsl
+```
+
+--------------------------------
+
+### Common Docker Bridge/NAT Failure Message
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/WSL_KERNEL.md
+
+This error indicates that the WSL kernel is missing essential modules for Docker's bridge/NAT functionality.
+
+```text
+modprobe: FATAL: Module xt_addrtype not found in directory /lib/modules/...
+```
+
+--------------------------------
+
+### Set Chrome APK Path Environment Variable
+
+Source: https://github.com/akwin1234/damru/blob/main/chrome-apks/README.md
+
+Configure the CHROME_APK environment variable to point to a specific Chrome split-APK version directory. This is used when auto-detection fails.
+
+```python
+CHROME_APK = "/home/damru/chrome-apks/148.0.7778.217"
+```
+
+--------------------------------
+
+### Validate Linux/WSL System Identity
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/2.md
+
+Verifies the Linux kernel version and identifies the Microsoft kernel in WSL2.
+
+```bash
+uname -a
+```
+
+--------------------------------
+
+### Force Profile Hardening without Chrome Preferences
+
+Source: https://github.com/akwin1234/damru/blob/main/chrome-apks/README.md
+
+Apply profile hardening to a custom Android WebView. This command is used for apps embedding system WebView, focusing on Android-level hardening without modifying Chrome preferences.
+
+```bash
+python -m damru force-profile --serial 127.0.0.1:5600 --device pixel_8_pro --no-chrome
+```
+
+--------------------------------
+
+### Check iptables Rules in Android Shell
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/You are a senior Linux kernel, Docker networking,.md
+
+Lists IP tables rules within an Android environment (Redroid) to check for network filtering and NAT configurations.
+
+```bash
+su 0 iptables -L -n
+su 0 iptables -t filter -L -n
+su 0 iptables -t nat -L -n
+```
+
+--------------------------------
+
+### Async Damru with Authenticated Proxy and HTTP Bridge
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Configures Damru for asynchronous use with an authenticated SOCKS5 proxy and an Android HTTP bridge. Chrome will use the http_proxy for timezone and locale resolution.
+
+```python
+from damru import AsyncDamru
+
+async with AsyncDamru(
+    device="pixel_8_pro",
+    proxy="socks5://user:pass@proxy.example:824",
+    http_proxy="172.17.0.1:18888",
+) as browser:
+    page = await browser.new_page()
+    await page.goto("https://demo.fingerprint.com/playground")
+```
+
+--------------------------------
+
+### Force a Device Profile on a Running Worker
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/DEVICE_PROFILES.md
+
+Use the `damru force-profile` command to apply a specific device profile to an already running worker. This command allows targeting by serial number and specifying the device profile by name, model, or slug.
+
+```bash
+python -m damru force-profile --serial 127.0.0.1:5600 --device xiaomi_redmi_9a
+```
+
+```bash
+python -m damru force-profile --serial 127.0.0.1:5600 --device "Moto G (5S) Plus" --no-chrome --clear-proxy
+```
+
+```bash
+python -m damru force-profile --serial 127.0.0.1:5600 --device pixel_8_pro --browser-package org.chromium.webview_shell
+```
+
+--------------------------------
+
+### Add User to Docker Group
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Grant the current user Docker permissions by adding them to the docker group. A WSL restart is required after executing this command.
+
+```bash
+sudo usermod -aG docker $USER
+```
+
+--------------------------------
+
+### Quick Check of Redroid Worker
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/WSL_KERNEL.md
+
+Runs a quick check on a Redroid worker instance identified by its serial port and saves the output to a JSON file.
+
+```bash
+python -m damru quick-check --serial 127.0.0.1:5900 --output /tmp/damru-wsl-quick-5900.json
+```
+
+--------------------------------
+
+### Validate Windows IP Interfaces for WSL
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/2.md
+
+Confirms IPv4 and IPv6 routing metrics for the WSL network adapter.
+
+```powershell
+Get-NetIPInterface
+```
+
+--------------------------------
+
+### Multi-Page Scraping in One Session
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PYTHON_API.md
+
+Scrape multiple pages concurrently within a single Damru session. All pages in this context share the same spoofed Device & IP identity.
+
+```python
+async with AsyncDamru(device="random") as browser:
+    # All pages in this context share the same spoofed Device & IP identity
+    page1 = await browser.new_page()
+    page2 = await browser.new_page()
+    
+    await asyncio.gather(
+        page1.goto("https://google.com"),
+        page2.goto("https://bing.com")
+    )
+```
+
+--------------------------------
+
+### Check Windows Firewall Profiles
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/2.md
+
+Ensures the Windows Defender Firewall is not blocking WSL bridge traffic, which can cause ADB connection issues.
+
+```powershell
+Get-NetFirewallProfile
+```
+
+--------------------------------
+
+### Checking Android Iptables Filter Table
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/You are a senior Linux kernel, Docker networking,.md
+
+Inside a Redroid container, this command attempts to list the 'filter' table of iptables. The failure indicates that the 'filter' table is not available within the Android userspace environment.
+
+```bash
+su 0 iptables -L OUTPUT -n
+```
+
+--------------------------------
+
+### DamruError
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PYTHON_API.md
+
+Custom exception class for Damru-specific failures. Catches issues like ADB connection errors, rooting problems, and binary patching failures.
+
+```APIDOC
+## `DamruError`
+
+All Damru-specific failures (ADB connection errors, rooting issues, binary patching failures) raise a `DamruError`.
+
+```python
+from damru import Damru, DamruError
+
+try:
+    with Damru() as browser:
+        ...
+except DamruError as e:
+    print(f"Damru failed to initialize: {e}")
+```
+```
+
+--------------------------------
+
+### Repair Worker Internet Connectivity
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/AUTOMATION_GAPS_PLAN.md
+
+Repairs DNS/internet state for WSL/Docker/Android, affecting one or all workers.
+
+```bash
+python -m damru fix-internet --all
+```
+
+--------------------------------
+
+### Damru Image Baking Process
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/README.md
+
+Commands to bake a custom Redroid image using Damru. This process involves downloading APKs, baking the image, and saving it as a tarball.
+
+```bash
+python -m damru install-apks --download
+```
+
+```bash
+python -m damru bake-image --image damru-redroid:latest
+```
+
+```bash
+docker save damru-redroid:latest -o damru-redroid-latest.tar
+```
+
+--------------------------------
+
+### Damru
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PYTHON_API.md
+
+The synchronous (blocking) version of AsyncDamru, suitable for traditional scripts or multi-threaded environments. It offers the same methods and parameters as AsyncDamru but without the need for `await`.
+
+```APIDOC
+## `Damru` (Synchronous)
+
+The blocking version of `AsyncDamru`. Perfect for traditional scripts or multi-threaded environments.
+
+### Usage
+```python
+from damru import Damru
+
+with Damru(device="pixel_7") as context:
+    page = context.new_page()
+    page.goto("https://bot.sannysoft.com")
+```
+*Note: Methods and parameters are identical to `AsyncDamru` but without `await`.*
+```
+
+--------------------------------
+
+### Verify Windows Network Adapter Status
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/2.md
+
+Checks the operational status of the virtual network interface used by WSL.
+
+```powershell
+Get-NetAdapter
+```
+
+--------------------------------
+
+### Configure Docker to Bypass Kernel NAT
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/2.md
+
+Launch the Docker daemon with specific flags to bypass the Netfilter subsystem and utilize its userland proxy mechanism for port publishing. This is useful when kernel NAT is unavailable or problematic.
+
+```bash
+dockerd --iptables=false --ip-masq=false --bridge=none --userland-proxy=true
+```
+
+--------------------------------
+
+### Run Redroid Worker in Host Network Mode
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/You are a senior Linux kernel, Docker networking,.md
+
+Launches a Redroid worker container using the host network mode, bypassing Docker's network isolation for direct access.
+
+```bash
+docker run -itd --rm --privileged \
+  --network host \
+  -v ~/data-worker1:/data \
+  --name redroid-worker1 \
+  damru-redroid:latest
+```
+
+--------------------------------
+
+### Open URL in a Specific Worker
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/AUTOMATION_GAPS_PLAN.md
+
+Opens a specified URL in the browser of a particular worker. Requires the worker's serial number and the URL.
+
+```bash
+python -m damru open-url --serial 127.0.0.1:5600 --url https://example.com
+```
+
+--------------------------------
+
+### AndroidDevice Database Access
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PYTHON_API.md
+
+Provides access to a database of 155 built-in device profiles, allowing retrieval of physical specifications and selection of profiles by name, model, slug, or random criteria.
+
+```APIDOC
+## Device Management
+
+### `AndroidDevice` Database
+
+Access the physical specifications of the 155 built-in device profiles. The full generated list is in [DEVICE_PROFILES.md](DEVICE_PROFILES.md). Profiles can be selected by exact marketing name, model, or slug. Default random selection uses the premium pool only: 51 original verified profiles plus 49 high-confidence new profiles. Medium and experimental profiles remain available by explicit name or opt-in tier.
+
+### Functions
+
+- **list_device_names()**: Returns a list of all available device profile names.
+- **get_device(name: str)**: Retrieves the `AndroidDevice` object for a specific device name, model, or slug.
+- **get_devices_by_tier(tier: str)**: Returns a list of `AndroidDevice` objects for a specified tier (e.g., 'premium', 'medium', 'experimental').
+- **get_random_device(**
+    android_version: str = None,
+    tier: str = "premium",
+    **kwargs
+**)**: Selects and returns a random `AndroidDevice` profile, optionally filtered by Android version and tier.
+
+#### Example Usage
+```python
+from damru import list_device_names, get_device, get_devices_by_tier, get_random_device
+
+# Get hardware specs for a specific phone
+pixel = get_device("pixel_8_pro")
+print(f"Cores: {pixel.hardware_concurrency}, RAM: {pixel.device_memory}GB")
+
+# Select a random Android 13 profile
+random_phone = get_random_device(android_version="13")
+```
+```
+
+--------------------------------
+
+### Check WSL Kernel Status
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/WSL_KERNEL.md
+
+Use this command to check the status of the WSL kernel without making any changes.
+
+```powershell
+python -m damru wsl-kernel status
+```
+
+--------------------------------
+
+### Validate Docker Engine Status
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/2.md
+
+Checks the Docker daemon state and warns if essential bridge or NAT features are missing.
+
+```bash
+docker info
+```
+
+--------------------------------
+
+### Connect ADB to Redroid Worker
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/You are a senior Linux kernel, Docker networking,.md
+
+Connects the Android Debug Bridge (ADB) to a running Redroid worker instance, typically accessed via the WSL IP address.
+
+```bash
+# From WSL or Windows using WSL IP:
+adb connect <WSL_IP>:5555
+```
+
+--------------------------------
+
+### Redroid ADB Port Configuration
+
+Source: https://github.com/akwin1234/damru/blob/main/research/new/You are a senior Linux kernel, Docker networking,.md
+
+These lines in a boot properties file attempt to change the ADB TCP port for a Redroid instance. This is a workaround to allow multiple Redroid instances to be accessible if using host networking.
+
+```properties
+service.adb.tcp.port=5556
+persist.adb.tcp.port=5556
+```
+
+--------------------------------
+
+### Disable Chrome APK Path Specification
+
+Source: https://github.com/akwin1234/damru/blob/main/README.md
+
+Configure Damru to auto-search for Chrome APKs in the project's 'chrome-apks/' directory. When set to None, Damru will rotate APK versions for random profile actions.
+
+```python
+# None = auto-searches the 'chrome-apks/' directory in the project root
+CHROME_APK = None
+```
+
+```python
+# Or specify an absolute path:
+# CHROME_APK = "/mnt/c/path/to/damru/chrome-apks/145.0.7632.75"
+```
+
+--------------------------------
+
+### Bypass CDN TLS with curl_cffi
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/PYTHON_API.md
+
+Defeat CDN TLS and other TLS-fingerprinting WAFs by replaying requests through curl_cffi browser impersonation. This persistent interception is set for a specific domain.
+
+```python
+from damru.bypass import arm_bypass_async
+
+async with AsyncDamru() as browser:
+    page = await browser.new_page()
+    
+    # Persistent interception for this domain
+    await arm_bypass_async(page, domain="target-site.com")
+    
+    # All document navigations now use randomized browser TLS hashes
+    await page.goto("https://target-site.com")
+```
+
+--------------------------------
+
+### Quick Check a Specific Worker
+
+Source: https://github.com/akwin1234/damru/blob/main/docs/AUTOMATION_GAPS_PLAN.md
+
+Performs a quick check on a specific worker identified by its serial number.
+
+```bash
+python -m damru quick-check --serial 127.0.0.1:5600
+```
+
+=== COMPLETE CONTENT === This response contains all available snippets from this library. No additional content exists. Do not make further requests.
