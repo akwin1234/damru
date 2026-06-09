@@ -1450,6 +1450,48 @@ chmod 755 "$target"
             timeout=10, allow_failure=True,
         )
 
+    async def list_worker_states(self) -> dict[int, str]:
+        out = await self._run_cmd(
+            self._docker_cmd("ps", "-a", "--filter", f"name={REDROID_CONTAINER_PREFIX}", "--format", "{{.Names}} {{.State}}"),
+            timeout=10,
+            allow_failure=True,
+        )
+        workers: dict[int, str] = {}
+        for line in out.splitlines():
+            parts = line.strip().split(maxsplit=1)
+            if not parts:
+                continue
+            name = parts[0]
+            if not name.startswith(REDROID_CONTAINER_PREFIX):
+                continue
+            suffix = name.removeprefix(REDROID_CONTAINER_PREFIX)
+            if suffix.isdigit():
+                workers[int(suffix)] = parts[1] if len(parts) > 1 else "unknown"
+        return workers
+
+    async def stale_bridge_reuse_indices(self) -> list[int]:
+        out = await self._run_cmd(
+            self._docker_cmd("ps", "-a", "--filter", f"name={REDROID_CONTAINER_PREFIX}", "--format", "{{.Names}} {{.State}} {{.Networks}}"),
+            timeout=10,
+            allow_failure=True,
+        )
+        indices: list[int] = []
+        for line in out.splitlines():
+            parts = line.strip().split()
+            if len(parts) < 3:
+                continue
+            name, state, network = parts[0], parts[1], parts[2]
+            if state == "running" or network != "host" or not name.startswith(REDROID_CONTAINER_PREFIX):
+                continue
+            suffix = name.removeprefix(REDROID_CONTAINER_PREFIX)
+            if suffix.isdigit():
+                indices.append(int(suffix))
+        return sorted(indices)
+
+    async def pause_container(self, index: int) -> None:
+        name = f"{REDROID_CONTAINER_PREFIX}{index}"
+        await self._run_cmd(self._docker_cmd("stop", name), timeout=30, allow_failure=True)
+
     async def stop_container(self, index: int) -> None:
         """Stop and remove a single container."""
         name = f"{REDROID_CONTAINER_PREFIX}{index}"

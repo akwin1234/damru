@@ -134,9 +134,9 @@ class AsyncDamru:
         if MODE != "auto":
             return None
 
-        from .docker import RedroidManager
+        from .runtime import create_redroid_manager
 
-        docker = RedroidManager()
+        docker = create_redroid_manager()
         await docker.check_docker()
         apk_path = None
         try:

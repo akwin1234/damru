@@ -568,10 +568,13 @@ def _cross_distro_host_redroid_conflicts() -> list[str]:
     for distro in _decode_wsl_list_output(result.stdout):
         if distro == current:
             continue
-        probe = _run([
-            "wsl", "-d", distro, "-u", "root", "--", "bash", "-lc",
-            "docker ps --filter network=host --format '{{.Names}} {{.Image}}' 2>/dev/null | grep -E '(^| )damru-|redroid' || true",
-        ], timeout=15)
+        try:
+            probe = _run([
+                "wsl", "-d", distro, "-u", "root", "--", "bash", "-lc",
+                "docker ps --filter network=host --format '{{.Names}} {{.Image}}' 2>/dev/null | grep -E '(^| )damru-|redroid' || true",
+            ], timeout=15)
+        except subprocess.TimeoutExpired:
+            continue
         if probe.stdout.strip():
             for line in probe.stdout.strip().splitlines():
                 conflicts.append(f"{distro}: {line}")
@@ -705,6 +708,8 @@ def _preflight_config() -> dict[str, object]:
         "image": getattr(config, "REDROID_IMAGE", "damru-redroid:latest"),
         "base_port": int(getattr(config, "REDROID_BASE_PORT", 5600) or 5600),
         "chrome_apk": getattr(config, "CHROME_APK", None),
+        "redroid_runtime": getattr(config, "REDROID_RUNTIME", "docker"),
+        "containerd_address": getattr(config, "CONTAINERD_ADDRESS", ""),
     }
 
 
@@ -720,6 +725,31 @@ def _preflight_command_exists(command: str, timeout: int) -> tuple[bool, str]:
 def _preflight_docker_image_exists(image: str, timeout: int) -> tuple[bool, str]:
     result = _preflight_linux_readonly("docker image inspect " + shlex.quote(image) + " >/dev/null 2>&1", timeout)
     return result.returncode == 0, image
+
+def _preflight_containerd_ref(image: str) -> str:
+    if "/" not in image:
+        return "docker.io/library/" + image
+    first = image.split("/", 1)[0]
+    if "." in first or ":" in first or first == "localhost":
+        return image
+    return "docker.io/" + image
+
+def _preflight_containerd_address_namespace(cfg: dict[str, object]) -> tuple[str, str]:
+    address = str(cfg.get("containerd_address") or "").strip()
+    if not address:
+        address = "/var/run/docker/containerd/containerd.sock" if _is_windows() else "/run/containerd/containerd.sock"
+    namespace = "moby" if "docker/containerd" in address else "damru"
+    return address, namespace
+
+def _preflight_containerd_image_exists(image: str, cfg: dict[str, object], timeout: int) -> tuple[bool, str]:
+    address, namespace = _preflight_containerd_address_namespace(cfg)
+    ref = _preflight_containerd_ref(image)
+    script = " ".join([
+        "ctr", "-a", shlex.quote(address), "-n", shlex.quote(namespace),
+        "images", "list", "-q", "|", "grep", "-Fx", shlex.quote(ref), ">/dev/null", "2>&1",
+    ])
+    result = _preflight_linux_readonly(script, timeout)
+    return result.returncode == 0, ref
 
 
 def _preflight_playwright_patch_status() -> tuple[bool, str]:
@@ -928,23 +958,41 @@ def _check_preflight(args: argparse.Namespace) -> int:
     patch_ok, patch_detail = _preflight_playwright_patch_status()
     _preflight_add(checks, "playwright_patch", "Damru Playwright patch", _preflight_status(patch_ok), patch_detail, "Run 'python -m damru install-deps -y' to apply the patch.")
 
-    for command in ("bash", "docker", "adb"):
+    runtime = str(cfg.get("redroid_runtime", "docker") or "docker").strip().lower()
+    for command in ("bash", "adb"):
         ok, detail = _preflight_command_exists(command, timeout)
         _preflight_add(checks, "cmd_" + command, "Linux command: " + command, _preflight_status(ok), detail or ("found" if ok else "missing"), "Run 'python -m damru install-deps -y'.")
+    if runtime in {"ctr", "containerd"}:
+        ok, detail = _preflight_command_exists("ctr", timeout)
+        _preflight_add(checks, "cmd_ctr", "Linux command: ctr", _preflight_status(ok), detail or ("found" if ok else "missing"), "Install containerd/ctr or switch DAMRU_CONTAINER_RUNTIME=docker.")
+    else:
+        ok, detail = _preflight_command_exists("docker", timeout)
+        _preflight_add(checks, "cmd_docker", "Linux command: docker", _preflight_status(ok), detail or ("found" if ok else "missing"), "Run 'python -m damru install-deps -y'.")
     for command in ("curl", "wget", "jq"):
         ok, detail = _preflight_command_exists(command, timeout)
         _preflight_add(checks, "cmd_" + command, "Linux command: " + command, _preflight_status(ok, strict=strict, warn=True), detail or ("found" if ok else "missing"), "Run 'python -m damru install-deps -y'.")
 
-    docker_ok = _preflight_linux_readonly("docker info >/dev/null 2>&1", timeout).returncode == 0
-    _preflight_add(checks, "docker_daemon", "Docker daemon", _preflight_status(docker_ok), "running" if docker_ok else "not reachable", "Start Docker or run 'python -m damru install-deps -y'.")
-    if docker_ok:
-        bridge_ok = _preflight_linux_readonly("docker network inspect bridge >/dev/null 2>&1", timeout).returncode == 0
-        _preflight_add(checks, "docker_bridge", "Docker bridge network", _preflight_status(bridge_ok), "available" if bridge_ok else "missing", "Run 'python -m damru fix-wsl' on WSL or repair Docker networking.")
-        image_ok, image_detail = _preflight_docker_image_exists(image, timeout)
-        _preflight_add(checks, "redroid_image", "Redroid image", _preflight_status(image_ok), image_detail if image_ok else image + " not found", "Run 'python -m damru install-image --download'.")
+    if runtime in {"ctr", "containerd"}:
+        ctr_address, ctr_namespace = _preflight_containerd_address_namespace(cfg)
+        ctr_ok = _preflight_linux_readonly(f"ctr -a {shlex.quote(ctr_address)} -n {shlex.quote(ctr_namespace)} version >/dev/null 2>&1", timeout).returncode == 0
+        _preflight_add(checks, "containerd_runtime", "containerd runtime", _preflight_status(ctr_ok), f"{ctr_address} namespace={ctr_namespace}" if ctr_ok else "not reachable", "Start containerd or use DAMRU_CONTAINER_RUNTIME=docker.")
+        if ctr_ok:
+            image_ok, image_detail = _preflight_containerd_image_exists(image, cfg, timeout)
+            _preflight_add(checks, "redroid_image", "Redroid image", _preflight_status(image_ok), image_detail if image_ok else image + " not found", "Run 'python -m damru install-image --download'.")
+        else:
+            _preflight_add(checks, "redroid_image", "Redroid image", "skip", "containerd runtime unavailable")
+        _preflight_add(checks, "docker_bridge", "Docker bridge network", "skip", "containerd runtime selected")
     else:
-        _preflight_add(checks, "docker_bridge", "Docker bridge network", "skip", "Docker daemon unavailable")
-        _preflight_add(checks, "redroid_image", "Redroid image", "skip", "Docker daemon unavailable")
+        docker_ok = _preflight_linux_readonly("docker info >/dev/null 2>&1", timeout).returncode == 0
+        _preflight_add(checks, "docker_daemon", "Docker daemon", _preflight_status(docker_ok), "running" if docker_ok else "not reachable", "Start Docker or run 'python -m damru install-deps -y'.")
+        if docker_ok:
+            bridge_ok = _preflight_linux_readonly("docker network inspect bridge >/dev/null 2>&1", timeout).returncode == 0
+            _preflight_add(checks, "docker_bridge", "Docker bridge network", _preflight_status(bridge_ok), "available" if bridge_ok else "missing", "Run 'python -m damru fix-wsl' on WSL or repair Docker networking.")
+            image_ok, image_detail = _preflight_docker_image_exists(image, timeout)
+            _preflight_add(checks, "redroid_image", "Redroid image", _preflight_status(image_ok), image_detail if image_ok else image + " not found", "Run 'python -m damru install-image --download'.")
+        else:
+            _preflight_add(checks, "docker_bridge", "Docker bridge network", "skip", "Docker daemon unavailable")
+            _preflight_add(checks, "redroid_image", "Redroid image", "skip", "Docker daemon unavailable")
 
     binder = _preflight_linux_readonly("test -e /dev/binder && test -e /dev/hwbinder && test -e /dev/vndbinder", timeout).returncode == 0
     binderfs = _preflight_linux_readonly("test -d /dev/binderfs && mount | grep -q ' /dev/binderfs ' && test -e /dev/binderfs/binder-control", timeout).returncode == 0
@@ -2162,6 +2210,28 @@ def _fix_internet(args: argparse.Namespace) -> int:
 
 def _running_damru_worker_serials() -> list[str]:
     try:
+        import asyncio
+        from . import config
+        from .runtime import create_redroid_manager
+
+        base_port = int(getattr(config, "REDROID_BASE_PORT", 5600))
+
+        async def _states() -> dict[int, str]:
+            manager = create_redroid_manager()
+            return await manager.list_worker_states()
+
+        workers = asyncio.run(_states())
+        serials = []
+        for index, state in sorted(workers.items()):
+            if str(state).lower() != "running":
+                continue
+            serial = f"127.0.0.1:{base_port + int(index)}"
+            serials.append(f"wsl:{serial}" if _is_windows() else serial)
+        return serials
+    except Exception:
+        pass
+
+    try:
         from . import config
 
         prefix = str(getattr(config, "REDROID_CONTAINER_PREFIX", "damru-worker-"))
@@ -3154,47 +3224,17 @@ def _ui_worker(args: argparse.Namespace) -> int:
 
     from . import config
     from .async_core import DamruError
-    from .docker import RedroidManager
+    from .runtime import create_redroid_manager
 
     async def _run() -> int:
-        manager = RedroidManager()
+        manager = create_redroid_manager()
         async def _existing_workers() -> dict[int, str]:
-            out = await manager._run_cmd(
-                manager._docker_cmd("ps", "-a", "--filter", f"name={config.REDROID_CONTAINER_PREFIX}", "--format", "{{.Names}} {{.State}}"),
-                timeout=10,
-                allow_failure=True,
-            )
-            workers: dict[int, str] = {}
-            for line in out.splitlines():
-                parts = line.strip().split(maxsplit=1)
-                if not parts:
-                    continue
-                name = parts[0]
-                if not name.startswith(config.REDROID_CONTAINER_PREFIX):
-                    continue
-                suffix = name.removeprefix(config.REDROID_CONTAINER_PREFIX)
-                if suffix.isdigit():
-                    workers[int(suffix)] = parts[1] if len(parts) > 1 else "unknown"
-            return workers
+            return await manager.list_worker_states()
 
         async def _stale_bridge_reuse_indices() -> list[int]:
-            out = await manager._run_cmd(
-                manager._docker_cmd("ps", "-a", "--filter", f"name={config.REDROID_CONTAINER_PREFIX}", "--format", "{{.Names}} {{.State}} {{.Networks}}"),
-                timeout=10,
-                allow_failure=True,
-            )
-            indices: list[int] = []
-            for line in out.splitlines():
-                parts = line.strip().split()
-                if len(parts) < 3:
-                    continue
-                name, state, network = parts[0], parts[1], parts[2]
-                if state == "running" or network != "host" or not name.startswith(config.REDROID_CONTAINER_PREFIX):
-                    continue
-                suffix = name.removeprefix(config.REDROID_CONTAINER_PREFIX)
-                if suffix.isdigit():
-                    indices.append(int(suffix))
-            return sorted(indices)
+            if hasattr(manager, "stale_bridge_reuse_indices"):
+                return await manager.stale_bridge_reuse_indices()
+            return []
 
         async def _existing_indices() -> list[int]:
             return sorted((await _existing_workers()).keys())
@@ -3270,8 +3310,7 @@ def _ui_worker(args: argparse.Namespace) -> int:
             return 0
         if args.action == "pause":
             index = int(args.index)
-            name = f"{config.REDROID_CONTAINER_PREFIX}{index}"
-            await manager._run_cmd(manager._docker_cmd("stop", name), timeout=30, allow_failure=True)
+            await manager.pause_container(index)
             print(f"Stopped Damru worker {index}; container kept")
             return 0
         if args.action == "delete":
@@ -3285,8 +3324,7 @@ def _ui_worker(args: argparse.Namespace) -> int:
         if args.action == "stop-all":
             indices = await _existing_indices()
             for index in indices:
-                name = f"{config.REDROID_CONTAINER_PREFIX}{index}"
-                await manager._run_cmd(manager._docker_cmd("stop", name), timeout=30, allow_failure=True)
+                await manager.pause_container(index)
             print("Stopped all Damru worker containers; containers kept")
             return 0
         if args.action == "delete-all":

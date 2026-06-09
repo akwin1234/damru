@@ -340,10 +340,10 @@ Damru ships `magisk.apk` as a package asset and uses it only when raw/unbaked Re
 
 ## First-Time User Deployment Guide (WSL2 / Linux)
 
-Damru uses **Redroid** (Android in Docker) to spin up headless mobile devices. Follow this step-by-step guide to deploy Damru from scratch on the tested Ubuntu paths: native Ubuntu VPS/Linux, or Ubuntu inside WSL2 with Damru's bundled WSL kernel.
+Damru uses **Redroid** Android workers to spin up headless mobile devices. The default and primary runtime is Docker Engine. Experimental `ctr`/containerd worker launch is available for scale testing with `DAMRU_CONTAINER_RUNTIME=containerd`; it mirrors Damru's Docker launch flags, binderfs mount, host networking, PID-shift wrapper, ADB root, and DNS repair. Follow this step-by-step guide to deploy Damru from scratch on the tested Ubuntu paths: native Ubuntu VPS/Linux, or Ubuntu inside WSL2 with Damru's bundled WSL kernel.
 
 > [!IMPORTANT]
-> Redroid is Linux-only. On Windows, Docker and Redroid must run inside WSL2; native Windows Docker is not a supported Redroid target.
+> Redroid is Linux-only. On Windows, Docker/containerd and Redroid must run inside WSL2; native Windows Docker is not a supported Redroid target.
 >
 > Current supported/tested host paths are **Ubuntu native Linux** and **Ubuntu WSL2 with Damru's bundled custom WSL kernel**. We did not patch or replace the kernel on the native Ubuntu VPS; it worked with the provider's normal Ubuntu kernel. Debian 13 VPS kernels tested so far ship with `CONFIG_ANDROID_BINDERFS` disabled, so they are not supported for Redroid multi-container pools.
 
@@ -363,6 +363,17 @@ Damru runs one full Android container per worker. The default Redroid worker lim
 | **WSL2 recommended host** | 4+ vCPU | 8-16 GB RAM | 40+ GB free in WSL disk | WSL stores Docker layers inside the distro virtual disk unless you move Docker data-root. |
 
 For large pools, start with `max_devices=1`, run `python -m damru check-env`, then increase workers gradually. Redroid is CPU and disk-I/O heavy during boot; too many workers on a small VPS will look like browser instability.
+
+### Experimental containerd runtime
+
+Docker remains the supported default. For scale testing, Damru can launch Redroid workers directly through `ctr`/containerd:
+
+```bash
+DAMRU_CONTAINER_RUNTIME=containerd python -m damru check preflight
+DAMRU_CONTAINER_RUNTIME=containerd python -m damru ui-worker start --count 2
+```
+
+On WSL2, Damru uses Docker's embedded containerd socket by default (`/var/run/docker/containerd/containerd.sock`, namespace `moby`). On native Linux, set `DAMRU_CONTAINERD_ADDRESS` and `DAMRU_CONTAINERD_NAMESPACE` when using a standalone containerd service. Do not launch Redroid with raw `ctr` commands by hand unless you reproduce Damru's privileged flag, `/dev/binderfs` mount, host networking, PID-shift init wrapper, unique ADB port remap, `adb root`, DNS repair, and normal Damru profile setup. Missing any of those pieces can leave obvious Redroid/Android/browser leaks.
 
 `DamruPool(max_devices > 1, mode="auto")` requires real binderfs support, not only `/dev/binder`, `/dev/hwbinder`, and `/dev/vndbinder` device nodes. If the kernel has `CONFIG_ANDROID_BINDERFS` disabled, one Redroid container may boot while a second container appears in ADB but fails Android userspace (`zygote`, `system_server`, WebView/CDP). Current Damru checks this before starting a multi-worker pool and tells the user to run `max_devices=1` or boot a binderfs-enabled kernel.
 

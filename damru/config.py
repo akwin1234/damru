@@ -63,6 +63,11 @@ MUMU_PHONE_MODEL = None
 MUMU_PHONE_MIIT = None
 
 # Redroid Container Settings
+# Runtime backend for auto Redroid workers: "docker" (default) or "containerd".
+# containerd support is experimental and uses ctr with host networking.
+REDROID_RUNTIME = os.environ.get("DAMRU_CONTAINER_RUNTIME", "docker").strip().lower()
+CONTAINERD_ADDRESS = os.environ.get("DAMRU_CONTAINERD_ADDRESS", "").strip()
+CONTAINERD_NAMESPACE = os.environ.get("DAMRU_CONTAINERD_NAMESPACE", "").strip()
 REDROID_IMAGE = "damru-redroid:latest"
 # Upstream base image, pulled automatically when the baked image is absent
 # (see RedroidManager.ensure_image).

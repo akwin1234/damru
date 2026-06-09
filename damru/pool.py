@@ -269,10 +269,10 @@ class DamruPool:
         If the container already has that version, skip install.
         If it has a different version, uninstall + install the new one.
         """
-        from .docker import RedroidManager
+        from .runtime import create_redroid_manager
 
         count = self._max_devices or 3
-        self._docker = RedroidManager(wsl_distro=self._wsl_distro)
+        self._docker = create_redroid_manager(wsl_distro=self._wsl_distro)
 
         await self._docker.check_docker()
         await self._docker.validate_redroid_multi_container_support(count)
