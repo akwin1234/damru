@@ -46,6 +46,15 @@ class FakeRootOps:
     async def apply_cpu_cores_spoof(self, target_cores: int) -> None:
         self.calls.append(("root.cpu", target_cores))
 
+    async def apply_gpu_binary_spoof(self, device) -> None:
+        self.calls.append(("root.gpu", device.name, device.webgl_renderer))
+
+    async def apply_memory_spoof(self, target_gb: float) -> None:
+        self.calls.append(("root.memory", target_gb))
+
+    async def setup_memory_preload(self, chrome_package: str) -> None:
+        self.calls.append(("root.memory_preload", chrome_package))
+
     async def apply_webrtc_block(self, chrome_package: str) -> None:
         self.calls.append(("root.webrtc", chrome_package))
 
@@ -53,10 +62,10 @@ class FakeRootOps:
 class FakeChromeManager:
     calls: list[tuple] = []
 
-    def __init__(self, adb: FakeADB):
+    def __init__(self, adb: FakeADB, package: str | None = None):
         self.adb = adb
-        self.package = "com.android.chrome"
-        self.calls.append(("chrome.init", adb.serial))
+        self.package = package or "com.android.chrome"
+        self.calls.append(("chrome.init", adb.serial, self.package))
 
     async def detect_package(self, retries: int = 30, delay: float = 2.0) -> str:
         self.calls.append(("chrome.detect", retries, delay))
@@ -111,6 +120,9 @@ async def test_force_device_profile_applies_named_profile() -> None:
     assert ("root.props", "Xiaomi Redmi 9A", True, True) in FakeRootOps.calls
     assert ("root.version", "11") in FakeRootOps.calls
     assert ("root.cpu", 8) in FakeRootOps.calls
+    assert any(call[:2] == ("root.gpu", "Xiaomi Redmi 9A") for call in FakeRootOps.calls)
+    assert ("root.memory", 2) in FakeRootOps.calls
+    assert ("root.memory_preload", "com.android.chrome") in FakeRootOps.calls
     assert any(call[0] == "chrome.flags" for call in FakeChromeManager.calls)
     assert ("chrome.prefs", "pt-BR", "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7") in FakeChromeManager.calls
     shell_commands = [call[1] for call in FakeADB.calls if call[0] == "adb.shell"]
@@ -137,12 +149,32 @@ async def test_force_device_profile_can_skip_chrome_and_cpu() -> None:
     assert result.chrome_note == "chrome=skipped"
     assert not FakeChromeManager.calls
     assert not any(call[0] == "root.cpu" for call in FakeRootOps.calls)
+    assert any(call[0] == "root.gpu" for call in FakeRootOps.calls)
+    assert not any(call[0] == "root.memory" for call in FakeRootOps.calls)
     shell_commands = [call[1] for call in FakeADB.calls if call[0] == "adb.shell"]
     assert "settings put global http_proxy :0" in shell_commands
     assert "settings delete global global_http_proxy_host" in shell_commands
     assert "settings delete global global_http_proxy_port" in shell_commands
     assert "wm size 1080x1920" in shell_commands
     assert "wm density 480" in shell_commands
+
+
+@pytest.mark.unit
+async def test_force_device_profile_can_harden_webview_shell() -> None:
+    result = await profile_apply.force_device_profile(
+        "127.0.0.1:5600",
+        "xiaomi_redmi_9a",
+        timezone="America/Sao_Paulo",
+        locale="pt-BR",
+        browser_package="org.chromium.webview_shell",
+        clear_chrome=False,
+    )
+
+    assert result.chrome_package == "org.chromium.webview_shell"
+    assert result.chrome_note == "org.chromium.webview_shell=148.0.7778.217"
+    assert ("chrome.init", "127.0.0.1:5600", "org.chromium.webview_shell") in FakeChromeManager.calls
+    assert ("chrome.prefs", "pt-BR", "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7") in FakeChromeManager.calls
+    assert ("root.memory_preload", "org.chromium.webview_shell") in FakeRootOps.calls
 
 
 @pytest.mark.unit
@@ -180,6 +212,8 @@ def test_force_profile_cli_wires_named_profile(monkeypatch: pytest.MonkeyPatch, 
             no_clear_chrome=False,
             rotate_chrome=False,
             no_cpu=True,
+            no_gpu=False,
+            no_memory=False,
             clear_proxy=True,
         )
     )
@@ -189,5 +223,7 @@ def test_force_profile_cli_wires_named_profile(monkeypatch: pytest.MonkeyPatch, 
     assert called["device_name"] == "xiaomi_redmi_9a"
     assert called["configure_chrome"] is False
     assert called["apply_cpu"] is False
+    assert called["apply_gpu"] is True
+    assert called["apply_memory"] is True
     assert called["clear_proxy"] is True
     assert "Forced profile applied on 127.0.0.1:5600" in capsys.readouterr().out

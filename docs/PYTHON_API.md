@@ -173,6 +173,7 @@ To force a specific profile onto an already-running rooted worker without openin
 python -m damru force-profile --serial 127.0.0.1:5600 --device pixel_8_pro
 python -m damru force-profile --serial 127.0.0.1:5600 --device "Xiaomi POCO F5"
 python -m damru force-profile --serial 127.0.0.1:5600 --device xiaomi_redmi_9a --no-chrome --clear-proxy
+python -m damru force-profile --serial 127.0.0.1:5600 --device xiaomi_redmi_9a --browser-package org.chromium.webview_shell --locale pt-BR --timezone America/Sao_Paulo
 ```
 
 ```python
@@ -187,7 +188,7 @@ result = await force_device_profile(
 print(result.description)
 ```
 
-`force-profile` applies Android props, release string, timezone, locale, display size/density, CPU core spoofing, and Chrome command-line/preferences by default. Locale writes include modern `persist.sys.locale`/`system_locales` plus legacy `persist.sys.language` and `persist.sys.country`, so Android Chrome/WebView-family processes do not keep a stale `en-US` language. Pass `--no-chrome` or `configure_chrome=False` only for non-Chrome harnesses that cannot use Chrome preferences, and `--clear-proxy` or `clear_proxy=True` when a debug run should not inherit the worker's current Android HTTP proxy. GPU spoofing, memory preload, and CDP overrides remain part of full Damru sessions because they are package/runtime specific.
+`force-profile` applies Android props, release string, timezone, locale, display size/density, CPU core spoofing, native Vulkan GPU spoofing, memory preload, and Chromium command-line/preferences by default. Locale writes include modern `persist.sys.locale`/`system_locales` plus legacy `persist.sys.language` and `persist.sys.country`, so Android Chrome/WebView-family processes do not keep a stale `en-US` language. Pass `--browser-package org.chromium.webview_shell` for WebView Shell harnesses; Damru will write `/data/local/tmp/webview-command-line` and `app_webview/pref_store` instead of Chrome's command-line/preferences. Pass `--no-chrome` or `configure_chrome=False` only for harnesses that cannot use Chromium preferences, `--no-gpu` / `--no-memory` for native-layer isolation tests, and `--clear-proxy` or `clear_proxy=True` when a debug run should not inherit the worker's current Android HTTP proxy. CDP overrides remain part of the runtime harness because they are active-page specific.
 
 ---
 

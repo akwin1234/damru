@@ -2299,9 +2299,12 @@ def _force_profile(args: argparse.Namespace) -> int:
             timezone=getattr(args, "timezone", None),
             locale=getattr(args, "locale", None),
             configure_chrome=not getattr(args, "no_chrome", False),
+            browser_package=getattr(args, "browser_package", "com.android.chrome"),
             clear_chrome=not getattr(args, "no_clear_chrome", False),
             rotate_chrome=getattr(args, "rotate_chrome", False),
             apply_cpu=not getattr(args, "no_cpu", False),
+            apply_gpu=not getattr(args, "no_gpu", False),
+            apply_memory=not getattr(args, "no_memory", False),
             clear_proxy=getattr(args, "clear_proxy", False),
         )
 
@@ -3042,10 +3045,17 @@ def build_parser() -> argparse.ArgumentParser:
     force_profile.add_argument("--http-proxy", default=None, help="explicit Android HTTP proxy host:port or URL")
     force_profile.add_argument("--timezone", default=None, help="explicit IANA timezone, e.g. America/Sao_Paulo")
     force_profile.add_argument("--locale", default=None, help="explicit BCP-47 locale, e.g. pt-BR")
+    force_profile.add_argument(
+        "--browser-package",
+        default="com.android.chrome",
+        help="Chromium package to harden; use org.chromium.webview_shell for WebView Shell",
+    )
     force_profile.add_argument("--no-chrome", action="store_true", help="skip Chrome command-line/preferences setup")
     force_profile.add_argument("--no-clear-chrome", action="store_true", help="keep existing Chrome data")
     force_profile.add_argument("--rotate-chrome", action="store_true", help="rotate Chrome from the validated APK bundle")
     force_profile.add_argument("--no-cpu", action="store_true", help="skip CPU core spoofing")
+    force_profile.add_argument("--no-gpu", action="store_true", help="skip native Vulkan GPU spoofing")
+    force_profile.add_argument("--no-memory", action="store_true", help="skip native memory preload spoofing")
     force_profile.add_argument("--clear-proxy", action="store_true", help="clear Android system HTTP proxy instead of preserving it")
     force_profile.set_defaults(func=_force_profile)
 

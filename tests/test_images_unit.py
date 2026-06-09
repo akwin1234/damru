@@ -80,3 +80,18 @@ async def test_ensure_image_other_missing_pull_failure_raises():
     mgr = _manager(fake)
     with pytest.raises(DamruError):
         await mgr.ensure_image("alpine:latest")
+
+
+def test_target_chrome_version_from_split_apk_dir(tmp_path):
+    bundle = tmp_path / "148.0.7778.217"
+    bundle.mkdir()
+    (bundle / "base.apk").write_text("")
+
+    assert RedroidManager()._target_chrome_version_from_apk_path(str(bundle)) == "148.0.7778.217"
+
+
+def test_target_chrome_version_is_none_for_single_apk(tmp_path):
+    apk = tmp_path / "chrome.apk"
+    apk.write_text("")
+
+    assert RedroidManager()._target_chrome_version_from_apk_path(str(apk)) is None

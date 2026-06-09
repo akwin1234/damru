@@ -21,6 +21,9 @@ CHROME_PACKAGES = [
     "com.chrome.canary",
     "org.chromium.chrome",
 ]
+WEBVIEW_SHELL_PACKAGES = {
+    "org.chromium.webview_shell",
+}
 
 
 class ChromeError(Exception):
@@ -40,9 +43,19 @@ class ChromeManager:
         Retries because package manager may not be fully initialised immediately
         after a fresh Android boot (pm list packages returns empty too early).
         """
+        explicit_package = self.package if self.package not in CHROME_PACKAGES else None
         for attempt in range(max(1, retries)):
             out = await self.adb.shell("pm list packages", allow_failure=True)
             installed = set(line.replace("package:", "").strip() for line in out.splitlines())
+            if explicit_package:
+                if explicit_package in installed:
+                    return explicit_package
+                if attempt < retries - 1:
+                    logger.debug("Package %s not ready (attempt %d/%d), waiting %.0fs...",
+                                 explicit_package, attempt + 1, retries, delay)
+                    await sleep(delay)
+                    continue
+                raise ChromeError(f"Browser package not found on device: {explicit_package}")
             for pkg in CHROME_PACKAGES:
                 if pkg in installed:
                     self.package = pkg
@@ -52,6 +65,22 @@ class ChromeManager:
                 logger.debug("Package manager not ready (attempt %d/%d), waiting %.0fs…", attempt + 1, retries, delay)
                 await sleep(delay)
         raise ChromeError("No Chrome browser found on device. Install Chrome first.")
+
+    def _is_webview_shell(self) -> bool:
+        return self.package in WEBVIEW_SHELL_PACKAGES
+
+    def _command_line_path(self) -> str:
+        if self._is_webview_shell():
+            return "/data/local/tmp/webview-command-line"
+        return "/data/local/tmp/chrome-command-line"
+
+    def _command_line_argv0(self) -> str:
+        return "webview" if self._is_webview_shell() else "chrome"
+
+    def _preferences_path(self) -> str:
+        if self._is_webview_shell():
+            return f"/data/data/{self.package}/app_webview/pref_store"
+        return f"/data/data/{self.package}/app_chrome/Default/Preferences"
 
     async def get_version(self) -> str:
         """Get installed Chrome version string."""
@@ -68,7 +97,7 @@ class ChromeManager:
         await sleep(0.3)
 
     async def write_command_line(self, flags: List[str]) -> None:
-        """Write Chrome command-line flags to /data/local/tmp/chrome-command-line.
+        """Write Chromium command-line flags for Chrome or WebView Shell.
 
         Chrome reads this file on startup. Format: first token is ignored (argv[0]),
         rest are flags. Must force-stop and relaunch for flags to take effect.
@@ -101,19 +130,19 @@ class ChromeManager:
         if disable_features:
             final_flags.append(f"--disable-features={','.join(disable_features)}")
 
-        # Android Chrome expects argv[0] to look like a browser binary name.
+        # Android Chromium expects argv[0] to look like a browser binary name.
         # Some builds tolerate any placeholder, but Chrome 145 on Redroid only
         # honored remote debugging when this token was `chrome`.
-        cmd_line = "chrome " + " ".join(final_flags)
+        cmd_line = self._command_line_argv0() + " " + " ".join(final_flags)
 
         # Write via printf to avoid shell quoting issues with echo
         # Escape special chars for shell
         safe_line = cmd_line.replace("\\", "\\\\").replace('"', '\\"').replace("$", "\\$").replace("`", "\\`")
         await self.adb.shell_root(
-            f'printf "%s" "{safe_line}" > /data/local/tmp/chrome-command-line'
+            f'printf "%s" "{safe_line}" > {self._command_line_path()}'
         )
-        await self.adb.shell_root("chmod 644 /data/local/tmp/chrome-command-line")
-        logger.debug("Chrome command-line: %s", cmd_line[:200])
+        await self.adb.shell_root(f"chmod 644 {self._command_line_path()}")
+        logger.debug("Chromium command-line for %s: %s", self.package, cmd_line[:200])
 
     async def launch(self, url: str = "about:blank", startup_delay: float = 4.0) -> None:
         """Launch Chrome via am start.
@@ -353,7 +382,7 @@ class ChromeManager:
         After targeted_cleanup (warm start), it persists.
         Uses su 0 because /data/data/<pkg>/ is not accessible to shell user.
         """
-        prefs_path = f"/data/data/{self.package}/app_chrome/Default/Preferences"
+        prefs_path = self._preferences_path()
         out = await self.adb.shell(
             f"su 0 test -f {prefs_path} && echo OK",
             timeout=5, allow_failure=True,
@@ -362,7 +391,7 @@ class ChromeManager:
 
     async def clear_command_line(self) -> None:
         """Remove the Chrome command-line flags file."""
-        await self.adb.shell_root("rm -f /data/local/tmp/chrome-command-line")
+        await self.adb.shell_root(f"rm -f {self._command_line_path()}")
 
     async def patch_preferences(self, locale: str, accept_lang: str) -> None:
         """Patch Chrome's Preferences file for stealth operation.
@@ -382,7 +411,7 @@ class ChromeManager:
             locale: BCP-47 locale (e.g. "en-PH")
             accept_lang: Accept-Language value (e.g. "en-PH,en-US;q=0.9,en;q=0.8")
         """
-        prefs_path = f"/data/data/{self.package}/app_chrome/Default/Preferences"
+        prefs_path = self._preferences_path()
 
         # Read current preferences (or create minimal if not yet existing)
         # Must use root — /data/data/<pkg>/ is mode 700 owned by Chrome's UID,
@@ -514,4 +543,4 @@ class ChromeManager:
         await self.adb.shell_root(f"chmod 600 {prefs_path}")
         await self.adb.shell_root(f"rm -f {tmp}")
 
-        logger.info("Chrome language patched: %s → %s", locale, selected)
+        logger.info("%s language patched: %s → %s", self.package, locale, selected)

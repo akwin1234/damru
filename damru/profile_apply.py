@@ -100,18 +100,21 @@ async def force_device_profile(
     timezone: str | None = None,
     locale: str | None = None,
     configure_chrome: bool = True,
+    browser_package: str = "com.android.chrome",
     clear_chrome: bool = True,
     rotate_chrome: bool = False,
     apply_cpu: bool = True,
+    apply_gpu: bool = True,
+    apply_memory: bool = True,
     clear_proxy: bool = False,
 ) -> AppliedDeviceProfile:
     """Force a named Damru profile onto an existing rooted ADB worker.
 
     This is the deterministic counterpart to the CLI random-profile action.
     It applies Android identity props, release string, timezone, locale,
-    display size/density, optional CPU core spoofing, and optional Chrome
-    command-line/preference setup. GPU, memory preload, and CDP overrides still
-    belong to full Damru sessions because they are package/runtime specific.
+    display size/density, optional native GPU/memory/CPU spoofing, and optional
+    Chromium command-line/preference setup. CDP overrides still belong to the
+    runtime harness because they are target/page specific.
     """
     if clear_proxy and (proxy or http_proxy):
         raise ValueError("clear_proxy cannot be combined with proxy or http_proxy.")
@@ -146,13 +149,22 @@ async def force_device_profile(
         root.apply_cpu_cores_spoof(device.hardware_concurrency) if apply_cpu else _noop(),
     )
 
+    if apply_gpu:
+        await root.apply_gpu_binary_spoof(device)
+
+    if rotate_chrome and browser_package != "com.android.chrome":
+        raise ValueError("rotate_chrome is only supported for com.android.chrome.")
+
     chrome_package: str | None = None
     chrome_version: str | None = None
     chrome_note = "chrome=skipped"
     if configure_chrome:
-        chrome = ChromeManager(adb)
+        chrome = ChromeManager(adb, package=browser_package)
         await chrome.detect_package(retries=8, delay=1.0)
         chrome_package = chrome.package
+        if apply_memory:
+            await root.apply_memory_spoof(device.device_memory)
+            await root.setup_memory_preload(chrome.package)
         await chrome.force_stop()
         if rotate_chrome:
             chrome_version = await _maybe_rotate_chrome(serial, chrome)
@@ -162,7 +174,8 @@ async def force_device_profile(
                 await chrome.clear_all_data()
         else:
             chrome_version = await chrome.get_version()
-            chrome_note = f"chrome={chrome_version or 'kept'}"
+            label = "chrome" if chrome.package == "com.android.chrome" else chrome.package
+            chrome_note = f"{label}={chrome_version or 'kept'}"
             if clear_chrome:
                 await chrome.clear_all_data()
         accept_lang = build_accept_language(profile.locale)
