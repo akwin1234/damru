@@ -12,7 +12,7 @@ This file is the current automation checklist. Older notes in this repo may ment
 | Dependencies | `install-deps` installs Linux/WSL packages, Docker, ADB, binderfs tools, and applies Damru's Playwright patch. |
 | Baked image | `install-image` loads or downloads `damru-redroid:latest` when available. |
 | Raw APK assets | `install-apks --download` downloads/extracts Chrome/WebView/TTS/resetprop assets to `/home/damru/chrome-apks`. |
-| Chrome rotation | Random profile actions can rotate between 19 validated Chrome APK versions when the bundle exists. |
+| Chrome rotation | Random profile actions rotate through Chrome APK folders only when that folder also includes a matching WebView APK. |
 | Preflight | `check preflight` is fast, read-only, JSON-capable, and suitable for deployment scripts. |
 | Deep environment check | `check-env` performs slower setup validation and optional viewer checks. |
 | WSL repair | `fix-wsl` repairs safe Docker, binderfs, iptables, DNS, and WSL networking cases. |

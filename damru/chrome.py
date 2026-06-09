@@ -22,6 +22,8 @@ CHROME_PACKAGES = [
     "org.chromium.chrome",
 ]
 
+WEBVIEW_SHELL_PACKAGE = "org.chromium.webview_shell"
+
 
 class ChromeError(Exception):
     """Chrome operation failed."""
@@ -114,6 +116,30 @@ class ChromeManager:
         )
         await self.adb.shell_root("chmod 644 /data/local/tmp/chrome-command-line")
         logger.debug("Chrome command-line: %s", cmd_line[:200])
+
+    async def write_webview_command_line(self, flags: List[str], user_agent: Optional[str] = None) -> None:
+        """Write Android WebView command-line flags for WebView Shell."""
+        final_flags: List[str] = []
+        for flag in flags:
+            flag = flag.strip()
+            if not flag:
+                continue
+            if flag.startswith("--remote-debugging-socket-name="):
+                continue
+            final_flags.append(flag)
+
+        if user_agent and not any(f.startswith("--user-agent=") for f in final_flags):
+            final_flags.append(f"--user-agent={user_agent}")
+        if not any(f.startswith("--remote-allow-origins=") for f in final_flags):
+            final_flags.append("--remote-allow-origins=*")
+
+        cmd_line = "webview " + " ".join(final_flags)
+        safe_line = cmd_line.replace("\\", "\\\\").replace('"', '\\"').replace("$", "\\$").replace("`", "\\`")
+        await self.adb.shell_root(
+            f'printf "%s" "{safe_line}" > /data/local/tmp/webview-command-line'
+        )
+        await self.adb.shell_root("chmod 644 /data/local/tmp/webview-command-line")
+        logger.debug("WebView command-line: %s", cmd_line[:200])
 
     async def launch(self, url: str = "about:blank", startup_delay: float = 4.0) -> None:
         """Launch Chrome via am start.
@@ -515,3 +541,65 @@ class ChromeManager:
         await self.adb.shell_root(f"rm -f {tmp}")
 
         logger.info("Chrome language patched: %s → %s", locale, selected)
+
+    async def patch_webview_preferences(
+        self,
+        locale: str,
+        accept_lang: str,
+        package: str = WEBVIEW_SHELL_PACKAGE,
+    ) -> None:
+        """Patch WebView Shell's app_webview/pref_store without JS hooks."""
+        prefs_path = f"/data/data/{package}/app_webview/pref_store"
+        raw = await self.adb.shell(
+            f"su 0 cat {prefs_path}", timeout=10, allow_failure=True,
+        )
+        if not raw or raw.startswith("cat:") or "No such file" in raw or "Permission denied" in raw:
+            prefs_dir = prefs_path.rsplit("/", 1)[0]
+            await self.adb.shell_root(f"mkdir -p {prefs_dir}")
+            prefs = {}
+        else:
+            try:
+                prefs = json.loads(raw)
+            except json.JSONDecodeError:
+                logger.warning("WebView pref_store is not valid JSON, starting fresh")
+                prefs = {}
+
+        langs = [part.split(";")[0].strip() for part in accept_lang.split(",")]
+        selected = ",".join(langs)
+        prefs.setdefault("intl", {})["selected_languages"] = selected
+        prefs.setdefault("webrtc", {})["ip_handling_policy"] = "default_public_interface_only"
+        prefs.setdefault("dns_prefetching", {})["enabled"] = False
+        prefs.setdefault("net", {})["network_prediction_options"] = 2
+        prefs.setdefault("safebrowsing", {})["enabled"] = False
+        prefs.setdefault("alternate_error_pages", {})["enabled"] = False
+        prefs.setdefault("background_sync", {})["enabled"] = False
+        prefs.setdefault("dns_over_https", {})["mode"] = "off"
+
+        patched_json = json.dumps(prefs, separators=(",", ":"))
+        tmp = "/data/local/tmp/damru_webview_prefs.json"
+        local_tmp = None
+        fd, local_tmp = tempfile.mkstemp(prefix="damru_webview_prefs_", suffix=".json")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
+                f.write(patched_json)
+            await self.adb.push(local_tmp, tmp)
+        finally:
+            if local_tmp and os.path.exists(local_tmp):
+                try:
+                    os.remove(local_tmp)
+                except OSError:
+                    pass
+
+        owner = await self.adb.shell(
+            f"su 0 stat -c '%U:%G' /data/data/{package}", timeout=5, allow_failure=True,
+        )
+        await self.adb.shell_root(f"cp {tmp} {prefs_path}")
+        if owner and ":" in owner and "stat:" not in owner:
+            await self.adb.shell_root(f"chown {owner.strip()} {prefs_path}")
+        await self.adb.shell_root(f"chmod 600 {prefs_path}")
+        await self.adb.shell_root(f"rm -f {tmp}")
+        logger.info("WebView language patched: %s -> %s", locale, selected)
+
+    async def webview_shell_installed(self, package: str = WEBVIEW_SHELL_PACKAGE) -> bool:
+        out = await self.adb.shell(f"pm list packages {package}", timeout=8, allow_failure=True)
+        return f"package:{package}" in out

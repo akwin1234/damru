@@ -120,9 +120,9 @@ The individual site proof pass used a fixed Pixel 8 Pro Android 14 profile for r
 
 ## APK Rotation Validation
 
-The local APK matrix validated 19 Chrome split-APK folders from `143.0.7499.52` through `148.0.7778.217`. Each folder was tested for Trichrome/Chrome split installation, exact `versionName`, `quick-check`, explicit Chrome launch, PID alive, DNS ping, and a CDP JavaScript probe covering UA, memory, cores, timezone, languages, and WebGL API availability.
+The current local APK matrix keeps only Chrome split-APK folders with a matching per-version Android WebView APK in automatic rotation. Matched folders are tested for Chrome install, WebView provider parity, exact `versionName`, `quick-check`, explicit Chrome launch, PID alive, DNS ping, and a CDP JavaScript probe covering UA, memory, cores, timezone, languages, and WebGL API availability. Chrome-only folders without a matching WebView APK are skipped by random rotation and rejected by explicit `--chrome-version` selection so Chrome and WebView cannot silently drift apart.
 
-Representative full spoof probes passed for Chrome `146.0.7680.177`, `147.0.7727.138`, and `148.0.7778.217`, including Android UA version matching, `navigator.webdriver == false`, `navigator.deviceMemory == 8`, `navigator.hardwareConcurrency == 8`, proxy timezone/language application, GPU spoofing, TTS warm-up, and normal page load.
+Representative full spoof probes passed for matched Chrome/WebView versions `143.0.7499.52`, `146.0.7680.31`, `147.0.7727.101`, and `148.0.7778.178`, including Android UA version matching, active WebView provider matching, `navigator.webdriver == false`, `navigator.deviceMemory == 8`, `navigator.hardwareConcurrency == 8`, proxy timezone/language application, GPU spoofing, TTS warm-up, and normal page load.
 
 Chrome 149 APKs are not included yet because tested public bundles were missing the required English/x86/x86_64 split layout.
 

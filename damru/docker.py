@@ -29,7 +29,7 @@ from pathlib import PureWindowsPath
 from typing import List, Optional
 
 from .async_core import DamruError
-from .apk_assets import candidate_apk_bundle_roots, find_bundle_apk
+from .apk_assets import candidate_apk_bundle_roots, find_matching_webview_apk
 from .config import (
     CONTAINER_BOOT_TIMEOUT,
     DOCKER_CMD_TIMEOUT,
@@ -448,7 +448,8 @@ class RedroidManager:
         err = stderr.decode("utf-8", errors="replace").strip()
 
         if proc.returncode != 0 and not allow_failure:
-            raise DamruError(f"Command failed: {' '.join(cmd)}\n{err}")
+            detail = '\n'.join(part for part in (out, err) if part)
+            raise DamruError(f"Command failed: {' '.join(cmd)}\n{detail}")
 
         return out
 
@@ -1307,6 +1308,61 @@ chmod 755 "$target"
         if out.strip() != "device":
             raise DamruError(f"Redroid ADB did not become online on {serial}: {out.strip() or '<no output>'}")
 
+
+    def _container_name_port_for_serial(self, serial: str) -> tuple[str, int] | None:
+        plain = self._plain_serial(serial)
+        try:
+            port = int(plain.rsplit(':', 1)[1])
+        except Exception:
+            return None
+        index = port - REDROID_BASE_PORT
+        if index < 0:
+            return None
+        return f'{REDROID_CONTAINER_PREFIX}{index}', port
+
+    async def _replace_system_webview_apk(self, serial: str, webview_apk: Path) -> None:
+        target = self._container_name_port_for_serial(serial)
+        if target is None:
+            raise DamruError(
+                'System WebView replacement requires a Damru Redroid worker serial such as 127.0.0.1:5600.'
+            )
+        name, port = target
+        src = self._to_wsl_path(str(webview_apk.resolve())) if self._is_windows else str(webview_apk.resolve())
+        await self._run_cmd(
+            self._docker_cmd('cp', src, f'{name}:/system/product/app/webview/webview.apk'),
+            timeout=APK_INSTALL_TIMEOUT,
+        )
+        await self._run_cmd(
+            self._docker_cmd(
+                'exec', name, 'sh', '-lc',
+                'chown root:root /system/product/app/webview/webview.apk; '
+                'chmod 0644 /system/product/app/webview/webview.apk; '
+                'rm -rf /system/product/app/webview/oat /data/dalvik-cache/*/system@product@app@webview@webview.apk@* 2>/dev/null || true',
+            ),
+            timeout=30,
+            allow_failure=True,
+        )
+        port_map = await self._run_cmd(
+            self._docker_cmd('inspect', '-f', '{{json .NetworkSettings.Ports}}', name),
+            timeout=10,
+            allow_failure=True,
+        )
+        await self._run_cmd(self._docker_cmd('restart', name), timeout=60)
+        await asyncio.sleep(8)
+        if '5555/tcp' in port_map:
+            await self._run_cmd(
+                self._docker_cmd('exec', name, 'sh', '-lc', 'setprop service.adb.tcp.port 5555; setprop ctl.restart adbd'),
+                timeout=10,
+                allow_failure=True,
+            )
+            await asyncio.sleep(3)
+            plain = self._plain_serial(serial)
+            await self._run_cmd(self._adb_cmd('disconnect', plain), timeout=5, allow_failure=True)
+            await self._run_cmd(self._adb_cmd('connect', plain), timeout=10, allow_failure=True)
+        else:
+            await self._remap_adbd_port(name, port)
+        await self._wait_for_package_service(serial)
+
     async def install_chrome(self, serial: str, apk_path: str) -> None:
         """Install Chrome on a container via ADB.
 
@@ -1322,27 +1378,42 @@ chmod 755 "$target"
         p = Path(apk_path)
         logger.info("Installing Chrome on %s from %s...", serial, apk_path)
         await self._wait_for_package_service(serial)
-
         if p.is_dir():
             all_apks = sorted(p.glob("*.apk"))
             if not all_apks:
                 raise DamruError(f"No .apk files in directory: {apk_path}")
 
-            webview = find_bundle_apk("TrichromeWebView.apk", apk_path)
-            if webview is not None:
-                logger.info("Installing TrichromeWebView on %s...", serial)
-                await self._run_cmd(
-                    self._adb_cmd("install", "-r", str(webview), serial=serial),
-                    timeout=APK_INSTALL_TIMEOUT,
-                    allow_failure=True,
+            matching_webview = find_matching_webview_apk(p, apk_path)
+            if matching_webview is None:
+                raise DamruError(
+                    f'Matching WebView APK missing for Chrome {p.name}. '
+                    f'Place webview.apk or TrichromeWebView.apk inside {p} so Chrome/WebView stay version-aligned.'
                 )
+            vanadium_library = None
+            for library_name in (
+                'vanadium_trichrome_library.apk',
+                'TrichromeLibrary.apk',
+                'app_vanadium_trichromelibrary.apk',
+            ):
+                candidate = p / library_name
+                if candidate.exists():
+                    vanadium_library = candidate
+                    break
+            if vanadium_library is not None:
+                logger.info('Installing matching WebView TrichromeLibrary on %s...', serial)
+                await self._run_cmd(
+                    self._adb_cmd('install', '-r', '-d', str(vanadium_library), serial=serial),
+                    timeout=APK_INSTALL_TIMEOUT,
+                )
+            logger.info('Replacing system WebView on %s from %s...', serial, matching_webview)
+            await self._replace_system_webview_apk(serial, matching_webview)
 
             # Install TrichromeLibrary first if present (Chrome needs it)
             trichrome = p / "google_trichrome_library.apk"
             if trichrome.exists():
                 logger.info("Installing TrichromeLibrary on %s...", serial)
                 await self._run_cmd(
-                    self._adb_cmd("install", "-r", str(trichrome), serial=serial),
+                    self._adb_cmd("install", "-r", "-d", str(trichrome), serial=serial),
                     timeout=APK_INSTALL_TIMEOUT,
                 )
 
@@ -1350,15 +1421,28 @@ chmod 755 "$target"
             chrome_apks = [
                 a for a in all_apks
                 if "trichrome" not in a.name.lower()
+                and "webview" not in a.name.lower()
+                and not a.name.lower().startswith("webview")
             ]
             if not chrome_apks:
                 raise DamruError(f"No Chrome APKs found in: {apk_path}")
 
             await self._install_split_via_push(serial, chrome_apks)
+            installed_chrome = await self.get_installed_chrome_version(serial)
+            installed_webview = await self.get_installed_webview_version(serial)
+            provider = await self.get_current_webview_provider(serial)
+            if installed_chrome and installed_webview:
+                if not self._chrome_webview_versions_match(installed_chrome, installed_webview):
+                    provider_detail = provider or 'unknown'
+                    raise DamruError(
+                        f'Chrome/WebView version mismatch after install: '
+                        f'Chrome {installed_chrome}, WebView {installed_webview}. '
+                        f'Use a matching WebView APK for {p.name}. Provider: {provider_detail}'
+                    )
             logger.info("Chrome installed on %s (%d split APKs)", serial, len(chrome_apks))
         else:
             await self._run_cmd(
-                self._adb_cmd("install", "-r", str(p), serial=serial),
+                self._adb_cmd("install", "-r", "-d", str(p), serial=serial),
                 timeout=APK_INSTALL_TIMEOUT,
             )
             logger.info("Chrome installed on %s", serial)
@@ -1406,7 +1490,7 @@ chmod 755 "$target"
         # Create pm install session
         out = await self._run_cmd(
             self._adb_cmd(
-                "shell", "pm", "install-create", "-r", "-S", str(total_size),
+                "shell", "pm", "install-create", "-r", "-d", "-S", str(total_size),
                 serial=serial,
             ),
             timeout=30,
@@ -1524,6 +1608,41 @@ chmod 755 "$target"
                 return line.split("=", 1)[1].strip()
         return None
 
+    async def get_installed_webview_version(self, serial: str) -> Optional[str]:
+        '''Get installed Android WebView provider version, when present.'''
+        out = await self._run_cmd(
+            self._adb_cmd('shell', 'dumpsys', 'package', 'com.android.webview', serial=serial),
+            timeout=10,
+            allow_failure=True,
+        )
+        if not out or 'Unable to find package' in out:
+            return None
+        for line in out.splitlines():
+            line = line.strip()
+            if line.startswith('versionName='):
+                return line.split('=', 1)[1].strip()
+        return None
+
+    async def get_current_webview_provider(self, serial: str) -> Optional[str]:
+        '''Return the active WebView provider package/version summary.'''
+        out = await self._run_cmd(
+            self._adb_cmd('shell', 'dumpsys', 'webviewupdate', serial=serial),
+            timeout=10,
+            allow_failure=True,
+        )
+        for line in out.splitlines():
+            text = line.strip()
+            if text.startswith('Current WebView package'):
+                return text
+        return None
+
+    @staticmethod
+    def _chrome_webview_versions_match(chrome_version: str, webview_version: str) -> bool:
+        '''Chrome uses x.y.z.n; WebView builds may append .0 after the same base version.'''
+        chrome = chrome_version.strip()
+        webview = webview_version.strip()
+        return webview == chrome or webview.startswith(f'{chrome}.')
+
     async def uninstall_chrome(self, serial: str) -> None:
         """Uninstall Chrome and TrichromeLibrary from a container."""
         for pkg in [
@@ -1584,9 +1703,16 @@ chmod 755 "$target"
                     return str(apk_root.resolve())
                 continue
 
+            matched_versions = [v for v in versions if find_matching_webview_apk(v, str(apk_root)) is not None]
+
             if version:
                 for v in versions:
                     if v.name == version:
+                        if v not in matched_versions:
+                            raise DamruError(
+                                f"Chrome version {version} is missing a matching WebView APK. "
+                                f"Place webview.apk or TrichromeWebView.apk inside {v}."
+                            )
                         logger.info("Chrome APK: v%s", v.name)
                         return str(v.resolve())
                 raise DamruError(
@@ -1594,9 +1720,13 @@ chmod 755 "$target"
                     f"Available: {[v.name for v in versions]}"
                 )
 
-            auto_versions = [v for v in versions if v.name not in _CHROME_APK_AUTO_SKIP_VERSIONS]
+            auto_versions = [v for v in matched_versions if v.name not in _CHROME_APK_AUTO_SKIP_VERSIONS]
             if not auto_versions:
-                auto_versions = versions
+                missing = [v.name for v in versions if v not in matched_versions]
+                raise DamruError(
+                    "No Chrome APK version has a matching WebView APK. "
+                    f"Missing matching WebView for: {missing}"
+                )
 
             picked = _random.choice(auto_versions)
             logger.info(

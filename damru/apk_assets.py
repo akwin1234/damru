@@ -5,6 +5,13 @@ from pathlib import Path
 from typing import Optional
 from importlib import resources
 
+_WEBVIEW_APK_NAMES = (
+    'TrichromeWebView.apk',
+    'AndroidSystemWebView.apk',
+    'WebView.apk',
+    'webview.apk',
+)
+
 
 def _package_root() -> Path:
     return Path(__file__).resolve().parent
@@ -97,6 +104,22 @@ def find_bundle_apk(name: str, explicit_chrome_apk: Optional[str] = None) -> Opt
     return None
 
 
+def find_matching_webview_apk(version_dir: str | Path, explicit_chrome_apk: Optional[str] = None) -> Optional[Path]:
+    '''Find a WebView APK that belongs to the same Chrome version directory.'''
+    p = Path(version_dir)
+    if not p.is_dir():
+        return None
+    lowered = {name.lower() for name in _WEBVIEW_APK_NAMES}
+    for name in _WEBVIEW_APK_NAMES:
+        direct = p / name
+        if direct.is_file():
+            return direct.resolve()
+    for apk in p.glob('*.apk'):
+        apk_name = apk.name.lower()
+        if apk_name in lowered or 'webview' in apk_name:
+            return apk.resolve()
+    return None
+
 def find_any_bundle_apk(names: list[str], explicit_chrome_apk: Optional[str] = None) -> Optional[Path]:
     """Find the first available APK from a list of acceptable names."""
     for name in names:
@@ -124,7 +147,6 @@ def validate_apk_bundle(root: Path) -> tuple[bool, str]:
         return False, f"no APK files found under {root}"
 
     required = [
-        "TrichromeWebView.apk",
         "google_tts.apk",
         "espeak.apk",
         "rhvoice.apk",
@@ -136,5 +158,24 @@ def validate_apk_bundle(root: Path) -> tuple[bool, str]:
 
     if not chrome_dirs:
         return False, f"missing Chrome split-APK version directory under {root}"
+
+    matched_webview = [
+        chrome_dir.name
+        for chrome_dir in chrome_dirs
+        if find_matching_webview_apk(chrome_dir, str(root)) is not None
+    ]
+    missing_webview = [chrome_dir.name for chrome_dir in chrome_dirs if chrome_dir.name not in matched_webview]
+    if not matched_webview:
+        return False, (
+            'missing matching WebView APK in Chrome version directories: '
+            + ', '.join(missing_webview)
+            + f' in {root}'
+        )
+
+    if missing_webview:
+        return True, (
+            f'{root.resolve()} ({len(matched_webview)} Chrome/WebView matched; '
+            f'skipping Chrome-only directories: {", ".join(missing_webview)})'
+        )
 
     return True, str(root)

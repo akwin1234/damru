@@ -31,13 +31,13 @@ python -m damru quick-check --serial 127.0.0.1:5600
 The APK installer extracts to `/home/damru/chrome-apks` by default and validates:
 
 - Chrome split-APK version folders
-- `TrichromeWebView.apk`
+- Matching per-version `webview.apk` or `TrichromeWebView.apk` for folders used by Chrome rotation
 - `google_tts.apk`
 - `espeak.apk`
 - `rhvoice.apk`
 - Damru's packaged `magisk.apk` when raw Redroid needs a local `resetprop` source
 
-The current APK bundle contains 19 validated Chrome versions from `143.0.7499.52` through `148.0.7778.217`. Random profile actions can rotate Chrome versions when this bundle exists.
+Random profile actions rotate only through Chrome version folders with a matching WebView APK. Folders without a matching WebView asset are skipped so Chrome and Android WebView do not drift apart.
 
 ## Readiness Checks
 

@@ -2196,6 +2196,7 @@ def _random_profile(args: argparse.Namespace) -> int:
                 profile_tier=getattr(args, "profile_tier", "premium"),
                 proxy=getattr(args, "proxy", None),
                 http_proxy=getattr(args, "http_proxy", None),
+                chrome_version=getattr(args, "chrome_version", None),
             ))
             ok = ok and code == 0
         return 0 if ok else 1
@@ -2238,18 +2239,29 @@ def _random_profile(args: argparse.Namespace) -> int:
         chrome_note = ""
         docker = RedroidManager()
         current_chrome = await docker.get_installed_chrome_version(serial)
+        installed_chrome = current_chrome
+        desired_chrome_version = getattr(args, "chrome_version", None)
         try:
-            apk_path = docker.find_chrome_apk(None)
+            apk_path = docker.find_chrome_apk(None, version=desired_chrome_version)
         except Exception:
+            if desired_chrome_version:
+                raise
             apk_path = None
             chrome_note = "; chrome=kept (APK rotation unavailable)"
         if apk_path:
             for _ in range(8):
+                if desired_chrome_version:
+                    break
                 candidate = docker.find_chrome_apk(None)
                 if Path(candidate).name != current_chrome:
                     apk_path = candidate
                     break
-            await docker.uninstall_chrome(serial)
+            from .apk_assets import find_matching_webview_apk
+
+            if Path(apk_path).is_dir() and find_matching_webview_apk(apk_path, apk_path) is None:
+                raise RuntimeError(
+                    f"Matching WebView APK missing for Chrome {Path(apk_path).name}; current Chrome was kept."
+                )
             await docker.install_chrome(serial, apk_path)
             installed_chrome = await docker.get_installed_chrome_version(serial)
             await chrome.detect_package(retries=8, delay=1.0)
@@ -2266,8 +2278,22 @@ def _random_profile(args: argparse.Namespace) -> int:
         accept_lang = build_accept_language(profile.locale)
         await chrome.write_command_line(profile.chrome_flags)
         await chrome.patch_preferences(profile.locale, accept_lang)
+        from .chrome import WEBVIEW_SHELL_PACKAGE
+        from .profile_apply import _build_webview_user_agent
+
+        if await chrome.webview_shell_installed(WEBVIEW_SHELL_PACKAGE):
+            await adb.shell(f"am force-stop {WEBVIEW_SHELL_PACKAGE}", allow_failure=True)
+            await root.setup_memory_preload(WEBVIEW_SHELL_PACKAGE)
+            await chrome.write_webview_command_line(
+                profile.chrome_flags,
+                user_agent=_build_webview_user_agent(device, installed_chrome or current_chrome),
+            )
+            await chrome.patch_webview_preferences(profile.locale, accept_lang, WEBVIEW_SHELL_PACKAGE)
         if applied_proxy:
-            await root.apply_webrtc_block(chrome.package)
+            await asyncio.gather(
+                root.apply_webrtc_block(chrome.package),
+                root.apply_webrtc_block(WEBVIEW_SHELL_PACKAGE),
+            )
         await chrome.force_stop()
         proxy_note = f"; proxy={applied_proxy}" if applied_proxy else ""
         return f"{profile.description}; {profile.screen_width}x{profile.screen_height}@{profile.density_dpi}; tz={profile.timezone}; locale={profile.locale}{proxy_note}{chrome_note}"
@@ -2301,6 +2327,7 @@ def _force_profile(args: argparse.Namespace) -> int:
             configure_chrome=not getattr(args, "no_chrome", False),
             clear_chrome=not getattr(args, "no_clear_chrome", False),
             rotate_chrome=getattr(args, "rotate_chrome", False),
+            chrome_version=getattr(args, "chrome_version", None),
             apply_cpu=not getattr(args, "no_cpu", False),
             clear_proxy=getattr(args, "clear_proxy", False),
         )
@@ -3033,6 +3060,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     random_profile.add_argument("--proxy", default=None, help="proxy URL used for geo/timezone/locale and Android HTTP proxy")
     random_profile.add_argument("--http-proxy", default=None, help="explicit Android HTTP proxy host:port or URL")
+    random_profile.add_argument("--chrome-version", default=None, help="force a Chrome/WebView APK version from chrome-apks/<version>; default is random")
     random_profile.set_defaults(func=_random_profile)
 
     force_profile = sub.add_parser("force-profile", help="apply a named stealth profile to an ADB worker")
@@ -3045,6 +3073,7 @@ def build_parser() -> argparse.ArgumentParser:
     force_profile.add_argument("--no-chrome", action="store_true", help="skip Chrome command-line/preferences setup")
     force_profile.add_argument("--no-clear-chrome", action="store_true", help="keep existing Chrome data")
     force_profile.add_argument("--rotate-chrome", action="store_true", help="rotate Chrome from the validated APK bundle")
+    force_profile.add_argument("--chrome-version", default=None, help="use a specific Chrome/WebView APK version with --rotate-chrome")
     force_profile.add_argument("--no-cpu", action="store_true", help="skip CPU core spoofing")
     force_profile.add_argument("--clear-proxy", action="store_true", help="clear Android system HTTP proxy instead of preserving it")
     force_profile.set_defaults(func=_force_profile)

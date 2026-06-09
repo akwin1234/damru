@@ -8,7 +8,7 @@ from typing import Optional
 import asyncio
 
 from .adb import ADB
-from .chrome import ChromeManager
+from .chrome import WEBVIEW_SHELL_PACKAGE, ChromeManager
 from .devices import get_device
 from .profiles import build_profile
 from .proxy import build_accept_language
@@ -72,23 +72,60 @@ async def _clear_android_proxy(adb: ADB) -> None:
     )
 
 
-async def _maybe_rotate_chrome(serial: str, chrome: ChromeManager) -> str:
+async def _maybe_rotate_chrome(serial: str, chrome: ChromeManager, version: str | None = None) -> str:
     from .docker import RedroidManager
 
     docker = RedroidManager()
     current = await docker.get_installed_chrome_version(serial)
-    apk_path = docker.find_chrome_apk(None)
-    if current:
+    apk_path = docker.find_chrome_apk(None, version=version)
+    if current and version is None:
         for _ in range(8):
             candidate = docker.find_chrome_apk(None)
             if Path(candidate).name != current:
                 apk_path = candidate
                 break
-    await docker.uninstall_chrome(serial)
+    from .apk_assets import find_matching_webview_apk
+
+    if Path(apk_path).is_dir() and find_matching_webview_apk(apk_path, apk_path) is None:
+        raise RuntimeError(
+            f"Matching WebView APK missing for Chrome {Path(apk_path).name}; current Chrome was kept."
+        )
     await docker.install_chrome(serial, apk_path)
     await chrome.detect_package(retries=8, delay=1.0)
     installed = await docker.get_installed_chrome_version(serial)
     return installed or Path(apk_path).name
+
+def _build_webview_user_agent(device, chrome_version: str | None) -> str:
+    chrome_ver = chrome_version or "145.0.0.0"
+    return (
+        f"Mozilla/5.0 (Linux; Android {device.android_version}; {device.model} Build/{device.build_id}; wv) "
+        f"AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 "
+        f"Chrome/{chrome_ver} Mobile Safari/537.36"
+    )
+
+async def _configure_webview_shell(
+    adb: ADB,
+    root: RootOps,
+    chrome: ChromeManager,
+    device,
+    chrome_flags: list[str],
+    chrome_version: str | None,
+    locale: str,
+    accept_lang: str,
+) -> None:
+    if not hasattr(chrome, "webview_shell_installed"):
+        return
+    if not await chrome.webview_shell_installed(WEBVIEW_SHELL_PACKAGE):
+        return
+    await adb.shell(f"am force-stop {WEBVIEW_SHELL_PACKAGE}", allow_failure=True)
+    await root.setup_memory_preload(WEBVIEW_SHELL_PACKAGE)
+    await asyncio.gather(
+        chrome.write_webview_command_line(
+            chrome_flags,
+            user_agent=_build_webview_user_agent(device, chrome_version),
+        ),
+        chrome.patch_webview_preferences(locale, accept_lang, WEBVIEW_SHELL_PACKAGE),
+    )
 
 
 async def force_device_profile(
@@ -102,6 +139,7 @@ async def force_device_profile(
     configure_chrome: bool = True,
     clear_chrome: bool = True,
     rotate_chrome: bool = False,
+    chrome_version: str | None = None,
     apply_cpu: bool = True,
     clear_proxy: bool = False,
 ) -> AppliedDeviceProfile:
@@ -155,7 +193,7 @@ async def force_device_profile(
         chrome_package = chrome.package
         await chrome.force_stop()
         if rotate_chrome:
-            chrome_version = await _maybe_rotate_chrome(serial, chrome)
+            chrome_version = await _maybe_rotate_chrome(serial, chrome, version=chrome_version)
             chrome_note = f"chrome={chrome_version}"
             await chrome.force_stop()
             if clear_chrome:
@@ -170,8 +208,21 @@ async def force_device_profile(
             chrome.write_command_line(profile.chrome_flags),
             chrome.patch_preferences(profile.locale, accept_lang),
         )
+        await _configure_webview_shell(
+            adb,
+            root,
+            chrome,
+            device,
+            profile.chrome_flags,
+            chrome_version,
+            profile.locale,
+            accept_lang,
+        )
         if profile.android_http_proxy:
-            await root.apply_webrtc_block(chrome.package)
+            await asyncio.gather(
+                root.apply_webrtc_block(chrome.package),
+                root.apply_webrtc_block(WEBVIEW_SHELL_PACKAGE),
+            )
         await chrome.force_stop()
 
     return AppliedDeviceProfile(

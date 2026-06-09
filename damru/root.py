@@ -278,11 +278,21 @@ class RootOps:
         """
         # Use double quotes to handle values with spaces
         escaped_value = value.replace('"', '\\"')
-        if key.startswith("ro."):
-            resetprop = await self._ensure_resetprop()
-            await self.adb.shell_root(f'{resetprop} {key} "{escaped_value}"')
-        else:
-            await self.adb.shell_root(f'setprop {key} "{escaped_value}"')
+        last_error: Exception | None = None
+        for attempt in range(3):
+            try:
+                if key.startswith("ro."):
+                    resetprop = await self._ensure_resetprop()
+                    await self.adb.shell_root(f'{resetprop} {key} "{escaped_value}"')
+                else:
+                    await self.adb.shell_root(f'setprop {key} "{escaped_value}"')
+                return
+            except Exception as exc:
+                last_error = exc
+                if attempt < 2:
+                    await asyncio.sleep(0.15 * (attempt + 1))
+        if last_error:
+            raise last_error
 
     async def get_prop(self, key: str) -> str:
         """Get current value of a system property."""

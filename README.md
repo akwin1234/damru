@@ -276,24 +276,23 @@ python -m damru install-apks --download
 
 `install-apks` downloads the APK asset bundle, extracts to `/home/damru/chrome-apks` on Linux/WSL by default, validates the top-level support APKs and Chrome split APK folders, and updates `CHROME_APK` only when needed. `install-deps` and `setup` also run this automatically when no baked image and no local APKs are available.
 
-Extract/copy the bundle so one bundle root contains this layout. The bundle is not only Chrome; it also includes Trichrome WebView and TTS voice APKs. Damru ships `magisk.apk` and copies it into this bundle automatically when raw/unbaked Redroid needs a local `resetprop` source:
+Extract/copy the bundle so one bundle root contains this layout. The bundle is not only Chrome; it also includes per-version WebView APKs and TTS voice APKs. Damru ships `magisk.apk` and copies it into this bundle automatically when raw/unbaked Redroid needs a local `resetprop` source:
 
 ```text
 chrome-apks/
-  143.0.7499.52/
-  144.0.7559.132/
-  145.0.7632.75/
-  146.0.7680.31/
-  ...
-  148.0.7778.217/
-  TrichromeWebView.apk
-  espeak.apk
+  148.0.7778.178/
+    base.apk
+    split_chrome.apk
+    google_trichrome_library.apk
+    webview.apk
+    vanadium_trichrome_library.apk
   google_tts.apk
+  espeak.apk
   rhvoice.apk
   magisk.apk
 ```
 
-The current bundle contains 19 validated Chrome split-APK versions from `143.0.7499.52` through `148.0.7778.217`. Random profile actions can rotate Chrome to another validated installed version when the bundle is present. Damru intentionally skips APKMirror bundles that are not compatible with the required English/x86/x86_64 split layout; no Chrome 149 bundle is included yet for that reason.
+Chrome rotation only uses version folders that include a matching `webview.apk` or `TrichromeWebView.apk`. This prevents the old failure mode where Chrome updated to a new version while Android WebView stayed on the baked system version. Version folders without a matching WebView asset are kept for manual work but skipped by random rotation and reported by preflight.
 
 Manual Linux/WSL extraction, from the directory where you downloaded the bundle:
 
@@ -313,7 +312,7 @@ python -m damru check-env
 python -m damru bake-image --image damru-redroid:latest
 ```
 
-Damru auto-searches `/home/damru/chrome-apks`, package-local `chrome-apks/`, the current directory's `chrome-apks/`, and the parent directory's `chrome-apks/`. From that one bundle root it discovers Chrome split APK folders, `TrichromeWebView.apk`, `google_tts.apk`, `espeak.apk`, `rhvoice.apk`, and `magisk.apk`. If automatic detection fails, keep the full `chrome-apks/` bundle together and point config/code at a specific Chrome split-APK version directory:
+Damru auto-searches `/home/damru/chrome-apks`, package-local `chrome-apks/`, the current directory's `chrome-apks/`, and the parent directory's `chrome-apks/`. From that one bundle root it discovers Chrome split APK folders, per-version WebView APKs, `google_tts.apk`, `espeak.apk`, `rhvoice.apk`, and `magisk.apk`. If automatic detection fails, keep the full `chrome-apks/` bundle together and point config/code at a specific Chrome split-APK version directory:
 
 ```python
 CHROME_APK = "/home/damru/chrome-apks/145.0.7632.75"
@@ -729,7 +728,7 @@ Damru uses a centralized configuration file located at `damru/config.py`. If you
    # CHROME_APK = "/mnt/c/path/to/damru/chrome-apks/145.0.7632.75"
    ```
 
-   When `CHROME_APK = None` and the bundle exists, random profile actions can also rotate to another validated Chrome APK version so the Chrome major/minor version follows the selected profile instead of staying fixed forever.
+   When `CHROME_APK = None` and the bundle exists, random profile actions can also rotate to another validated Chrome/WebView-matched APK version so the Chrome major/minor version follows the selected profile instead of staying fixed forever.
 
 3. **Pool Settings (`NUM_DEVICES` & `MODE`)**:
    ```python
