@@ -126,6 +126,7 @@ External benchmark proof: [docs/BROWSERS_BENCHMARK_REPORT.md](docs/BROWSERS_BENC
 - **Adapter code:** [scripts/run_browsers_benchmark_damru.py](scripts/run_browsers_benchmark_damru.py).
 - **Targets passed:** Google Search, Cloudflare, DataDome, Amazon, Ticketmaster/Imperva, Akamai, PerimeterX/HUMAN, Kasada, and Reddit.
 - **Browser data:** CreepJS completed without benchmark error, WebRTC candidate IP stayed blank by design, and IP check completed through the configured residential proxy.
+- **BrowserScan note:** 100% BrowserScan results require IP timezone and browser timezone to match. Damru does this automatically when a proxy is supplied; no-proxy local tests can score lower if the host public IP country does not match the selected profile timezone.
 - **Manual reCAPTCHA proof:** Damru UI antcpt checks returned **reCAPTCHA v3 score 0.9** in both direct and proxy modes; publish screenshots only after redacting the visible IP.
 
 #### Screenshot Proof Gallery
