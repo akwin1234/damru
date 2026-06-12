@@ -1043,6 +1043,43 @@ Damru is built on the shoulders of giants. We would like to credit the following
 
 ---
 
+
+
+### Example 5: Using DamruPool for Multi-Device Automation
+
+```python
+import asyncio
+from damru import DamruPool
+
+async def main():
+    # Pool manages N workers (default: NUM_DEVICES from config, or up to 10)
+    # Each session gets a fresh random fingerprint with full stealth
+    proxy = "socks5://user:pass@residential-proxy.com:1080"
+    async with DamruPool(max_devices=2) as pool:
+        # session() yields a Playwright BrowserContext with full stealth applied
+        async with pool.session() as ctx:
+            page = await ctx.new_page()
+            await page.goto("https://example.com")
+            print(await page.title())
+
+        # Or use the convenience wrapper for one-shot navigation:
+        title = await pool.open_url("127.0.0.1:5600", "https://shopee.com.br/", proxy=proxy)
+        print(f"Title: {title}")
+
+asyncio.run(main())
+```
+
+### Changelog (v0.1.0-beta → v1.2)
+
+- **WebView version matching**: Relaxed to match on first 3 version segments (x.y.z) allowing minor build skew between Chrome and WebView APKs
+- **APK version selection**: `_preferred_chrome_apk_version_dir` now prefers Chrome versions that have a matching `webview.apk` in their directory
+- **Image download**: `install-image --download` now accepts direct HTTPS URLs in addition to Google Drive links
+- **Bake image cleanup**: Pre-commit cleanup removes temp APKs, dalvik-cache, logs, etc. reducing baked image size
+- **WSL serial compatibility**: `wsl:` serial prefix is automatically stripped on Linux hosts
+- **Sensor HAL bake**: Missing AIDL compiler no longer breaks `bake-image` — sensor HAL install is skipped gracefully
+- **Worker default cap**: Raised from 3 to 10 when NUM_DEVICES is unset
+- **Pool API**: Added `open_url()` convenience method for one-shot stealth navigation
+
 ## License & Fork Policy
 
 Damru is distributed under the **PolyForm Noncommercial License 1.0.0**. Personal, educational, and noncommercial research use is allowed. Commercial use, hosted services, paid automation, paid scraping, paid botting, managed traffic operations, and SaaS use require a separate written commercial license. Commercial licenses are available; to buy or request one, contact `contact@damru.dev`.

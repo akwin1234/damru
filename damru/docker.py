@@ -2238,10 +2238,18 @@ chmod 755 "$target"
 
     @staticmethod
     def _chrome_webview_versions_match(chrome_version: str, webview_version: str) -> bool:
-        '''Chrome uses x.y.z.n; WebView builds may append .0 after the same base version.'''
+        '''Chrome uses x.y.z.n; WebView builds may append .0 after the same base version.
+        Match on first 3 version segments (x.y.z) to allow minor build skew.'''
         chrome = chrome_version.strip()
         webview = webview_version.strip()
-        return webview == chrome or webview.startswith(f'{chrome}.')
+        if webview == chrome or webview.startswith(f'{chrome}.'):
+            return True
+        # Allow minor build skew: match on first 3 segments
+        c_parts = chrome.split('.')
+        w_parts = webview.split('.')
+        if len(c_parts) >= 3 and len(w_parts) >= 3:
+            return c_parts[:3] == w_parts[:3]
+        return False
 
     def _target_chrome_version_from_apk_path(self, apk_path: str) -> Optional[str]:
         """Return the bundle version when apk_path points at chrome-apks/<version>."""
@@ -2445,15 +2453,18 @@ chmod 755 "$target"
         await self._wait_for_boot(serial, name=temp_name, timeout=CONTAINER_BOOT_TIMEOUT)
 
         if (os.environ.get("DAMRU_ENABLE_NATIVE_SENSOR_HAL", "1") == "1" or os.environ.get("DAMRU_EXPERIMENTAL_SENSOR_HAL", "1") == "1") and not await self._sensor_hal_present(serial):
-            logger.info("Installing native sensor HAL into baked image")
-            await self._install_aidl_sensor_hal(temp_name, serial)
-            logger.info("Restarting %s to activate native sensor HAL", temp_name)
-            await self._run_cmd(self._docker_cmd("restart", temp_name), timeout=60)
-            await asyncio.sleep(8)
-            await self._run_cmd(self._adb_cmd("disconnect", serial), timeout=5, allow_failure=True)
-            await self._run_cmd(self._adb_cmd("connect", serial), timeout=10, allow_failure=True)
-            await self._wait_for_boot(serial, name=temp_name, timeout=CONTAINER_BOOT_TIMEOUT)
-            await self._wait_for_package_service(serial, timeout=90)
+            try:
+                logger.info("Installing native sensor HAL into baked image")
+                await self._install_aidl_sensor_hal(temp_name, serial)
+                logger.info("Restarting %s to activate native sensor HAL", temp_name)
+                await self._run_cmd(self._docker_cmd("restart", temp_name), timeout=60)
+                await asyncio.sleep(8)
+                await self._run_cmd(self._adb_cmd("disconnect", serial), timeout=5, allow_failure=True)
+                await self._run_cmd(self._adb_cmd("connect", serial), timeout=10, allow_failure=True)
+                await self._wait_for_boot(serial, name=temp_name, timeout=CONTAINER_BOOT_TIMEOUT)
+                await self._wait_for_package_service(serial, timeout=90)
+            except Exception as _sensor_err:
+                logger.warning("Native sensor HAL install failed (AIDL or NDK missing), continuing without it: %s", _sensor_err)
 
         try:
             adb = ADB(serial=serial)
@@ -2652,6 +2663,26 @@ chmod 755 "$target"
             await adb.shell("am force-stop com.android.chrome", allow_failure=True)
             await adb.shell("am force-stop org.chromium.webview_shell", allow_failure=True)
             await asyncio.sleep(1)
+
+            # Pre-commit cleanup: trim /data cache, temp files, logs to reduce image size
+            logger.info("Cleaning up temp files in container before commit...")
+            for clean_cmd in [
+                "rm -rf /data/local/tmp/*.apk /data/local/tmp/*.zip /data/local/tmp/*.tar* 2>/dev/null; true",
+                "rm -rf /data/dalvik-cache/arm64/* 2>/dev/null; true",
+                "rm -rf /data/resource-cache/* 2>/dev/null; true",
+                "rm -rf /data/system/package_cache/* 2>/dev/null; true",
+                "rm -rf /data/anr/* 2>/dev/null; true",
+                "rm -rf /data/backup/* 2>/dev/null; true",
+                "rm -rf /data/cache/* 2>/dev/null; true",
+                "rm -rf /data/tombstones/* 2>/dev/null; true",
+                "rm -rf /data/vendor/wifi/* 2>/dev/null; true",
+                "logcat -c 2>/dev/null; true",
+                "pm trim-caches 999999999 2>/dev/null; true",
+            ]:
+                try:
+                    await adb.shell_root(clean_cmd, timeout=10)
+                except Exception:
+                    pass
 
             # Step 13: docker commit → custom image
             logger.info("Committing image as %s (this may take a minute)...", image_name)

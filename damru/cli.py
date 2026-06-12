@@ -267,6 +267,9 @@ def _adb_devices_text() -> str:
 
 def _resolve_serial(serial: str | None) -> str | None:
     if serial:
+        # Strip wsl: prefix on non-WSL platforms; keep it on Windows/WSL
+        if serial.startswith("wsl:") and sys.platform != "win32":
+            serial = serial[4:]
         return serial
     for line in _adb_devices_text().splitlines()[1:]:
         parts = line.split()
@@ -1993,7 +1996,7 @@ def _install_image(args: argparse.Namespace) -> int:
         target = Path(args.output or (Path.cwd() / _DAMRU_IMAGE_TAR)).expanduser().resolve()
         print(f"Downloading baked image to {target}")
         try:
-            _download_google_drive_file(args.url, target)
+            _download_file(args.url, target)
         except Exception as exc:
             print(f"Image download failed: {exc}", file=sys.stderr)
             print(f"Manual download URL: {args.url}", file=sys.stderr)
@@ -2054,7 +2057,14 @@ def _preferred_chrome_apk_version_dir(version_dirs: list[Path]) -> Path | None:
     if not version_dirs:
         return None
     compatible = [p for p in version_dirs if p.name not in _CHROME_APK_AUTO_SKIP_VERSIONS]
-    return (compatible or version_dirs)[-1]
+    candidates = compatible or version_dirs
+    # Prefer the latest version that has a matching webview.apk inside
+    _WEBVIEW_NAMES = {'webview.apk', 'trichromewebview.apk'}
+    with_webview = [
+        p for p in candidates
+        if any(apk.name.lower() in _WEBVIEW_NAMES for apk in p.glob('*.apk'))
+    ]
+    return (with_webview or candidates)[-1]
 
 def _ensure_shipped_magisk_in_bundle(root: Path) -> None:
     """Copy Damru's shipped Magisk APK into an extracted APK bundle if missing."""

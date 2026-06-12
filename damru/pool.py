@@ -273,7 +273,7 @@ class DamruPool:
         """
         from .docker import RedroidManager
 
-        count = self._max_devices or 3
+        count = self._max_devices or 10
         self._docker = RedroidManager(wsl_distro=self._wsl_distro)
 
         await self._docker.check_docker()
@@ -586,6 +586,31 @@ class DamruPool:
         return await asyncio.gather(*[_run(item) for item in items])
 
     # -- Slot management --
+    async def open_url(self, serial: str, url: str, proxy: str | None = None, mode: str = "playwright", **kwargs) -> str:
+        """Open a URL on a device with full stealth fingerprint.
+        
+        Convenience wrapper around stealth-open-url logic.
+        Uses AsyncDamru for a single shot navigation.
+        
+        Args:
+            serial: ADB device serial
+            url: http:// or https:// URL
+            proxy: SOCKS/HTTP proxy URL
+            mode: navigation mode (playwright, cdp, reattach, native)
+            **kwargs: passed to AsyncDamru constructor
+        """
+        from .async_core import AsyncDamru
+        async with AsyncDamru(serial=serial, proxy=proxy, **kwargs) as ctx:
+            if mode == "playwright":
+                page = await ctx.new_page()
+                await page.goto(url, wait_until="domcontentloaded")
+                return page.title()
+            else:
+                # Fallback: navigate via CDP
+                page = ctx.pages[0] if ctx.pages else await ctx.new_page()
+                await page.goto(url, wait_until="domcontentloaded")
+                return page.title()
+
 
     async def _acquire_slot(self) -> DeviceSlot:
         """Wait for and return a free healthy slot."""

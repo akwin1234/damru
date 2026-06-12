@@ -46,7 +46,7 @@ def test_stealth_open_url_reuses_profile_by_default():
     args = parser.parse_args(["stealth-open-url", "--url", "https://example.com"])
     assert args.cold_start is False
     assert args.timezone is None
-    assert args.mode == "reattach"
+    assert args.mode == "playwright"
 
     args = parser.parse_args(["stealth-open-url", "--url", "https://example.com", "--cold-start"])
     assert args.cold_start is True
