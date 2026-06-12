@@ -37,6 +37,7 @@ class ChromeManager:
     def __init__(self, adb: ADB, package: Optional[str] = None):
         self.adb = adb
         self.package = package or "com.android.chrome"
+        self._package_detected = package is not None
         self.devtools_socket_name = "chrome_devtools_remote"
 
     async def detect_package(self, retries: int = 30, delay: float = 2.0) -> str:
@@ -51,6 +52,7 @@ class ChromeManager:
             installed = set(line.replace("package:", "").strip() for line in out.splitlines())
             if explicit_package:
                 if explicit_package in installed:
+                    self._package_detected = True
                     return explicit_package
                 if attempt < retries - 1:
                     logger.debug("Package %s not ready (attempt %d/%d), waiting %.0fs...",
@@ -61,10 +63,11 @@ class ChromeManager:
             for pkg in CHROME_PACKAGES:
                 if pkg in installed:
                     self.package = pkg
+                    self._package_detected = True
                     return pkg
             if attempt < retries - 1:
-                # Package manager not ready yet — wait and retry
-                logger.debug("Package manager not ready (attempt %d/%d), waiting %.0fs…", attempt + 1, retries, delay)
+                # Package manager not ready yet â€” wait and retry
+                logger.debug("Package manager not ready (attempt %d/%d), waiting %.0fsâ€¦", attempt + 1, retries, delay)
                 await sleep(delay)
         raise ChromeError("No Chrome browser found on device. Install Chrome first.")
 
@@ -176,7 +179,8 @@ class ChromeManager:
         fresh profile data and render the FRE screen (~4s).
         On warm reuse (no pm clear), Chrome starts faster (~2s).
         """
-        package = await self.detect_package(retries=30, delay=2.0)
+        package = self.package if self._package_detected else await self.detect_package(retries=30, delay=2.0)
+        await self._wait_for_android_services(timeout=90.0)
         if self._is_webview_shell():
             activities = [".WebViewBrowserActivity"]
         else:
@@ -187,22 +191,36 @@ class ChromeManager:
             ]
         last_error = ""
         launched = False
+        launched_activity = ""
+        launched_output = ""
         for launch_probe in range(4):
             for activity_name in activities:
                 activity = f"{package}/{activity_name}"
-                out = await self.adb.shell(
-                    f"am start -W --activity-clear-top -n {activity} -a android.intent.action.VIEW -d {url}",
-                    allow_failure=True,
-                )
+                try:
+                    out = await self.adb.shell(
+                        f"am start -W --activity-clear-top -n {activity} -a android.intent.action.VIEW -d {url}",
+                        timeout=20,
+                    )
+                except Exception as exc:
+                    last_error = str(exc)
+                    continue
                 failed = (
+                    not out.strip()
+                    or
+                    ("Status: ok" not in out and "Complete" not in out)
+                    or
                     "Error:" in out
                     or "Error type" in out
                     or "Exception" in out
+                    or "Can't find service" in out
+                    or "not found; no service started" in out
                     or "does not exist" in out
                     or "not found" in out.lower()
                 )
                 if not failed:
                     launched = True
+                    launched_activity = activity
+                    launched_output = out.strip()
                     break
                 last_error = out.strip() or last_error
             if launched:
@@ -213,26 +231,60 @@ class ChromeManager:
             raise ChromeError(f"Chrome launch failed for {package}: {last_error or '<no output>'}")
         await sleep(startup_delay)
         focus = ""
-        for _ in range(12):
-            focus = await self.adb.shell(
-                "dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'; "
-                "dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' | head",
+        for focus_probe in range(2):
+            for _ in range(12):
+                focus = await self.adb.shell(
+                    "dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'; "
+                    "dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' | head",
+                    allow_failure=True,
+                )
+                if package in focus:
+                    return
+                await sleep(1.0)
+            if focus_probe == 0 and launched_activity:
+                logger.info("Chrome not focused after launch; retrying VIEW intent")
+                await self.adb.shell(
+                    f"am start -W --activity-clear-top -n {launched_activity} -a android.intent.action.VIEW -d {url}",
+                    allow_failure=True,
+                )
+                await sleep(2.0)
+
+        logger.warning(
+            "Chrome launch focus not confirmed for %s; continuing to DevTools socket check. Android focus output: %s",
+            package,
+            focus.strip() or "<empty>",
+        )
+        logger.warning("Chrome launch command output: %s", launched_output[:800] or "<empty>")
+
+    async def _wait_for_android_services(self, timeout: float = 60.0) -> None:
+        """Wait for ActivityManager/PackageManager after SF/zygote restarts."""
+        import time
+
+        start = time.monotonic()
+        last = ""
+        while time.monotonic() - start < timeout:
+            out = await self.adb.shell(
+                "service check activity; service check package; service check activity_task",
+                timeout=8,
                 allow_failure=True,
             )
-            if package in focus:
-                break
-            await sleep(1.0)
-        else:
-            raise ChromeError(
-                f"Chrome launch did not focus {package}. Android focus output: {focus.strip() or '<empty>'}"
-            )
+            last = out.strip()
+            if out.count("found") >= 3:
+                pm = await self.adb.shell(f"pm path {self.package} | head -1", timeout=8, allow_failure=True)
+                if "base.apk" in pm:
+                    return
+            await sleep(2.0)
+        logger.warning(
+            "Android services not fully ready before browser launch: %s",
+            last or "<empty>",
+        )
 
     async def dismiss_fre(self, max_attempts: int = 8) -> bool:
         """Dismiss Chrome First Run Experience using uiautomator.
 
         Chrome 145 FRE flow on redroid/Android 14:
-          Screen 1: "Welcome to Chrome" → signin_fre_continue_button ("Continue")
-          Screen 2: "Chrome notifications" → negative_button ("No thanks")
+          Screen 1: "Welcome to Chrome" â†’ signin_fre_continue_button ("Continue")
+          Screen 2: "Chrome notifications" â†’ negative_button ("No thanks")
           Then devtools socket appears.
 
         After pm clear, Chrome may take several seconds to render FRE,
@@ -262,7 +314,7 @@ class ChromeManager:
 
             # Check if we're past FRE (main browser UI visible)
             if "compositor_view_holder" in xml and "fre_pager" not in xml:
-                logger.info("FRE complete — main browser UI detected (attempt %d)", attempt + 1)
+                logger.info("FRE complete â€” main browser UI detected (attempt %d)", attempt + 1)
                 return True
 
             # Try each FRE button in priority order
@@ -270,7 +322,7 @@ class ChromeManager:
             for btn_id in _FRE_BUTTONS:
                 if btn_id not in xml:
                     continue
-                # Match button with bounds — handle both attribute orders
+                # Match button with bounds â€” handle both attribute orders
                 m = re.search(
                     rf'{btn_id}[^/]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"',
                     xml,
@@ -339,7 +391,7 @@ class ChromeManager:
                 await sleep(3.0)
                 continue
 
-            # No FRE dialogs detected — Chrome may still be loading
+            # No FRE dialogs detected â€” Chrome may still be loading
             if attempt < 4:
                 logger.debug("No FRE dialog found (attempt %d), retrying...", attempt + 1)
                 await sleep(2.0)
@@ -353,6 +405,8 @@ class ChromeManager:
     async def wait_for_devtools_socket(self, timeout: float = 15.0) -> bool:
         """Poll for the browser DevTools socket to become available."""
         import time
+        if self.adb.serial and ":" in self.adb._plain_serial(self.adb.serial):
+            await ADB()._run(["connect", self.adb.serial], timeout=10, allow_failure=True)
         start = time.monotonic()
         while time.monotonic() - start < timeout:
             out = await self.adb.shell(
@@ -449,7 +503,7 @@ class ChromeManager:
         prefs_path = self._preferences_path()
 
         # Read current preferences (or create minimal if not yet existing)
-        # Must use root — /data/data/<pkg>/ is mode 700 owned by Chrome's UID,
+        # Must use root â€” /data/data/<pkg>/ is mode 700 owned by Chrome's UID,
         # not accessible to the 'shell' user.
         raw = await self.adb.shell(
             f"su 0 cat {prefs_path}", timeout=10, allow_failure=True,
@@ -469,7 +523,7 @@ class ChromeManager:
                 prefs = {}
 
         # Build selected_languages from accept_lang
-        # e.g. "en-PH,en-US;q=0.9,en;q=0.8" → "en-PH,en-US,en"
+        # e.g. "en-PH,en-US;q=0.9,en;q=0.8" â†’ "en-PH,en-US,en"
         langs = [part.split(";")[0].strip() for part in accept_lang.split(",")]
         selected = ",".join(langs)
 
@@ -481,7 +535,7 @@ class ChromeManager:
         # --- WebRTC IP handling policy ---
         # "default_public_interface_only" hides private/local IPs (10.x, 172.x)
         # but allows STUN to discover the public exit IP (proxy IP).
-        # DO NOT use "disable_non_proxied_udp" — it shows WebRTC as "disabled"
+        # DO NOT use "disable_non_proxied_udp" â€” it shows WebRTC as "disabled"
         # which is a fingerprint tell (no real device has WebRTC disabled).
         if "webrtc" not in prefs:
             prefs["webrtc"] = {}
@@ -578,7 +632,7 @@ class ChromeManager:
         await self.adb.shell_root(f"chmod 600 {prefs_path}")
         await self.adb.shell_root(f"rm -f {tmp}")
 
-        logger.info("%s language patched: %s → %s", self.package, locale, selected)
+        logger.info("%s language patched: %s â†’ %s", self.package, locale, selected)
 
     async def patch_webview_preferences(
         self,

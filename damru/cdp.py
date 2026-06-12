@@ -114,12 +114,14 @@ class CDPConnection:
         return ctx
 
     async def disconnect(self) -> None:
-        """Close browser connection and remove port forward."""
+        """Detach from remote Chrome and remove port forward.
+
+        ``connect_over_cdp()`` attaches to an already-running Android Chrome.
+        Calling ``Browser.close()`` on that object sends a close command to the
+        remote browser; it is not a passive detach.  AsyncDamru controls Chrome
+        lifetime separately through ``ChromeManager.force_stop()``.
+        """
         if self._browser:
-            try:
-                await self._browser.close()
-            except Exception:
-                pass
             self._browser = None
 
         if self._pw_instance:

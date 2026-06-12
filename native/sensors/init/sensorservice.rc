@@ -1,0 +1,9 @@
+service sensorservice /system/bin/sensorservice
+    class late_start
+    disabled
+    user system
+    group system wakelock
+    capabilities BLOCK_SUSPEND
+
+on property:sys.boot_completed=1
+    start sensorservice

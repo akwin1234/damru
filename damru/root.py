@@ -1,4 +1,4 @@
-﻿"""Root-level system property spoofing for damru.
+"""Root-level system property spoofing for damru.
 
 Uses resetprop to change Android ro.* properties at runtime.
 resetprop sources (in priority order):
@@ -116,11 +116,12 @@ class RootOps:
         self.adb = adb
         self._resetprop_cmd: Optional[str] = None
         self._original_props: Dict[str, str] = {}
+        self._battery_state: Optional[dict[str, int]] = None
 
     async def check_root(self) -> bool:
         """Verify root access is available."""
         last_error: Optional[Exception] = None
-        for attempt in range(3):
+        for attempt in range(10):
             try:
                 rooted = await self.adb.is_rooted()
                 if rooted:
@@ -128,9 +129,9 @@ class RootOps:
             except Exception as exc:
                 last_error = exc
 
-            if attempt < 2:
-                # MuMu can expose ADB before su/adbd is fully ready.
-                await asyncio.sleep(1.0)
+            if attempt < 9:
+                # MuMu/Redroid can expose ADB before su/adbd is fully ready.
+                await asyncio.sleep(2.0)
 
         if last_error is not None:
             raise RootError(
@@ -696,7 +697,7 @@ class RootOps:
                 verify_count, proc_count, target_cores,
             )
 
-    async def apply_battery_spoof(self) -> None:
+    async def apply_battery_spoof(self, quiet: bool = False) -> None:
         """Spoof battery state to look like a real phone, not an emulator.
 
         Emulator defaults (AC=true, level=100, status=5/full, temp=0) are
@@ -707,28 +708,46 @@ class RootOps:
         """
         import random
 
-        level = random.randint(23, 89)
-        temp = random.randint(250, 330)  # tenths of C (25.0-33.0C)
+        serial = getattr(self.adb, "serial", "") or ""
+        if ":" in serial and os.environ.get("DAMRU_EXPERIMENTAL_BATTERY_DUMPSYS") != "1" and os.environ.get("DAMRU_EXPERIMENTAL_BATTERY_SPOOF") != "1":
+            log = logger.debug if quiet else logger.info
+            log("Battery spoof skipped on TCP/Redroid transport (set DAMRU_EXPERIMENTAL_BATTERY_DUMPSYS=1 to force)")
+            return
+
+        if self._battery_state is None:
+            self._battery_state = {
+                "level": random.randint(23, 89),
+                "temp": random.randint(250, 330),  # tenths of C (25.0-33.0C)
+                "counter": random.randint(1_800_000, 4_900_000),  # uAh
+            }
+        level = self._battery_state["level"]
+        temp = self._battery_state["temp"]
+        charge_counter = self._battery_state["counter"]
 
         # Reset battery stats first to clear stale history that can produce
         # negative dischargingTime values after manual dumpsys overrides.
         await self.adb.shell("dumpsys batterystats --reset", allow_failure=True)
 
-        source = random.choice(["ac", "usb", "wireless"])
+        source = "none"
+        charging = False
         cmds = [
-            f"dumpsys battery set level {level}",
-            "dumpsys battery set status 2",      # charging
-            f"dumpsys battery set ac {1 if source == 'ac' else 0}",
-            f"dumpsys battery set usb {1 if source == 'usb' else 0}",
-            f"dumpsys battery set wireless {1 if source == 'wireless' else 0}",
-            f"dumpsys battery set temp {temp}",
+            "dumpsys battery unplug -f",
+            "dumpsys battery set -f present 1",
+            f"dumpsys battery set -f level {level}",
+            "dumpsys battery set -f status 3",
+            "dumpsys battery set -f ac 0",
+            "dumpsys battery set -f usb 0",
+            "dumpsys battery set -f wireless 0",
+            f"dumpsys battery set -f temp {temp}",
+            f"dumpsys battery set -f counter {charge_counter}",
         ]
         for cmd in cmds:
             await self.adb.shell(cmd, allow_failure=True)
 
-        logger.info(
-            "Battery spoofed: %d%%, charging via %s, %.1fC",
-            level, source, temp / 10.0,
+        log = logger.debug if quiet else logger.info
+        log(
+            "Battery spoofed: %d%%, charging=%s via %s, %.1fC",
+            level, charging, source, temp / 10.0,
         )
 
     @staticmethod

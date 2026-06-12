@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Optional
 
 import asyncio
+import hashlib
+import random
 
 from .adb import ADB
 from .chrome import WEBVIEW_SHELL_PACKAGE, ChromeManager
@@ -185,8 +187,12 @@ async def force_device_profile(
         timezone=timezone,
         locale=locale,
     )
+    sensor_seed = hashlib.sha256(
+        f"{device.model}|{profile.timezone}|{profile.locale}|{random.getrandbits(64)}".encode()
+    ).hexdigest()[:16]
 
     await root.apply_device_props(device, safe_only=True, parallel=True)
+    await root.set_prop("persist.damru.sensor.seed", sensor_seed)
     await asyncio.gather(
         root.apply_version_release(device),
         root.apply_timezone(profile.timezone),

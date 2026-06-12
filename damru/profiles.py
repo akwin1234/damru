@@ -146,6 +146,8 @@ def _build_chrome_flags(
         "--js-flags=--max-old-space-size=1024",
         # Expose fake media devices so enumerateDevices includes videoinput.
         "--use-fake-device-for-media-stream",
+        # Avoid Redroid BatteryService test-mode instability and 100%-charging tells.
+        "--disable-battery-status-api",
         # Keep SpeechSynthesis path enabled on Android builds that gate it.
         "--enable-speech-synthesis-api",
         # Remove desktop-only GL extensions that SwiftShader exposes.
@@ -165,6 +167,7 @@ def _build_chrome_flags(
     # NOTE: DnsOverHttps is NOT disabled - we WANT DoH through the proxy
     # to prevent DNS leak detection by BrowserScan.
     disabled_features = [
+        "BatteryStatus",
         "WebRtcHideLocalIpsWithMdns",
         "PaintHolding",
     ]

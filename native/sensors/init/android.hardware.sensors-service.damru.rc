@@ -1,0 +1,4 @@
+service vendor.damru-sensors /vendor/bin/hw/android.hardware.sensors-service.damru
+    class hal
+    user root
+    group system

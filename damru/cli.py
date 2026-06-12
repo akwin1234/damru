@@ -25,7 +25,7 @@ from .apk_assets import bundled_magisk_apk, find_apk_bundle_root, validate_apk_b
 from .netfix import android_dns_repair_command, wsl_runtime_network_repair_lines, wsl_runtime_network_repair_script
 
 _DAMRU_IMAGE_TAR = "damru-redroid-latest.tar"
-_DAMRU_IMAGE_SHA256 = "357751c6ad3baffdad9dfeadde1ce0ae31b534012a4c6cb226e0077a619dab69"
+_DAMRU_IMAGE_SHA256 = "b83a0139dbebacc19e4f8630f7017d7037820af190c1bc1653e1fbef727b2253"
 _DAMRU_IMAGE_URL = "https://drive.google.com/file/d/1AzSTOlGpSfqHB-F-Yty2JqbOEMlgFT5F/view?usp=sharing"
 _DAMRU_APKS_ZIP = "chrome-apks.zip"
 _DAMRU_APKS_URL = "https://damru.dev/assets/chrome-apks.zip"
@@ -354,10 +354,12 @@ def _modprobe_detail(module: str) -> tuple[bool, str]:
 def _ensure_binderfs_mounted() -> None:
     script = "\n".join([
         "set +e",
-        "test -d /dev/binderfs && mount | grep -q ' /dev/binderfs ' && exit 0",
         "modprobe binder_linux devices=binder,hwbinder,vndbinder 2>/dev/null || true",
         "mkdir -p /dev/binderfs",
+        "if mount | grep -q ' /dev/binderfs ' && test -e /dev/binderfs/binder-control && test -e /dev/binderfs/binder && test -e /dev/binderfs/hwbinder && test -e /dev/binderfs/vndbinder; then exit 0; fi",
+        "if mount | grep -q ' /dev/binderfs ' && ! test -e /dev/binderfs/binder-control; then umount /dev/binderfs >/dev/null 2>&1 || true; fi",
         "mount | grep -q ' /dev/binderfs ' || mount -t binder binder /dev/binderfs >/dev/null 2>&1 || true",
+        "test -e /dev/binderfs/binder-control && test -e /dev/binderfs/binder && test -e /dev/binderfs/hwbinder && test -e /dev/binderfs/vndbinder",
     ])
     if _is_windows():
         _linux_run(script, timeout=20, root_user=True)
@@ -375,7 +377,7 @@ def _kernel_config_text() -> str:
 
 def _binderfs_mount_populated() -> bool:
     result = _linux_run(
-        "test -e /dev/binderfs/binder-control -o -e /dev/binderfs/binder",
+        "test -e /dev/binderfs/binder-control && test -e /dev/binderfs/binder && test -e /dev/binderfs/hwbinder && test -e /dev/binderfs/vndbinder",
         timeout=10,
         root_user=_is_windows(),
     )
@@ -947,7 +949,7 @@ def _check_preflight(args: argparse.Namespace) -> int:
         _preflight_add(checks, "redroid_image", "Redroid image", "skip", "Docker daemon unavailable")
 
     binder = _preflight_linux_readonly("test -e /dev/binder && test -e /dev/hwbinder && test -e /dev/vndbinder", timeout).returncode == 0
-    binderfs = _preflight_linux_readonly("test -d /dev/binderfs && mount | grep -q ' /dev/binderfs ' && test -e /dev/binderfs/binder-control", timeout).returncode == 0
+    binderfs = _preflight_linux_readonly("test -d /dev/binderfs && mount | grep -q ' /dev/binderfs ' && test -e /dev/binderfs/binder-control && test -e /dev/binderfs/binder && test -e /dev/binderfs/hwbinder && test -e /dev/binderfs/vndbinder", timeout).returncode == 0
     wsl_auto_mountable_binderfs = _is_wsl_linux() and wsl_status == "pass" and not binderfs
     if binder:
         binder_detail = "/dev/binder /dev/hwbinder /dev/vndbinder"
@@ -1155,7 +1157,7 @@ def _check_env(args: argparse.Namespace) -> int:
     _ensure_binderfs_mounted()
     _ensure_binderfs_mounted()
     binderfs_ok = _linux_run(
-        "test -d /dev/binderfs && mount | grep -q ' /dev/binderfs '",
+        "test -d /dev/binderfs && mount | grep -q ' /dev/binderfs ' && test -e /dev/binderfs/binder-control && test -e /dev/binderfs/binder && test -e /dev/binderfs/hwbinder && test -e /dev/binderfs/vndbinder",
         timeout=10,
         root_user=_is_windows(),
     ).returncode == 0
@@ -1493,7 +1495,7 @@ def _fix_wsl(args: argparse.Namespace) -> int:
 
     _ensure_binderfs_mounted()
     binderfs_ok = _linux_run(
-        "test -d /dev/binderfs && mount | grep -q ' /dev/binderfs '",
+        "test -d /dev/binderfs && mount | grep -q ' /dev/binderfs ' && test -e /dev/binderfs/binder-control && test -e /dev/binderfs/binder && test -e /dev/binderfs/hwbinder && test -e /dev/binderfs/vndbinder",
         timeout=10,
         root_user=_is_windows(),
     ).returncode == 0
@@ -1686,7 +1688,7 @@ def _install_deps(args: argparse.Namespace) -> int:
         return 1
 
     binderfs_ok = _linux_run(
-        "test -d /dev/binderfs && mount | grep -q ' /dev/binderfs '",
+        "test -d /dev/binderfs && mount | grep -q ' /dev/binderfs ' && test -e /dev/binderfs/binder-control && test -e /dev/binderfs/binder && test -e /dev/binderfs/hwbinder && test -e /dev/binderfs/vndbinder",
         timeout=10,
     ).returncode == 0
 
@@ -1713,7 +1715,7 @@ def _install_deps(args: argparse.Namespace) -> int:
         )
         return 1
     if not binderfs_ok:
-        print("binderfs is not mounted at /dev/binderfs.", file=sys.stderr)
+        print("binderfs is not mounted/populated at /dev/binderfs.", file=sys.stderr)
         return 1
 
     print("Installing Damru Python dependencies into the active interpreter...")
@@ -2728,6 +2730,9 @@ def _stealth_open_url(args: argparse.Namespace) -> int:
                                 ),
                                 damru._arm_worker_core_override(target_device.hardware_concurrency),
                             )
+                            if os.environ.get("DAMRU_EXPERIMENTAL_CDP_SENSORS") == "1":
+                                with contextlib.suppress(Exception):
+                                    await damru._apply_sensor_emulation()
 
                     with contextlib.suppress(Exception):
                         await damru._apply_timezone_override()

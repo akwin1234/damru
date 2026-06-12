@@ -14,9 +14,11 @@ DamruPoolSync is thread-safe for use with ThreadPoolExecutor.
 from __future__ import annotations
 
 import asyncio
+import math
+import random
 import sys
 import threading
-from contextlib import asynccontextmanager, contextmanager
+from contextlib import asynccontextmanager, contextmanager, suppress
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Sequence
 from urllib.parse import urlparse
@@ -745,6 +747,7 @@ def _apply_sync_overrides(ctx, overrides: Dict[str, Any]):
     touch_points = overrides.get("touch_points")
     net_params = overrides.get("network_params")
     quota_bytes = overrides.get("storage_quota_bytes")
+    enable_cdp_sensors = os.environ.get("DAMRU_EXPERIMENTAL_CDP_SENSORS") == "1"
     seen_origins = set()
 
     def _extract_origin(raw_url: str) -> Optional[str]:
@@ -756,6 +759,30 @@ def _apply_sync_overrides(ctx, overrides: Dict[str, Any]):
     def _apply_page_overrides(page) -> None:
         try:
             cdp = ctx.new_cdp_session(page)
+            phase = random.uniform(0.0, math.tau)
+            beta = random.uniform(-8.0, 12.0)
+            gamma = random.uniform(-7.0, 7.0)
+            alpha = random.uniform(0.0, 360.0)
+            gravity = {
+                "x": math.sin(math.radians(gamma)) * 9.80665,
+                "y": -math.sin(math.radians(beta)) * 9.80665,
+                "z": math.cos(math.radians(beta)) * math.cos(math.radians(gamma)) * 9.80665,
+            }
+            linear = {
+                "x": math.sin(phase * 1.7) * 0.025,
+                "y": math.cos(phase * 1.3) * 0.020,
+                "z": math.sin(phase * 1.1) * 0.014,
+            }
+            accel = {axis: gravity[axis] + linear[axis] for axis in ("x", "y", "z")}
+            z = math.radians(alpha) * 0.5
+            x = math.radians(beta) * 0.5
+            y = math.radians(gamma) * 0.5
+            quat = {
+                "x": math.sin(x) * math.cos(y) * math.cos(z) - math.cos(x) * math.sin(y) * math.sin(z),
+                "y": math.cos(x) * math.sin(y) * math.cos(z) + math.sin(x) * math.cos(y) * math.sin(z),
+                "z": math.cos(x) * math.cos(y) * math.sin(z) - math.sin(x) * math.sin(y) * math.cos(z),
+                "w": math.cos(x) * math.cos(y) * math.cos(z) + math.sin(x) * math.sin(y) * math.sin(z),
+            }
             cdp.send(
                 "Emulation.setHardwareConcurrencyOverride",
                 {"hardwareConcurrency": target_cores},
@@ -769,8 +796,33 @@ def _apply_sync_overrides(ctx, overrides: Dict[str, Any]):
                 )
             if net_params:
                 cdp.send("Network.enable", {})
-                cdp.send("Network.emulateNetworkConditions", net_params)
                 cdp.send("Network.overrideNetworkState", net_params)
+            if enable_cdp_sensors:
+                for sensor_type, reading in {
+                    "accelerometer": {"xyz": accel},
+                    "linear-acceleration": {"xyz": linear},
+                    "gravity": {"xyz": gravity},
+                    "gyroscope": {"xyz": {"x": random.uniform(-0.006, 0.006), "y": random.uniform(-0.006, 0.006), "z": random.uniform(-0.004, 0.004)}},
+                    "magnetometer": {"xyz": {"x": random.uniform(22.0, 38.0), "y": random.uniform(-12.0, 12.0), "z": random.uniform(-44.0, -28.0)}},
+                    "absolute-orientation": {"quaternion": quat},
+                    "relative-orientation": {"quaternion": quat},
+                }.items():
+                    with suppress(Exception):
+                        cdp.send("Emulation.setSensorOverrideEnabled", {
+                            "enabled": True,
+                            "type": sensor_type,
+                            "metadata": {"available": True, "minimumFrequency": 1, "maximumFrequency": 60},
+                        })
+                        cdp.send("Emulation.setSensorOverrideReadings", {
+                            "type": sensor_type,
+                            "reading": reading,
+                        })
+                with suppress(Exception):
+                    cdp.send("DeviceOrientation.setDeviceOrientationOverride", {
+                        "alpha": alpha,
+                        "beta": beta,
+                        "gamma": gamma,
+                    })
             if quota_bytes:
                 origin = _extract_origin(getattr(page, "url", "") or "")
                 if origin and origin not in seen_origins:

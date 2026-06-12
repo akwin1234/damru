@@ -34,6 +34,9 @@ class FakeRootOps:
     async def apply_device_props(self, device, safe_only: bool = True, parallel: bool = False) -> None:
         self.calls.append(("root.props", device.name, safe_only, parallel))
 
+    async def set_prop(self, key: str, value: str) -> None:
+        self.calls.append(("root.set_prop", key, value))
+
     async def apply_version_release(self, device) -> None:
         self.calls.append(("root.version", device.android_version))
 

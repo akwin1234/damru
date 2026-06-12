@@ -190,6 +190,9 @@ def test_stealth_open_url_keeps_session_alive_through_native_open(monkeypatch):
         async def _apply_touch_emulation(self, device):
             events.append(("touch", device.hardware_concurrency))
 
+        async def _apply_sensor_emulation(self):
+            events.append(("sensor",))
+
         async def _apply_network_emulation(self):
             events.append(("network",))
 
@@ -226,6 +229,7 @@ def test_stealth_open_url_keeps_session_alive_through_native_open(monkeypatch):
     assert not any(e[0] == "reconnect" for e in events)
     for kind in ("hardware", "touch", "network", "storage", "tz", "ua", "workers"):
         assert any(e[0] == kind for e in events)
+    assert not any(e[0] == "sensor" for e in events)
 
 
 def test_stealth_open_url_reattach_mode_detaches_during_load(monkeypatch):
@@ -275,6 +279,7 @@ def test_stealth_open_url_reattach_mode_detaches_during_load(monkeypatch):
         async def _apply_devtools_evasion(self): pass
         async def _apply_hardware_overrides(self, device): pass
         async def _apply_touch_emulation(self, device): pass
+        async def _apply_sensor_emulation(self): pass
         async def _apply_network_emulation(self): pass
         async def _apply_storage_quota_override(self, device): pass
         async def _apply_timezone_override(self): pass

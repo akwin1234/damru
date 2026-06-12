@@ -63,7 +63,7 @@ MUMU_PHONE_MODEL = None
 MUMU_PHONE_MIIT = None
 
 # Redroid Container Settings
-REDROID_IMAGE = "damru-redroid:latest"
+REDROID_IMAGE = os.environ.get("DAMRU_REDROID_IMAGE", "damru-redroid:latest")
 # Upstream base image, pulled automatically when the baked image is absent
 # (see RedroidManager.ensure_image).
 REDROID_BASE_IMAGE = "redroid/redroid:14.0.0_64only-latest"

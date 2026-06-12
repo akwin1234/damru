@@ -10,8 +10,11 @@ from __future__ import annotations
 import asyncio
 import base64
 import contextlib
+import hashlib
 import json
+import math
 import os
+import random
 import sys
 from typing import Optional
 from urllib.parse import urlparse
@@ -119,6 +122,10 @@ class AsyncDamru:
         self._touch_points = None
         self._sync_network_params = None
         self._sync_storage_quota_bytes = None
+        self._sensor_tasks = []
+        self._sensor_seed = random.uniform(0, math.tau)
+        self._sensor_motion = self._new_sensor_motion()
+        self._battery_tasks = []
 
     async def _start_default_redroid_if_needed(self) -> Optional[str]:
         """Start one managed Redroid worker for the simple AsyncDamru API.
@@ -215,6 +222,7 @@ class AsyncDamru:
         logger.info("Target device: %s (Android %s, %s, %s)",
                      target_device.name, target_device.android_version,
                      target_device.chipset, target_device.webgl_renderer)
+        self._sensor_motion = self._new_sensor_motion(target_device)
 
         # MuMu-specific dynamic profile (non-blocking)
         _mumu_chrome_wiped = False
@@ -257,6 +265,9 @@ class AsyncDamru:
             timezone=self._timezone,
             locale=self._locale,
         )
+        sensor_seed = hashlib.sha256(
+            f"{target_device.model}|{self._profile.timezone}|{self._profile.locale}|{random.getrandbits(64)}".encode()
+        ).hexdigest()[:16]
         logger.info("Profile: %s (tz=%s, locale=%s)",
                      self._profile.description, self._profile.timezone, self._profile.locale)
 
@@ -337,12 +348,15 @@ class AsyncDamru:
             await self._root.apply_device_props(
                 target_device, safe_only=not version_match, parallel=warm_start,
             )
-            await asyncio.gather(
+            await self._root.set_prop("persist.damru.sensor.seed", sensor_seed)
+            prop_tasks = [
                 self._root.apply_timezone(self._profile.timezone),
                 self._root.apply_locale(self._profile.locale),
                 self._root.hide_emulator_identity(),
-                self._root.apply_version_release(target_device),
-            )
+            ]
+            if version_match:
+                prop_tasks.append(self._root.apply_version_release(target_device))
+            await asyncio.gather(*prop_tasks)
 
         async def _ensure_debuggable():
             debuggable = await self._adb.get_prop("ro.debuggable")
@@ -399,10 +413,11 @@ class AsyncDamru:
             await self._root.install_extra_fonts()
             await self._root.randomize_fonts()
 
-        # Big parallel batch: all independent system setup + Chrome detect
-        # Warm mode only starts eSpeak TTS service (already installed+configured)
-        # Cold mode runs full ensure_speech_voices (install + configure)
-        chrome_version_fut = asyncio.ensure_future(_detect_chrome())
+        # Keep early system setup ordered. Redroid can expose ADB while Android
+        # framework services are still settling; too many concurrent resetprop,
+        # settings, package, and service-manager calls can leave the next Chrome
+        # launch with no ActivityManager/DevTools socket.
+        version = await _detect_chrome()
 
         async def _start_tts_service():
             """Start eSpeak TTS service (warm start - already installed)."""
@@ -412,21 +427,16 @@ class AsyncDamru:
                 allow_failure=True,
             )
 
-        phase2_tasks = [
-            _apply_all_props(),
-            _ensure_debuggable(),
-            self._root.apply_audio_48khz(),
-            _fonts_setup(),
-            _apply_screen(),
-            _set_proxy(),
-            chrome_version_fut,
-        ]
+        await _apply_all_props()
+        await _ensure_debuggable()
+        await self._root.apply_audio_48khz()
+        await _fonts_setup()
+        await _apply_screen()
+        await _set_proxy()
         if warm_start:
-            phase2_tasks.append(_start_tts_service())
+            await _start_tts_service()
         else:
-            phase2_tasks.append(self._root.ensure_speech_voices())
-        await asyncio.gather(*phase2_tasks)
-        version = await chrome_version_fut
+            await self._root.ensure_speech_voices()
 
         # #==============================================================#
         # |  PHASE 3+4: GPU + Chrome prep (OVERLAPPED for speed)       |
@@ -441,14 +451,20 @@ class AsyncDamru:
         )
         eff_renderer = RootOps.effective_renderer(target_device)
 
+        battery_dumpsys_enabled = (
+            os.environ.get("DAMRU_EXPERIMENTAL_BATTERY_DUMPSYS") == "1"
+            or os.environ.get("DAMRU_EXPERIMENTAL_BATTERY_SPOOF") == "1"
+        )
+
         async def _gpu_then_battery():
-            """GPU spoof (includes SurfaceFlinger restart) then battery."""
+            """GPU spoof (includes SurfaceFlinger restart) then optional battery dumpsys."""
             # Warm: skip GPU re-patch if .so already has target renderer
             if warm_start:
                 already = await self._root.is_gpu_already_patched(eff_renderer)
                 if already:
                     logger.info("GPU already patched for '%s' - skipping (saves ~6s)", eff_renderer)
-                    await self._root.apply_battery_spoof()
+                    if battery_dumpsys_enabled:
+                        await self._root.apply_battery_spoof()
                     return
 
             if "OK" in has_renderer_config:
@@ -465,8 +481,9 @@ class AsyncDamru:
             else:
                 logger.info("No renderer.config - using binary SwiftShader .so patch")
                 await self._root.apply_gpu_binary_spoof(target_device)
-            # Battery MUST follow GPU spoof - SurfaceFlinger restart resets BatteryService.
-            await self._root.apply_battery_spoof()
+            if battery_dumpsys_enabled:
+                # Battery dumpsys must follow GPU spoof because SurfaceFlinger restart resets BatteryService.
+                await self._root.apply_battery_spoof()
 
         async def _chrome_prep():
             """Chrome cleanup + config (runs concurrently with GPU patch)."""
@@ -490,13 +507,44 @@ class AsyncDamru:
                     return
             await self._root.apply_memory_spoof(target_device.device_memory)
 
-        # GPU+battery, Chrome prep, CPU cores, memory - ALL in parallel
-        await asyncio.gather(
-            _gpu_then_battery(),
-            _chrome_prep(),
-            self._root.apply_cpu_cores_spoof(target_device.hardware_concurrency),
-            _memory_spoof(),
-        )
+        async def _wait_adb_ready(label: str, timeout: float = 45.0) -> None:
+            """Wait for ADB + root shell after framework/SF transitions."""
+            import time as _time
+
+            end = _time.monotonic() + timeout
+            last = ""
+            while _time.monotonic() < end:
+                try:
+                    await self._adb.ensure_server()
+                    for reconnect in (False, True):
+                        if reconnect and self._serial:
+                            await ADB()._run(["disconnect", self._serial], timeout=5, allow_failure=True)
+                            await sleep(0.3)
+                            await ADB()._run(["connect", self._serial], timeout=10, allow_failure=True)
+                            await sleep(0.5)
+                        out = await self._adb.shell("id", timeout=6, allow_failure=True)
+                        if "uid=" in out:
+                            root_out = await self._adb.shell("su 0 id", timeout=6, allow_failure=True)
+                            if "uid=0" in root_out:
+                                return
+                            last = root_out.strip()
+                        else:
+                            last = out.strip()
+                        if not self._serial:
+                            break
+                except Exception as exc:
+                    last = str(exc)
+                await sleep(2.0)
+            raise DamruError(f"ADB/root not ready after {label}: {last or '<empty>'}")
+
+        # GPU patch restarts SurfaceFlinger/zygote on Redroid. Do not write
+        # Chrome data or command-line flags during that restart: package/data
+        # writes can succeed but Chrome later starts without a DevTools socket.
+        await self._root.apply_cpu_cores_spoof(target_device.hardware_concurrency)
+        await _memory_spoof()
+        await _gpu_then_battery()
+        await _wait_adb_ready("GPU/battery setup", timeout=90.0)
+        await _chrome_prep()
 
         # Chrome launch with retry - SurfaceFlinger restart kills processes
         # and the system needs variable time to re-register activities.
@@ -527,11 +575,8 @@ class AsyncDamru:
             if warm_start:
                 logger.debug("Warm start: socket missing, checking for unexpected FRE/sign-in promo...")
                 await self._chrome.dismiss_fre(max_attempts=4)
-                # Give Chrome much more time after FRE dismissal - browser UI visible but
-                # devtools socket may still be initializing. On slow hardware (2-core MuMu),
-                # Chrome can take 100+ seconds to expose chrome_devtools_remote socket.
-                logger.info("Warm start: Chrome UI confirmed alive, polling socket for up to 90s...")
-                socket_ready = await self._chrome.wait_for_devtools_socket(timeout=90.0)
+                logger.info("Warm start: Chrome UI confirmed alive, polling socket for up to 25s...")
+                socket_ready = await self._chrome.wait_for_devtools_socket(timeout=25.0)
                 if socket_ready:
                     break
 
@@ -539,6 +584,27 @@ class AsyncDamru:
 
         if not socket_ready:
             logger.warning("Devtools socket not detected after retries, attempting connection anyway")
+
+        async def _root_hardening() -> None:
+            for label, factory in (
+                ("IPv6 block", self._root.apply_ipv6_block),
+                ("WebRTC block", lambda: self._root.apply_webrtc_block(self._chrome.package)),
+            ):
+                last: Exception | None = None
+                for attempt in range(3):
+                    try:
+                        await _wait_adb_ready(label, timeout=30.0)
+                        await factory()
+                        break
+                    except Exception as exc:
+                        last = exc
+                        logger.warning("%s failed (attempt %d/3): %s", label, attempt + 1, exc)
+                        await sleep(3.0)
+                else:
+                    logger.warning("%s skipped after retries: %s", label, last)
+
+        await _root_hardening()
+        await self._repair_wsl_network_if_needed()
 
         self._cdp = CDPConnection(
             self._adb,
@@ -555,6 +621,9 @@ class AsyncDamru:
                 except Exception as e:
                     logger.warning("GPU spoof cleanup on connect failure: %s", e)
             raise
+
+        if battery_dumpsys_enabled:
+            self._start_battery_keepalive()
 
         # Close stale tabs if any
         pages = self._context.pages
@@ -575,10 +644,9 @@ class AsyncDamru:
         # #==============================================================#
 
         real_chrome = version if version else None
+
         await asyncio.gather(
             self._apply_devtools_evasion(),
-            self._root.apply_ipv6_block(),
-            self._root.apply_webrtc_block(self._chrome.package),
             self._apply_hardware_overrides(target_device),
             self._apply_touch_emulation(target_device),
             self._apply_network_emulation(),
@@ -589,16 +657,19 @@ class AsyncDamru:
                 chrome_version=real_chrome,
                 android_version=target_device.android_version,
             ),
-            self._warmup_tts_parallel(),  # TTS on separate tab, concurrent
         )
+        if os.environ.get("DAMRU_EXPERIMENTAL_CDP_SENSORS") == "1":
+            await self._apply_sensor_emulation()
 
-        # Worker core override + verify (depends on UA override being done)
-        await self._arm_worker_core_override(target_device.hardware_concurrency)
-        await self._verify_worker_cores(target_device.hardware_concurrency)
-        await self._settle_initial_page_context()
+        # Browser-level worker auto-attach is experimental on Android Chrome;
+        # page-level hardware override above is stable and keeps CDP alive.
+        if os.environ.get("DAMRU_EXPERIMENTAL_WORKER_CORE_CDP") == "1":
+            await self._arm_worker_core_override(target_device.hardware_concurrency)
+            await self._verify_worker_cores(target_device.hardware_concurrency)
+        # Keep Android Chrome's initial tab alive. Creating/navigating a fresh
+        # tab via Playwright CDP can close the mobile target on some builds.
         await self._apply_timezone_override()
         self._wrap_context_new_page()
-        await self._repair_wsl_network_if_needed()
 
         # Expose override targets for DamruPoolSync reattach
         self._override_cores = target_device.hardware_concurrency
@@ -710,36 +781,21 @@ class AsyncDamru:
         if not self._context:
             return
 
-        for old_page in list(self._context.pages):
+        page = self._context.pages[0] if self._context.pages else None
+        if page is None:
             with contextlib.suppress(Exception):
-                await old_page.close()
-
-        page = None
-        for attempt in range(3):
-            try:
                 page = await self._context.new_page()
-                await page.goto(
-                    "data:text/html,<title>damru-ready</title>",
-                    wait_until="load",
-                    timeout=5000,
-                )
-                await page.wait_for_load_state("load", timeout=5000)
-                await page.evaluate("() => 1")
-                await asyncio.sleep(1.0)
-                await page.evaluate("() => 1")
-                break
-            except Exception:
-                if page:
-                    with contextlib.suppress(Exception):
-                        await page.close()
-                page = None
-                if attempt == 2:
-                    return
-                await asyncio.sleep(1)
+        if page is None:
+            return
 
-        if page:
-            with contextlib.suppress(Exception):
-                await page.bring_to_front()
+        with contextlib.suppress(Exception):
+            await page.goto(
+                "data:text/html,<title>damru-ready</title>",
+                wait_until="load",
+                timeout=5000,
+            )
+            await page.evaluate("() => 1")
+            await page.bring_to_front()
 
     def _wrap_context_new_page(self) -> None:
         """Normalize Android Chrome tabs before user code navigates them."""
@@ -763,6 +819,8 @@ class AsyncDamru:
                         })
                     if timezone:
                         await cdp.send("Emulation.setTimezoneOverride", {"timezoneId": timezone})
+                if os.environ.get("DAMRU_EXPERIMENTAL_CDP_SENSORS") == "1":
+                    await self._apply_sensor_to_page(page)
                 await asyncio.sleep(0.2)
             except Exception:
                 pass
@@ -772,6 +830,20 @@ class AsyncDamru:
         setattr(self._context, "_damru_new_page_wrapped", True)
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        for task in self._battery_tasks:
+            task.cancel()
+        for task in self._battery_tasks:
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await task
+        self._battery_tasks.clear()
+
+        for task in self._sensor_tasks:
+            task.cancel()
+        for task in self._sensor_tasks:
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await task
+        self._sensor_tasks.clear()
+
         for task in self._raw_cdp_tasks:
             task.cancel()
         for task in self._raw_cdp_tasks:
@@ -818,6 +890,9 @@ class AsyncDamru:
     async def _repair_wsl_network_if_needed(self) -> None:
         """Repair WSL routing after host-network Redroid mutates netns state."""
         if sys.platform != "win32":
+            return
+        if self._cdp and self._context:
+            logger.debug("WSL network repair skipped while CDP is attached")
             return
         try:
             from .config import WSL_DISTRO
@@ -1395,6 +1470,228 @@ class AsyncDamru:
         self._context.on("page", _on_page)
         logger.info("Touch emulation: maxTouchPoints=%d (CDP)", touch_points)
 
+    @staticmethod
+    def _quaternion_from_euler(alpha: float, beta: float, gamma: float) -> dict[str, float]:
+        """Return a normalized quaternion from browser-style orientation angles."""
+        z = math.radians(alpha) * 0.5
+        x = math.radians(beta) * 0.5
+        y = math.radians(gamma) * 0.5
+        cz, sz = math.cos(z), math.sin(z)
+        cx, sx = math.cos(x), math.sin(x)
+        cy, sy = math.cos(y), math.sin(y)
+        return {
+            "x": sx * cy * cz - cx * sy * sz,
+            "y": cx * sy * cz + sx * cy * sz,
+            "z": cx * cy * sz - sx * sy * cz,
+            "w": cx * cy * cz + sx * sy * sz,
+        }
+
+    @staticmethod
+    def _clamp(value: float, low: float, high: float) -> float:
+        return max(low, min(high, value))
+
+    def _new_sensor_motion(self, device: Optional[AndroidDevice] = None) -> dict:
+        """Create one natural motion profile for this browser session."""
+        rng = random.Random(random.getrandbits(64))
+        name = getattr(device, "model", "") or getattr(device, "name", "") or "damru"
+        digest = hashlib.sha256(name.encode("utf-8", errors="ignore")).digest()
+        model_shift = digest[0] / 255.0
+        mag_strength = 28.0 + model_shift * 24.0 + rng.uniform(-3.0, 3.0)
+        mag_heading = rng.uniform(0.0, math.tau)
+        stillness = rng.uniform(0.65, 1.35)
+        return {
+            "alpha0": rng.uniform(0.0, 360.0),
+            "beta0": rng.uniform(-9.0, 13.0),
+            "gamma0": rng.uniform(-7.0, 7.0),
+            "alpha_drift": rng.uniform(-0.018, 0.018),
+            "beta_drift": rng.uniform(-0.010, 0.010),
+            "gamma_drift": rng.uniform(-0.010, 0.010),
+            "tremor": rng.uniform(0.10, 0.32) * stillness,
+            "linear": rng.uniform(0.010, 0.045) * stillness,
+            "phases": [rng.uniform(0.0, math.tau) for _ in range(12)],
+            "freqs": [rng.uniform(0.06, 0.32) for _ in range(6)] + [rng.uniform(1.7, 4.1) for _ in range(6)],
+            "mag": {
+                "x": math.cos(mag_heading) * mag_strength,
+                "y": math.sin(mag_heading) * mag_strength * 0.35,
+                "z": -rng.uniform(31.0, 43.0),
+            },
+        }
+
+    def _sensor_sample(self, tick: float) -> tuple[dict[str, float], dict[str, dict]]:
+        """Build a natural handheld-phone sensor sample for CDP Emulation."""
+        phase = self._sensor_seed + tick
+        motion = getattr(self, "_sensor_motion", None) or self._new_sensor_motion()
+        self._sensor_motion = motion
+        freqs = motion["freqs"]
+        phases = motion["phases"]
+        tremor = motion["tremor"]
+
+        slow_a = math.sin(tick * freqs[0] + phases[0]) * 1.4 + math.sin(tick * freqs[1] + phases[1]) * 0.7
+        slow_b = math.sin(tick * freqs[2] + phases[2]) * 1.0 + math.cos(tick * freqs[3] + phases[3]) * 0.55
+        slow_g = math.cos(tick * freqs[4] + phases[4]) * 0.9 + math.sin(tick * freqs[5] + phases[5]) * 0.45
+        fast_b = math.sin(tick * freqs[6] + phases[6]) * tremor + math.sin(tick * freqs[7] + phases[7]) * tremor * 0.33
+        fast_g = math.cos(tick * freqs[8] + phases[8]) * tremor + math.sin(tick * freqs[9] + phases[9]) * tremor * 0.33
+        fast_a = math.sin(tick * freqs[10] + phases[10]) * tremor * 0.7
+
+        alpha = (motion["alpha0"] + tick * motion["alpha_drift"] + slow_a + fast_a) % 360.0
+        beta = self._clamp(motion["beta0"] + tick * motion["beta_drift"] + slow_b + fast_b, -35.0, 35.0)
+        gamma = self._clamp(motion["gamma0"] + tick * motion["gamma_drift"] + slow_g + fast_g, -28.0, 28.0)
+
+        # Approximate angular velocity from the synthetic angle components.
+        d_beta = (
+            motion["beta_drift"]
+            + math.cos(tick * freqs[2] + phases[2]) * freqs[2] * 1.0
+            - math.sin(tick * freqs[3] + phases[3]) * freqs[3] * 0.55
+            + math.cos(tick * freqs[6] + phases[6]) * freqs[6] * tremor
+            + math.cos(tick * freqs[7] + phases[7]) * freqs[7] * tremor * 0.33
+        )
+        d_gamma = (
+            motion["gamma_drift"]
+            - math.sin(tick * freqs[4] + phases[4]) * freqs[4] * 0.9
+            + math.cos(tick * freqs[5] + phases[5]) * freqs[5] * 0.45
+            - math.sin(tick * freqs[8] + phases[8]) * freqs[8] * tremor
+            + math.cos(tick * freqs[9] + phases[9]) * freqs[9] * tremor * 0.33
+        )
+        d_alpha = (
+            motion["alpha_drift"]
+            + math.cos(tick * freqs[0] + phases[0]) * freqs[0] * 1.4
+            + math.cos(tick * freqs[1] + phases[1]) * freqs[1] * 0.7
+            + math.cos(tick * freqs[10] + phases[10]) * freqs[10] * tremor * 0.7
+        )
+
+        linear = {
+            "x": math.sin(phase * 1.7 + phases[6]) * motion["linear"],
+            "y": math.cos(phase * 1.3 + phases[7]) * motion["linear"] * 0.8,
+            "z": math.sin(phase * 1.1 + phases[8]) * motion["linear"] * 0.55,
+        }
+        gravity = {
+            "x": math.sin(math.radians(gamma)) * 9.80665,
+            "y": -math.sin(math.radians(beta)) * 9.80665,
+            "z": math.cos(math.radians(beta)) * math.cos(math.radians(gamma)) * 9.80665,
+        }
+        accel = {axis: gravity[axis] + linear[axis] for axis in ("x", "y", "z")}
+        gyro = {
+            "x": math.radians(d_beta),
+            "y": math.radians(d_gamma),
+            "z": math.radians(d_alpha),
+        }
+        mag = motion["mag"]
+        magnetic = {
+            "x": mag["x"] + math.sin(phase * 0.09 + phases[9]) * 0.45,
+            "y": mag["y"] + math.cos(phase * 0.08 + phases[10]) * 0.35,
+            "z": mag["z"] + math.sin(phase * 0.07 + phases[11]) * 0.40,
+        }
+        quat = self._quaternion_from_euler(alpha, beta, gamma)
+        orientation = {"alpha": alpha, "beta": beta, "gamma": gamma}
+        readings = {
+            "accelerometer": {"xyz": accel},
+            "linear-acceleration": {"xyz": linear},
+            "gravity": {"xyz": gravity},
+            "gyroscope": {"xyz": gyro},
+            "magnetometer": {"xyz": magnetic},
+            "absolute-orientation": {"quaternion": quat},
+            "relative-orientation": {"quaternion": quat},
+        }
+        return orientation, readings
+
+    async def _apply_sensor_to_page(self, page: Page) -> None:
+        """Attach virtual mobile motion sensors to one page via CDP.
+
+        This is protocol/native emulation only. It fixes browser-readable
+        sensor APIs without injecting or redefining page JavaScript objects.
+        """
+        if not self._context or getattr(page, "_damru_sensors_bound", False):
+            return
+        setattr(page, "_damru_sensors_bound", True)
+        try:
+            cdp = await self._context.new_cdp_session(page)  # type: ignore[union-attr]
+        except Exception as exc:
+            logger.debug("Sensor CDP session failed: %s", exc)
+            return
+
+        sensor_types = (
+            "accelerometer",
+            "linear-acceleration",
+            "gravity",
+            "gyroscope",
+            "magnetometer",
+            "absolute-orientation",
+            "relative-orientation",
+        )
+        enabled: set[str] = set()
+        for sensor_type in sensor_types:
+            try:
+                await cdp.send("Emulation.setSensorOverrideEnabled", {
+                    "enabled": True,
+                    "type": sensor_type,
+                    "metadata": {
+                        "available": True,
+                        "minimumFrequency": 1,
+                        "maximumFrequency": 60,
+                    },
+                })
+                enabled.add(sensor_type)
+            except Exception as exc:
+                logger.debug("Sensor override unavailable for %s: %s", sensor_type, exc)
+
+        if not enabled:
+            return
+
+        async def _pump() -> None:
+            tick = 0.0
+            while True:
+                if getattr(page, "is_closed", lambda: False)():
+                    return
+                orientation, readings = self._sensor_sample(tick)
+                try:
+                    await cdp.send("DeviceOrientation.setDeviceOrientationOverride", orientation)
+                except Exception as exc:
+                    logger.debug("DeviceOrientation override failed: %s", exc)
+                for sensor_type in tuple(enabled):
+                    try:
+                        await cdp.send("Emulation.setSensorOverrideReadings", {
+                            "type": sensor_type,
+                            "reading": readings[sensor_type],
+                        })
+                    except Exception as exc:
+                        logger.debug("Sensor reading failed for %s: %s", sensor_type, exc)
+                tick += 0.77
+                await asyncio.sleep(0.77)
+
+        task = asyncio.create_task(_pump())
+        self._sensor_tasks.append(task)
+
+    async def _apply_sensor_emulation(self) -> None:
+        """Enable virtual motion/orientation sensors for all Chromium pages."""
+        if not self._context:
+            return
+
+        page = self._context.pages[0] if self._context.pages else None
+        if page:
+            await self._apply_sensor_to_page(page)
+
+        def _on_page(p: Page) -> None:
+            asyncio.ensure_future(self._apply_sensor_to_page(p))
+
+        self._context.on("page", _on_page)
+        logger.info("Virtual motion sensors enabled (CDP)")
+
+    def _start_battery_keepalive(self) -> None:
+        """Reapply BatteryService spoof because Redroid resets it during boot."""
+        if not self._root or self._battery_tasks:
+            return
+
+        async def _pump() -> None:
+            while True:
+                try:
+                    await self._root.apply_battery_spoof(quiet=True)
+                except Exception as exc:
+                    logger.debug("Battery keepalive failed: %s", exc)
+                await asyncio.sleep(4.0)
+
+        task = asyncio.create_task(_pump())
+        self._battery_tasks.append(task)
+
     async def _apply_network_emulation(self) -> None:
         """Override network connection type via CDP protocol.
 
@@ -1412,8 +1709,6 @@ class AsyncDamru:
         """
         if not self._context:
             return
-        logger.info("Network emulation skipped: using native Redroid connectivity for stability")
-        return
 
         # Match the real Samsung reference profile captured for this project.
         conn_type = "wifi"

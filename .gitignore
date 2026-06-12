@@ -29,3 +29,17 @@ results/
 !damru/assets/magisk.apk
 chrome-apks/*
 !chrome-apks/README.md
+
+# Local preflight output
+fresh-preflight.json
+donate*.html
+donate*.png
+chrome-apks.zip
+chrome-apks.zip.sha256
+damru-redroid-latest.tar.sha256
+
+# Debug temp files
+nul
+tmp-*.txt
+# Research notes
+research/

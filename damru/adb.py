@@ -212,7 +212,7 @@ class ADB:
                 ["shell", f"su 0 sh -c '{escaped}'"], timeout=timeout
             )
 
-        # Not yet detected — try each method
+        # Not yet detected â€” try each method
         escaped = _encoded_script(command).replace("'", "'\"'\"'")
         try:
             return await self._run(
@@ -371,7 +371,7 @@ class ADB:
                 await asyncio.sleep(2)
 
         # Try adb root (restarts adbd as root)
-        # SKIP for TCP-connected devices (Docker containers) — adb root
+        # SKIP for TCP-connected devices (Docker containers) â€” adb root
         # restarts adbd which breaks Docker port forwarding permanently.
         serial = self.serial
         if serial and ":" in serial:
@@ -405,6 +405,8 @@ class ADB:
 
     async def forward(self, local_port: int, remote: str) -> None:
         """Set up port forwarding: adb forward tcp:PORT remote."""
+        if self.serial and ":" in self._plain_serial(self.serial):
+            await ADB()._run(["connect", self.serial], timeout=10, allow_failure=True)
         await self._run(["forward", f"tcp:{local_port}", remote])
 
     async def remove_forward(self, local_port: int) -> None:

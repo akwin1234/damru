@@ -49,6 +49,8 @@ from .netfix import android_dns_repair_command, wsl_runtime_network_repair_lines
 from .utils import logger
 
 _CHROME_APK_AUTO_SKIP_VERSIONS: set[str] = set()
+_REDROID_SENSOR_SOURCE_IMAGE = "redroid/redroid:11.0.0-latest"
+_SENSOR_MOCK_BIN = "android.hardware.sensors@2.1-service.mock"
 
 
 def _kernel_config_enabled(config_text: str, option: str) -> Optional[bool]:
@@ -283,7 +285,7 @@ class RedroidManager:
             "mounted=0",
             "populated=0",
             "mount | grep -q ' /dev/binderfs ' && mounted=1",
-            "if [ -e /dev/binderfs/binder-control ] || [ -e /dev/binderfs/binder ]; then populated=1; fi",
+            "if [ -e /dev/binderfs/binder-control ] && [ -e /dev/binderfs/binder ] && [ -e /dev/binderfs/hwbinder ] && [ -e /dev/binderfs/vndbinder ]; then populated=1; fi",
             "printf '%s %s' \"$mounted\" \"$populated\"",
         ])
         out = await self._run_cmd(
@@ -537,31 +539,21 @@ class RedroidManager:
 
     async def _ensure_binderfs(self) -> None:
         """Mount binderfs at /dev/binderfs if not already mounted."""
-        # Check if already mounted
-        out = await self._run_cmd(
-            self._wsl_sudo_cmd("mount | grep binderfs"),
-            timeout=5, allow_failure=True,
-        )
-        if "binderfs" in out:
-            logger.debug("Binderfs already mounted")
-            return
-
-        # Mount binderfs
+        script = "\n".join([
+            "set +e",
+            "modprobe binder_linux devices=binder,hwbinder,vndbinder 2>/dev/null || true",
+            "mkdir -p /dev/binderfs",
+            "if mount | grep -q ' /dev/binderfs ' && [ -e /dev/binderfs/binder-control ] && [ -e /dev/binderfs/binder ] && [ -e /dev/binderfs/hwbinder ] && [ -e /dev/binderfs/vndbinder ]; then exit 0; fi",
+            "if mount | grep -q ' /dev/binderfs ' && [ ! -e /dev/binderfs/binder-control ]; then umount /dev/binderfs >/dev/null 2>&1 || true; fi",
+            "mount | grep -q ' /dev/binderfs ' || mount -t binder binder /dev/binderfs >/dev/null 2>&1 || true",
+            "test -e /dev/binderfs/binder-control && test -e /dev/binderfs/binder && test -e /dev/binderfs/hwbinder && test -e /dev/binderfs/vndbinder",
+        ])
         await self._run_cmd(
-            self._wsl_sudo_cmd("mkdir -p /dev/binderfs"),
-            timeout=5, allow_failure=True,
+            self._wsl_sudo_cmd(script),
+            timeout=10, allow_failure=True,
         )
-        await self._run_cmd(
-            self._wsl_sudo_cmd("mount -t binder binder /dev/binderfs"),
-            timeout=5, allow_failure=True,
-        )
-
-        # Verify
-        out = await self._run_cmd(
-            self._wsl_sudo_cmd("ls /dev/binderfs/binder"),
-            timeout=5, allow_failure=True,
-        )
-        if "binder" in out or out.strip():
+        mounted, populated = await self._binderfs_mount_status()
+        if mounted and populated:
             logger.info("Binderfs mounted at /dev/binderfs")
         else:
             logger.warning(
@@ -685,7 +677,7 @@ class RedroidManager:
                 if await self._image_exists(image):
                     return
             logger.warning(
-                "Baked image %s missing — pulling base %s as unbaked fallback",
+                "Baked image %s missing; pulling base %s as unbaked fallback",
                 image, REDROID_BASE_IMAGE,
             )
             await self._run_cmd(
@@ -713,7 +705,223 @@ class RedroidManager:
                 f"Image {image} is missing and could not be pulled.\n{e}"
             )
 
+    async def _sensor_hal_present(self, serial: str) -> bool:
+        name_port = self._container_name_port_for_serial(serial)
+        if name_port is not None:
+            name, _ = name_port
+            aidl = await self._run_cmd(
+                self._docker_cmd(
+                    "exec", name, "sh", "-lc",
+                    "test -x /vendor/bin/hw/android.hardware.sensors-service.damru && "
+                    "test -f /vendor/etc/vintf/manifest/damru-sensors.xml && "
+                    "ps -A | grep -q android.hardware.sensors-service.damru && echo ready",
+                ),
+                timeout=10,
+                allow_failure=True,
+            )
+            if aidl.strip() == "ready":
+                return True
+            files = await self._run_cmd(
+                self._docker_cmd(
+                    "exec", name, "sh", "-lc",
+                    f"test -x /vendor/bin/hw/{_SENSOR_MOCK_BIN} && "
+                    "test -f /vendor/etc/vintf/manifest/android.hardware.sensors@2.1.xml && echo ready",
+                ),
+                timeout=10,
+                allow_failure=True,
+            )
+            if files.strip() == "ready":
+                return True
+            lshal = await self._run_cmd(
+                self._docker_cmd("exec", name, "sh", "-lc", "lshal 2>/dev/null | grep -i 'android.hardware.sensors@2.1::ISensors/default'"),
+                timeout=10,
+                allow_failure=True,
+            )
+            if lshal.strip():
+                return True
+        out = await self._run_cmd(
+            self._adb_cmd("shell", "dumpsys", "sensorservice", serial=serial),
+            timeout=10,
+            allow_failure=True,
+        )
+        return "BMI270 Accelerometer" in out
+    async def _ensure_sensor_mock_assets(self) -> str:
+        """Return a WSL/Linux path containing Redroid's HIDL mock sensor HAL."""
+        asset_dir = "/tmp/damru-redroid11-sensors"
+        marker = f"{asset_dir}/vendor/bin/hw/{_SENSOR_MOCK_BIN}"
+        check = await self._run_cmd(
+            self._wsl_sudo_cmd(f"test -s {shlex.quote(marker)} && echo ready"),
+            timeout=10,
+            allow_failure=True,
+        )
+        if check.strip() == "ready":
+            return asset_dir
+
+        logger.info("Preparing Redroid HIDL sensor mock assets from %s", _REDROID_SENSOR_SOURCE_IMAGE)
+        await self._run_cmd(self._docker_cmd("pull", _REDROID_SENSOR_SOURCE_IMAGE), timeout=900)
+        cid = (await self._run_cmd(self._docker_cmd("create", _REDROID_SENSOR_SOURCE_IMAGE), timeout=30)).strip()
+        if not cid:
+            raise DamruError(f"Could not create temporary container from {_REDROID_SENSOR_SOURCE_IMAGE}")
+        try:
+            await self._run_cmd(self._wsl_sudo_cmd(f"rm -rf {asset_dir}; mkdir -p {asset_dir}/vendor/bin/hw {asset_dir}/vendor/etc/init {asset_dir}/vendor/etc/vintf/manifest"), timeout=20)
+            for src, dst in (
+                (f"/vendor/bin/hw/{_SENSOR_MOCK_BIN}", f"{asset_dir}/vendor/bin/hw/{_SENSOR_MOCK_BIN}"),
+                ("/vendor/etc/init/android.hardware.sensors@2.1-service-mock.rc", f"{asset_dir}/vendor/etc/init/android.hardware.sensors@2.1-service-mock.rc"),
+                ("/vendor/etc/vintf/manifest/android.hardware.sensors@2.1.xml", f"{asset_dir}/vendor/etc/vintf/manifest/android.hardware.sensors@2.1.xml"),
+            ):
+                await self._run_cmd(self._docker_cmd("cp", f"{cid}:{src}", dst), timeout=60)
+        finally:
+            await self._run_cmd(self._docker_cmd("rm", "-f", cid), timeout=20, allow_failure=True)
+        return asset_dir
+
+    async def _install_hidl_sensor_hal(self, name: str, serial: Optional[str] = None) -> None:
+        """Install HIDL sensor HAL files into a Redroid container rootfs."""
+        asset_dir = await self._ensure_sensor_mock_assets()
+        init_dir = Path(__file__).resolve().parent.parent / "native" / "sensors" / "init"
+        sensorservice_rc = self._to_wsl_path(str(init_dir / "sensorservice.rc")) if self._is_windows else str(init_dir / "sensorservice.rc")
+
+        await self._run_cmd(self._docker_cmd("exec", name, "mkdir", "-p", "/vendor/bin/hw", "/vendor/etc/init", "/vendor/etc/vintf/manifest", "/system/etc/init"), timeout=20)
+        await self._run_cmd(self._docker_cmd("cp", f"{asset_dir}/vendor/bin/hw/{_SENSOR_MOCK_BIN}", f"{name}:/vendor/bin/hw/{_SENSOR_MOCK_BIN}"), timeout=60)
+        await self._run_cmd(self._docker_cmd("cp", f"{asset_dir}/vendor/etc/init/android.hardware.sensors@2.1-service-mock.rc", f"{name}:/vendor/etc/init/android.hardware.sensors@2.1-service-mock.rc"), timeout=60)
+        await self._run_cmd(self._docker_cmd("cp", f"{asset_dir}/vendor/etc/vintf/manifest/android.hardware.sensors@2.1.xml", f"{name}:/vendor/etc/vintf/manifest/android.hardware.sensors@2.1.xml"), timeout=60)
+        await self._run_cmd(self._docker_cmd("cp", sensorservice_rc, f"{name}:/system/etc/init/sensorservice.rc"), timeout=60)
+
+        safe_name = re.sub(r"[^A-Za-z0-9_.-]", "_", name)
+        manifest_tmp = f"/tmp/damru-{safe_name}-manifest.xml"
+        if await self._run_cmd(self._docker_cmd("cp", f"{name}:/vendor/etc/vintf/manifest.xml", manifest_tmp), timeout=20, allow_failure=True) is not None:
+            await self._run_cmd(
+                self._wsl_sudo_cmd(
+                    "perl -0pi -e "
+                    + shlex.quote(r's#\s*<hal format="aidl">\s*<name>android\.hardware\.sensors</name>.*?</hal>\s*#\n#sg')
+                    + f" {shlex.quote(manifest_tmp)}"
+                ),
+                timeout=20,
+                allow_failure=True,
+            )
+            await self._run_cmd(self._docker_cmd("cp", manifest_tmp, f"{name}:/vendor/etc/vintf/manifest.xml"), timeout=20, allow_failure=True)
+
+        rc_tmp = f"/tmp/damru-{safe_name}-redroid.common.rc"
+        if await self._run_cmd(self._docker_cmd("cp", f"{name}:/vendor/etc/init/redroid.common.rc", rc_tmp), timeout=20, allow_failure=True) is not None:
+            await self._run_cmd(
+                self._wsl_sudo_cmd(
+                    f"if grep -q 'Damru synthetic sensors HAL' {shlex.quote(rc_tmp)} 2>/dev/null; then "
+                    f"awk '/# Damru synthetic sensors HAL:{{exit}} {{print}}' {shlex.quote(rc_tmp)} > {shlex.quote(rc_tmp)}.clean && "
+                    f"mv {shlex.quote(rc_tmp)}.clean {shlex.quote(rc_tmp)}; fi"
+                ),
+                timeout=20,
+                allow_failure=True,
+            )
+            await self._run_cmd(self._docker_cmd("cp", rc_tmp, f"{name}:/vendor/etc/init/redroid.common.rc"), timeout=20, allow_failure=True)
+
+        # Vendor namespace must see the HIDL sensor interface libraries. Copy only
+        # the three interface libs; copying generic system libs into /vendor can
+        # destabilize other HAL services.
+        copy_libs = "; ".join(
+            f"cp /system/lib64/{lib} /vendor/lib64/{lib} 2>/dev/null || true"
+            for lib in (
+                "android.hardware.sensors@1.0.so",
+                "android.hardware.sensors@2.0.so",
+                "android.hardware.sensors@2.1.so",
+            )
+        )
+        cleanup = " && ".join([
+            "rm -f /vendor/etc/vintf/manifest/damru-sensors.xml /vendor/etc/init/android.hardware.sensors-service.damru.rc /vendor/bin/hw/android.hardware.sensors-service.damru",
+            copy_libs,
+            f"chmod 755 /vendor/bin/hw/{_SENSOR_MOCK_BIN}",
+            "chmod 644 /vendor/etc/init/android.hardware.sensors@2.1-service-mock.rc /vendor/etc/vintf/manifest/android.hardware.sensors@2.1.xml /system/etc/init/sensorservice.rc",
+        ])
+        await self._run_cmd(self._docker_cmd("exec", name, "sh", "-lc", cleanup), timeout=60)
+
+        if serial:
+            await self._run_cmd(self._adb_cmd("push", f"{asset_dir}/vendor/bin/hw/{_SENSOR_MOCK_BIN}", "/data/local/tmp/damru-sensors-mock", serial=serial), timeout=60)
+            await self._run_cmd(self._adb_cmd("push", f"{asset_dir}/vendor/etc/init/android.hardware.sensors@2.1-service-mock.rc", "/data/local/tmp/damru-sensors-mock.rc", serial=serial), timeout=60)
+            await self._run_cmd(self._adb_cmd("push", f"{asset_dir}/vendor/etc/vintf/manifest/android.hardware.sensors@2.1.xml", "/data/local/tmp/damru-sensors-21.xml", serial=serial), timeout=60)
+            await self._run_cmd(self._adb_cmd("push", sensorservice_rc, "/data/local/tmp/damru-sensorservice.rc", serial=serial), timeout=60)
+            adb_install = " && ".join([
+                "mkdir -p /vendor/bin/hw /vendor/etc/init /vendor/etc/vintf/manifest /system/etc/init",
+                f"cp /data/local/tmp/damru-sensors-mock /vendor/bin/hw/{_SENSOR_MOCK_BIN}",
+                "cp /data/local/tmp/damru-sensors-mock.rc /vendor/etc/init/android.hardware.sensors@2.1-service-mock.rc",
+                "cp /data/local/tmp/damru-sensors-21.xml /vendor/etc/vintf/manifest/android.hardware.sensors@2.1.xml",
+                "cp /data/local/tmp/damru-sensorservice.rc /system/etc/init/sensorservice.rc",
+                "rm -f /vendor/etc/vintf/manifest/damru-sensors.xml /vendor/etc/init/android.hardware.sensors-service.damru.rc /vendor/bin/hw/android.hardware.sensors-service.damru",
+                "cp /system/lib64/android.hardware.sensors@1.0.so /vendor/lib64/android.hardware.sensors@1.0.so 2>/dev/null || true",
+                "cp /system/lib64/android.hardware.sensors@2.0.so /vendor/lib64/android.hardware.sensors@2.0.so 2>/dev/null || true",
+                "cp /system/lib64/android.hardware.sensors@2.1.so /vendor/lib64/android.hardware.sensors@2.1.so 2>/dev/null || true",
+                f"chmod 755 /vendor/bin/hw/{_SENSOR_MOCK_BIN}",
+                "chmod 644 /vendor/etc/init/android.hardware.sensors@2.1-service-mock.rc /vendor/etc/vintf/manifest/android.hardware.sensors@2.1.xml /system/etc/init/sensorservice.rc /vendor/lib64/android.hardware.sensors@1.0.so /vendor/lib64/android.hardware.sensors@2.0.so /vendor/lib64/android.hardware.sensors@2.1.so 2>/dev/null || true",
+            ])
+            await self._run_cmd(self._adb_cmd("shell", "su", "0", "sh", "-c", adb_install, serial=serial), timeout=60)
+
+    async def _install_aidl_sensor_hal(self, name: str, serial: str) -> None:
+        """Install Damru's Android 14 AIDL sensor HAL into a Redroid container."""
+        root = Path(__file__).resolve().parent.parent
+        script = root / "native" / "sensors" / "install_sensors_hal.sh"
+        if not script.exists():
+            raise DamruError(f"Native sensor HAL installer missing: {script}")
+        plain_serial = self._plain_serial(serial)
+        if self._is_windows:
+            script_path = self._to_wsl_path(str(script))
+            repo_root = self._to_wsl_path(str(root))
+            cmd = (
+                f"cd {shlex.quote(repo_root)} && "
+                f"DAMRU_SENSOR_ADB_SERIAL={shlex.quote(plain_serial)} "
+                f"bash {shlex.quote(script_path)}"
+            )
+            await self._run_cmd(self._wsl_sudo_cmd(cmd), timeout=300)
+        else:
+            cmd = (
+                f"cd {shlex.quote(str(root))} && "
+                f"DAMRU_SENSOR_ADB_SERIAL={shlex.quote(plain_serial)} "
+                f"bash {shlex.quote(str(script))}"
+            )
+            await self._run_cmd(["bash", "-lc", cmd], timeout=300)
+
+    async def _ensure_sensor_hal(self, serial: str, container_name: Optional[str] = None) -> bool:
+        """Install Damru's native sensor HAL into the running Redroid image.
+
+        Returns True when an install/restart was performed.
+        """
+        enable_aidl = (
+            os.environ.get("DAMRU_ENABLE_NATIVE_SENSOR_HAL") == "1"
+            or os.environ.get("DAMRU_EXPERIMENTAL_SENSOR_HAL") == "1"
+        )
+        enable_hidl = os.environ.get("DAMRU_EXPERIMENTAL_HIDL_SENSOR_HAL") == "1"
+        if not enable_aidl and not enable_hidl:
+            return False
+        if await self._sensor_hal_present(serial):
+            return False
+
+        target_name = container_name
+        if target_name is None:
+            target = self._container_name_port_for_serial(serial)
+            if target is not None:
+                target_name = target[0]
+        if target_name is None:
+            logger.warning("Cannot map %s to a Damru container for sensor HAL install", serial)
+            return False
+
+        if enable_hidl:
+            logger.info("Installing experimental HIDL sensor HAL into %s", target_name)
+            await self._install_hidl_sensor_hal(target_name, serial=serial)
+        else:
+            logger.info("Installing native AIDL sensor HAL into %s", target_name)
+            await self._install_aidl_sensor_hal(target_name, serial)
+        return True
     # ── Container lifecycle ──
+
+    async def _commit_sensor_hal_and_recreate(self, name: str, index: int) -> str:
+        """Persist the HAL install, then boot a fresh container from it."""
+        logger.info("Committing %s after native sensor HAL install", name)
+        await self._run_cmd(
+            self._docker_cmd("commit", name, REDROID_IMAGE),
+            timeout=180,
+        )
+        await self._run_cmd(
+            self._docker_cmd("rm", "-f", name),
+            timeout=15,
+            allow_failure=True,
+        )
+        return await self.start_container(index)
 
     async def _get_container_state(self, name: str) -> str:
         """Check container state. Returns 'running', 'exited', or 'none'."""
@@ -725,6 +933,14 @@ class RedroidManager:
         if status in ("running", "exited", "created", "paused"):
             return status
         return "none"
+
+    async def _container_exit_code(self, name: str) -> str:
+        out = await self._run_cmd(
+            self._docker_cmd("inspect", "-f", "{{.State.ExitCode}}", name),
+            timeout=10,
+            allow_failure=True,
+        )
+        return out.strip()
 
     def _boot_timeout_for_index(self, index: int) -> float:
         """Return a realistic Redroid boot timeout for the requested worker.
@@ -795,19 +1011,29 @@ class RedroidManager:
             )
             await self._wait_for_boot(serial, name=name, timeout=boot_timeout)
             await self._repair_docker_bridge_nat()
-            if not await self._android_dns_usable(serial):
-                logger.warning("Recreating %s because Android DNS is not usable", name)
-                return await self.restart_container(index)
             try:
                 await self._wait_for_package_service(serial, timeout=60)
             except DamruError as exc:
                 logger.warning("Recreating unhealthy %s: %s", name, exc)
                 return await self.restart_container(index)
+            if not await self._wait_for_android_dns_usable(serial):
+                logger.warning("Android DNS not fully confirmed on %s after repair; reusing %s", serial, name)
+            if await self._ensure_sensor_hal(serial):
+                logger.info("Restarting %s to activate native sensor HAL", name)
+                return await self._commit_sensor_hal_and_recreate(name, index)
             if index not in self._started_indices:
                 self._started_indices.append(index)
             return serial
 
         elif state in ("exited", "created", "paused"):
+            if state == "exited" and await self._container_exit_code(name) == "130":
+                logger.info("Recreating stale %s after SIGINT exit", name)
+                await self._run_cmd(
+                    self._docker_cmd("rm", "-f", name),
+                    timeout=15,
+                    allow_failure=True,
+                )
+                return await self.start_container(index)
             if use_host_network and state in {"exited", "created"}:
                 entrypoint = await self._container_entrypoint_path(name)
                 if entrypoint != "/damru-redroid-init":
@@ -835,14 +1061,16 @@ class RedroidManager:
             )
             await self._wait_for_boot(serial, name=name, timeout=boot_timeout)
             await self._repair_docker_bridge_nat()
-            if not await self._android_dns_usable(serial):
-                logger.warning("Recreating %s because Android DNS is not usable", name)
-                return await self.restart_container(index)
             try:
                 await self._wait_for_package_service(serial, timeout=60)
             except DamruError as exc:
                 logger.warning("Recreating unhealthy %s: %s", name, exc)
                 return await self.restart_container(index)
+            if not await self._wait_for_android_dns_usable(serial):
+                logger.warning("Android DNS not fully confirmed on %s after repair; reusing %s", serial, name)
+            if await self._ensure_sensor_hal(serial):
+                logger.info("Restarting %s to activate native sensor HAL", name)
+                return await self._commit_sensor_hal_and_recreate(name, index)
             if index not in self._started_indices:
                 self._started_indices.append(index)
             return serial
@@ -891,7 +1119,7 @@ set -e
 target=/home/damru/bin/redroid-pid-shift
 source=/home/damru/bin/redroid_pid_shift.c
 mkdir -p /home/damru/bin
-if [ -x "$target" ]; then exit 0; fi
+if [ -x "$target" ] && strings "$target" 2>/dev/null | grep -q DAMRU_PID_SHIFT_CLEAN_V1; then exit 0; fi
 if ! command -v gcc >/dev/null 2>&1; then
   echo "gcc is required to build Damru's WSL Redroid init wrapper. Run python -m damru install-deps -y." >&2
   exit 127
@@ -904,7 +1132,9 @@ cat > "$source" <<'C'
 #include <unistd.h>
 
 int main(int argc, char **argv) {
-    int count = 96;
+    static const char *damru_guard = "DAMRU_PID_SHIFT_CLEAN_V1";
+    (void)damru_guard;
+    int count = 0;
     const char *env = getenv("DAMRU_PID_SHIFT_COUNT");
     if (env && *env) {
         int parsed = atoi(env);
@@ -948,11 +1178,19 @@ chmod 755 "$target"
         # Ensure the launch image exists before docker run (auto-pull/tag)
         await self.ensure_image(REDROID_IMAGE)
 
+        # WSL host-network Redroid uses the WSL network namespace. Bring the
+        # narrow Damru DNS/NAT repair online before Android netd starts so
+        # Android can bind resolver state during boot instead of being fixed
+        # only after the fact.
+        if use_host_network:
+            await self._repair_docker_bridge_nat()
+
         # Remove leftover container with same name
         await self._run_cmd(
             self._docker_cmd("rm", "-f", name),
             timeout=10, allow_failure=True,
         )
+        await self._ensure_binderfs()
 
         # Start redroid container with binderfs, memfd, and resource limits
         logger.info(
@@ -973,28 +1211,29 @@ chmod 755 "$target"
         pid_shift_wrapper = ""
         if use_host_network and self._is_windows:
             pid_shift_wrapper = await self._ensure_wsl_redroid_pid_shift_wrapper()
+        if use_host_network and self._is_windows:
             init_args = ["qemu=1", "androidboot.hardware=redroid", *boot_args]
 
         run_args = [
             "run", "-d",
             "--name", name,
             "--privileged",
-            "--cpus", str(REDROID_CPUS),
-            "--memory", REDROID_MEMORY,
             "--restart=on-failure:3",
             "-v", "/dev/binderfs:/dev/binderfs",
         ]
+        if not self._is_windows:
+            run_args.extend(["--cpus", str(REDROID_CPUS), "--memory", REDROID_MEMORY])
         if use_host_network:
             logger.info("Using host networking with adbd remapped to port %d", port)
             run_args.extend(["--network", "host"])
+        else:
+            run_args.extend(["-p", f"{port}:5555"])
             if pid_shift_wrapper:
                 run_args.extend([
                     "-e", f"DAMRU_PID_SHIFT_COUNT={96 + (index * 64)}",
                     "-v", f"{pid_shift_wrapper}:/damru-redroid-init:ro",
                     "--entrypoint", "/damru-redroid-init",
                 ])
-        else:
-            run_args.extend(["-p", f"{port}:5555"])
         run_args.extend([REDROID_IMAGE, *init_args])
 
         await self._run_cmd(
@@ -1020,9 +1259,15 @@ chmod 755 "$target"
             logger.info("Waiting for %s to boot...", name)
             await self._wait_for_boot(serial, name=name, timeout=boot_timeout)
             await self._repair_docker_bridge_nat()
-            if not await self._android_dns_boot_ready(serial) and not await self._android_dns_usable(serial):
-                raise DamruError(f"Android DNS did not initialize on {serial}")
             await self._wait_for_package_service(serial, timeout=90)
+            if not await self._wait_for_android_dns_usable(serial):
+                logger.warning(
+                    "Android DNS did not fully confirm on %s; continuing with repaired resolver props",
+                    serial,
+                )
+            if await self._ensure_sensor_hal(serial):
+                logger.info("Restarting %s to activate native sensor HAL", name)
+                return await self._commit_sensor_hal_and_recreate(name, index)
         except Exception as exc:
             diagnostics = await self._container_boot_diagnostics(name)
             await self._run_cmd(
@@ -1279,6 +1524,28 @@ chmod 755 "$target"
         )
         return "DnsAddresses: [ /" in connectivity or "Capabilities:" in connectivity
 
+    async def _wait_for_android_dns_usable(self, serial: str, timeout: float = 60.0) -> bool:
+        """Repair and poll Android DNS without treating failure as boot-fatal."""
+        if self._is_windows and self._should_use_host_network():
+            await self._repair_docker_bridge_nat()
+        elapsed = 0.0
+        while elapsed <= timeout:
+            if await self._android_dns_boot_ready(serial):
+                return True
+            if await self._android_dns_usable(serial):
+                return True
+            await asyncio.sleep(3.0)
+            elapsed += 3.0
+        # Last best-effort repair: enough for Chrome on some Redroid builds even
+        # when dumpsys connectivity never reports DnsAddresses.
+        await self._ensure_android_dns(serial)
+        net_dns = await self._run_cmd(
+            self._adb_cmd("shell", "getprop", "net.dns1", serial=serial),
+            timeout=8,
+            allow_failure=True,
+        )
+        return bool(net_dns.strip())
+
     async def _remap_adbd_port(self, name: str, port: int) -> None:
         """Move Redroid adbd to a stable per-worker host-network port."""
         current = await self._run_cmd(
@@ -1420,10 +1687,13 @@ chmod 755 "$target"
                     break
             if vanadium_library is not None:
                 logger.info('Installing matching WebView TrichromeLibrary on %s...', serial)
-                await self._run_cmd(
-                    self._adb_cmd('install', '-r', '-d', str(vanadium_library), serial=serial),
-                    timeout=APK_INSTALL_TIMEOUT,
-                )
+                try:
+                    await self._run_cmd(
+                        self._adb_cmd('install', '-r', '-d', str(vanadium_library), serial=serial),
+                        timeout=APK_INSTALL_TIMEOUT,
+                    )
+                except DamruError as exc:
+                    logger.warning('Optional Vanadium TrichromeLibrary install failed; continuing with Google library: %s', exc)
             logger.info('Replacing system WebView on %s from %s...', serial, matching_webview)
             await self._replace_system_webview_apk(serial, matching_webview)
 
@@ -1861,6 +2131,17 @@ chmod 755 "$target"
             await asyncio.sleep(2)
 
         await self._wait_for_boot(serial, name=temp_name, timeout=CONTAINER_BOOT_TIMEOUT)
+
+        if (os.environ.get("DAMRU_ENABLE_NATIVE_SENSOR_HAL") == "1" or os.environ.get("DAMRU_EXPERIMENTAL_SENSOR_HAL") == "1") and not await self._sensor_hal_present(serial):
+            logger.info("Installing native sensor HAL into baked image")
+            await self._install_aidl_sensor_hal(temp_name, serial)
+            logger.info("Restarting %s to activate native sensor HAL", temp_name)
+            await self._run_cmd(self._docker_cmd("restart", temp_name), timeout=60)
+            await asyncio.sleep(8)
+            await self._run_cmd(self._adb_cmd("disconnect", serial), timeout=5, allow_failure=True)
+            await self._run_cmd(self._adb_cmd("connect", serial), timeout=10, allow_failure=True)
+            await self._wait_for_boot(serial, name=temp_name, timeout=CONTAINER_BOOT_TIMEOUT)
+            await self._wait_for_package_service(serial, timeout=90)
 
         try:
             adb = ADB(serial=serial)

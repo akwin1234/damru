@@ -386,13 +386,34 @@ Damru uses **Redroid** (Android in Docker) to spin up headless mobile devices. F
 
 Damru runs one full Android container per worker. The default Redroid worker limit is `2` CPU cores and `2g` memory per container (`REDROID_CPUS = 2.0`, `REDROID_MEMORY = "2g"`). Use these numbers for capacity planning:
 
+Processor guidance:
+
+- **Minimum:** 2 modern x86_64 vCPU/cores for one worker smoke tests.
+- **Recommended:** 4 vCPU/cores for one comfortable worker.
+- **Multi-worker:** 6-8 vCPU/cores is a good practical target for 2-3 workers. More workers are possible, but boot time and page load stability depend heavily on disk I/O and proxy/network quality.
+- **Scaling rule:** budget roughly 2 vCPU per active Redroid worker, plus 1-2 vCPU for Docker, ADB, Python, Playwright/CDP, and the host OS.
+
+Memory guidance:
+
+- **Minimum:** 4 GB host RAM for one worker smoke tests.
+- **Recommended:** 8 GB host RAM for one stable worker.
+- **Multi-worker:** 12-16 GB host RAM is usually enough for 2-3 workers; larger pools should budget 2-3 GB RAM per worker plus host overhead.
+- **Observed locally:** a warm idle worker usually sits around 0.8-1.2 GB RAM inside a 2 GB Docker limit, but heavy pages, proof captures, and many stale tabs can push much higher.
+- **WSL2:** set enough WSL memory in `.wslconfig` if Windows is starving the Ubuntu distro; Redroid workers are real Android systems, not lightweight browser tabs.
+
 | Workload | CPU | RAM | Disk | Notes |
 | :--- | :--- | :--- | :--- | :--- |
 | **Bare minimum, 1 worker** | 2 vCPU | 4 GB host RAM | 15 GB free | Enough for install, Docker, one Redroid worker, and basic smoke tests. |
-| **Recommended, 1 worker** | 4 vCPU | 8 GB host RAM | 30 GB free | Better for high-resolution pages, proof captures, and fewer Chrome startup races. |
+| **Recommended, 1 worker** | 4 vCPU | 8 GB host RAM | 25-30 GB free | Better for high-resolution pages, proof captures, and fewer Chrome startup races. |
 | **Each additional worker** | +2 vCPU | +2-3 GB RAM | +5-8 GB free | Matches the default Docker worker limit plus image/container overhead. |
-| **Baking/exporting image** | 4 vCPU | 8 GB RAM | 20 GB temporary free | Needs room for base image, baked image layer, and exported `.tar`. |
-| **WSL2 recommended host** | 4+ vCPU | 8-16 GB RAM | 40+ GB free in WSL disk | WSL stores Docker layers inside the distro virtual disk unless you move Docker data-root. |
+| **Baking/exporting image** | 4 vCPU | 8 GB RAM | 35 GB temporary free | Needs room for the clean Redroid base, baked image layer, temp bake container, and exported `.tar`. |
+| **Raw APK bundle work** | 4 vCPU | 8 GB RAM | 8 GB free | The current `chrome-apks.zip` artifact is about 3.3 GB and expands to a larger `chrome-apks/` tree. Normal users should prefer the baked image. |
+| **WSL2 recommended host** | 4+ vCPU | 8-16 GB RAM | 40-50+ GB free in WSL disk | WSL stores Docker layers, containers, APK extracts, and image export work inside the distro virtual disk unless you move Docker data-root. |
+
+Current release artifact sizes:
+
+- `damru-redroid-latest.tar`: about 1.2 GB as an exported Docker tarball; it expands into Docker's image/layer store after `docker load`.
+- `chrome-apks.zip`: about 3.3 GB; needed only for raw/unbaked Redroid, image baking, APK recovery, or Chrome/WebView rotation asset updates.
 
 For large pools, start with `max_devices=1`, run `python -m damru check-env`, then increase workers gradually. Redroid is CPU and disk-I/O heavy during boot; too many workers on a small VPS will look like browser instability.
 

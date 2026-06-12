@@ -1,0 +1,7 @@
+service damru-sensors-hal /system/bin/hw/android.hardware.sensors@2.1-service.mock
+    interface android.hardware.sensors@2.0::ISensors default
+    interface android.hardware.sensors@2.1::ISensors default
+    class hal
+    user system
+    group system
+    rlimit rtprio 10 10
