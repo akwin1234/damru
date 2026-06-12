@@ -2002,6 +2002,24 @@ def _install_image(args: argparse.Namespace) -> int:
             print(f"Manual download URL: {args.url}", file=sys.stderr)
             return 1
         tar_path = target
+        # Skip SHA256 check for freshly downloaded files (new baked images)
+        # Only verify checksum for pre-placed local tarballs
+        print(f"Downloaded {os.path.getsize(str(tar_path)) // (1024 * 1024)} MB, loading into Docker...")
+        linux_tar = _to_wsl_path(str(tar_path)) if _is_windows() else str(tar_path)
+        print(f"Loading {tar_path} into Docker as {REDROID_IMAGE}...")
+        load = _linux_run(f"docker load -i {shlex.quote(linux_tar)}", timeout=1800, root_user=_is_windows())
+        if load.stdout.strip():
+            print(load.stdout.strip())
+        if load.returncode != 0:
+            if load.stderr.strip():
+                print(load.stderr.strip(), file=sys.stderr)
+            return load.returncode
+        image_ok = _linux_run(f"docker images -q {shlex.quote(REDROID_IMAGE)} | grep -q .", timeout=20, root_user=_is_windows()).returncode == 0
+        if not image_ok:
+            print(f"Docker loaded the tarball, but {REDROID_IMAGE} was not found.", file=sys.stderr)
+            return 1
+        print(f"Redroid image ready: {REDROID_IMAGE}")
+        return 0
 
     digest = _file_sha256(tar_path)
     if digest.lower() != _DAMRU_IMAGE_SHA256.lower():
