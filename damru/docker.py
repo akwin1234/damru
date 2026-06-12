@@ -2337,7 +2337,10 @@ chmod 755 "$target"
                 "logcat -c 2>/dev/null; true",
                 "pm trim-caches 999999999 2>/dev/null; true",
             ]:
-                await adb.shell_root(clean_cmd, timeout=10, allow_failure=True)
+                try:
+                    await adb.shell_root(clean_cmd, timeout=10)
+                except Exception:
+                    pass
 
             # Step 12: docker commit → custom image
             logger.info("Committing image as %s (this may take a minute)...", image_name)

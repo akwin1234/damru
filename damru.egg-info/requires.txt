@@ -1,0 +1,9 @@
+playwright<1.60,>=1.40
+requests>=2.28
+pysocks>=1.7
+websockets>=12
+
+[dev]
+pytest
+pytest-asyncio
+aiohttp
