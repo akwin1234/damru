@@ -192,3 +192,15 @@ Use `AsyncDamru`, `Damru`, or `DamruPool` for real automation code. The UI is a 
 ## Screenshot Capture
 
 The screenshots in this file were captured from the local UI at desktop size with Playwright. They are stored in `docs/assets/ui/` and are safe to include in README/docs.
+
+
+## Experimental Backend Flags
+
+The UI backend respects the same DAMRU_EXPERIMENTAL_* env vars as the CLI. Set them before starting the UI:
+
+`ash
+export DAMRU_EXPERIMENTAL_SENSOR_HAL=1   # enable native sensor HAL
+python -m damru ui
+`
+
+See README.md **Experimental Features** for the full list.

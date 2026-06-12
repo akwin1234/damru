@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Documented all experimental env vars (DAMRU_EXPERIMENTAL_SENSOR_HAL, HIDL_SENSOR_HAL, BATTERY_DUMPSYS, CDP_SENSORS, WORKER_CORE_CDP, RAW_WORKER_CDP, ENABLE_NATIVE_SENSOR_HAL, PROFILE_TIER) in README.md Experimental Features section.
+
+
 - Added WebView Shell-aware profile hardening: `force-profile --browser-package org.chromium.webview_shell` now writes WebView command-line/preferences, applies native memory preload for WebView Shell, and keeps Android props/timezone/locale/GPU/CPU profile behavior consistent with Chrome harnesses.
 - Tightened Chrome/WebView version alignment: Chrome rotation and explicit `--chrome-version` selection require matching WebView APK assets, install/bake replaces the system WebView provider with safe `root:root 0644` permissions, and stale WebView oat/dalvik cache is cleared to avoid Android writable-dex rejection.
 - Made `stealth-open-url` default to `--mode reattach`: apply full Damru stealth, detach CDP for the protected native Chrome navigation, then reconnect CDP so the loaded page can be inspected or automated. `--mode cdp`, `--mode native`, and `--mode playwright` remain available for specific debugging needs.

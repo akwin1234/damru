@@ -819,6 +819,40 @@ You must configure the Docker daemon inside WSL to use a different data-root.
 *(Note: Native `DOCKER_STORAGE_PATH` configuration via Python is on the upcoming roadmap).*
 
 ---
+## Experimental Features
+
+Damru includes several experimental flags that enable newer or riskier stealth capabilities. These are gated behind environment variables so they do not affect default behavior.
+
+Set any flag before running Damru:
+
+```bash
+export DAMRU_EXPERIMENTAL_SENSOR_HAL=1   # Linux/WSL
+$env:DAMRU_EXPERIMENTAL_SENSOR_HAL = 1  # Windows PowerShell
+```
+
+| Env Var | Default | What It Does |
+|---------|---------|-------------|
+| `DAMRU_EXPERIMENTAL_SENSOR_HAL=1` | off | Install the AIDL sensor HAL (gyroscope/accelerometer/magnetometer) into baked images. Writes the native sensor service binary, AIDL manifest, and per-profile randomised sensor-seed props at container start. |
+| `DAMRU_EXPERIMENTAL_HIDL_SENSOR_HAL=1` | off | Install the legacy HIDL sensor HAL instead of AIDL. Used only if AIDL is unavailable on the target Android image. |
+| `DAMRU_ENABLE_NATIVE_SENSOR_HAL=1` | off | Activate the native sensor HAL at worker runtime so `sensorservice` streams real events. Requires sensor HAL installed in the image first. |
+| `DAMRU_EXPERIMENTAL_CDP_SENSORS=1` | off | Inject generic sensor readings via CDP `Emulation.setSensorOverrideReadings`. Less realistic than the native HAL but works without rebuilding the image. |
+| `DAMRU_EXPERIMENTAL_BATTERY_DUMPSYS=1` | off | Force battery level/charging spoof via `dumpsys batterystatus` on TCP/Redroid ADB transports (normally skipped because `dumpsys` battery changes are transient on Redroid). |
+| `DAMRU_EXPERIMENTAL_BATTERY_SPOOF=1` | off | Alternative battery spoof path via `settings put global`. |
+| `DAMRU_EXPERIMENTAL_WORKER_CORE_CDP=1` | off | Enable experimental CDP worker-target auto-attach for multi-threaded JavaScript (Chrome Workers). May destabilise Chrome on some Android versions. |
+| `DAMRU_EXPERIMENTAL_RAW_WORKER_CDP=1` | off | Skip the default reattach flow and keep raw CDP attached throughout. Set automatically by `stealth-open-url --mode cdp`. |
+
+**Profile tiers** are also configurable. Default random selection uses the premium pool only. Override with:
+
+```bash
+export DAMRU_PROFILE_TIER=all            # include medium + experimental profiles
+# or via CLI: --profile-tier all
+```
+
+Tiers: `premium` (default), `premium_verified`, `premium_new`, `medium`, `experimental`, `extended`, `all`.
+
+> **Status:** Sensor HAL validated on WSL Redroid Android 14 with Chrome and WebView Shell. Battery spoof and CDP sensor paths are exploratory and may not persist across container restarts.
+
+---
 
 ## Usage & Examples
 
