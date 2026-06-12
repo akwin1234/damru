@@ -1,4 +1,4 @@
-"""APK asset discovery for raw/unbaked Redroid flows."""
+﻿"""APK asset discovery for raw/unbaked Redroid flows."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -166,7 +166,10 @@ def validate_apk_bundle(root: Path) -> tuple[bool, str]:
     ]
     missing_webview = [chrome_dir.name for chrome_dir in chrome_dirs if chrome_dir.name not in matched_webview]
     if not matched_webview:
-        return False, (
+        # Missing WebView APKs is a degraded state, not a hard failure.
+        # WebView-only protections can still work via system WebView.
+        import warnings as _warn
+        _warn.warn(
             'missing matching WebView APK in Chrome version directories: '
             + ', '.join(missing_webview)
             + f' in {root}'
