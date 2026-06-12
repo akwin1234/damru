@@ -2144,6 +2144,42 @@ chmod 755 "$target"
             self._started_indices.remove(index)
         return await self.start_container(index)
 
+    async def restart_existing_container(self, index: int) -> str:
+        """Restart an existing container without removing its writable layer."""
+        await self._ensure_binderfs()
+        name = f"{REDROID_CONTAINER_PREFIX}{index}"
+        port = REDROID_BASE_PORT + index
+        use_host_network = self._should_use_host_network()
+        boot_timeout = self._boot_timeout_for_index(index)
+        state = await self._get_container_state(name)
+        if state == "none":
+            return await self.start_container(index)
+
+        logger.info("Restarting existing container %s without removing its writable layer", name)
+        await self._run_cmd(
+            self._docker_cmd("restart", name),
+            timeout=60,
+            allow_failure=False,
+        )
+        if use_host_network:
+            await self._wait_for_container_boot_internal(name, timeout=boot_timeout)
+            await self._remap_adbd_port(name, port)
+            await self._repair_docker_bridge_nat()
+        serial = await self._serial_for_container(name, port, use_host_network)
+        await self._run_cmd(
+            self._adb_cmd("connect", serial),
+            timeout=10,
+            allow_failure=True,
+        )
+        await self._wait_for_boot(serial, name=name, timeout=boot_timeout)
+        await self._repair_docker_bridge_nat()
+        if not await self._android_dns_usable(serial):
+            raise DamruError(f"Android DNS is not usable after restarting {name}")
+        await self._wait_for_package_service(serial, timeout=60)
+        if index not in self._started_indices:
+            self._started_indices.append(index)
+        return serial
+
     async def is_container_alive(self, index: int) -> bool:
         """Check if a container is running."""
         name = f"{REDROID_CONTAINER_PREFIX}{index}"
