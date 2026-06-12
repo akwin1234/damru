@@ -66,6 +66,9 @@ def test_runtime_arch_props_use_arm_abi_and_soc_hardware() -> None:
     assert props["ro.product.cpu.abilist"] == "arm64-v8a,armeabi-v7a,armeabi"
     assert props["ro.bionic.arch"] == "arm64"
     assert props["ro.dalvik.vm.isa.arm64"] == "arm64"
+    assert props["ro.debuggable"] == "0"
+    assert props["ro.secure"] == "1"
+    assert props["ro.adb.secure"] == "1"
     assert props["ro.hardware"] == "qcom"
     assert props["ro.boot.hardware"] == "qcom"
     assert props["ro.hardware.gralloc"] == "default"
@@ -280,6 +283,9 @@ async def test_apply_runtime_arch_props_sets_arm_values_and_deletes_leaks() -> N
 
     assert adb.props["ro.product.cpu.abi"] == "arm64-v8a"
     assert adb.props["ro.bionic.arch"] == "arm64"
+    assert adb.props["ro.debuggable"] == "0"
+    assert adb.props["ro.secure"] == "1"
+    assert adb.props["ro.adb.secure"] == "1"
     assert adb.props["ro.hardware"] == "qcom"
     assert adb.props["ro.hardware.gralloc"] == "default"
     joined = "\n".join(adb.shell_root_commands)
