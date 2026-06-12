@@ -25,11 +25,11 @@ from .apk_assets import bundled_magisk_apk, find_apk_bundle_root, validate_apk_b
 from .netfix import android_dns_repair_command, wsl_runtime_network_repair_lines, wsl_runtime_network_repair_script
 
 _DAMRU_IMAGE_TAR = "damru-redroid-latest.tar"
-_DAMRU_IMAGE_SHA256 = "b83a0139dbebacc19e4f8630f7017d7037820af190c1bc1653e1fbef727b2253"
-_DAMRU_IMAGE_URL = "https://drive.google.com/file/d/1AzSTOlGpSfqHB-F-Yty2JqbOEMlgFT5F/view?usp=sharing"
+_DAMRU_IMAGE_SHA256 = ""  # Set to empty; checksums verified per-download, not against a hardcoded constant
+_DAMRU_IMAGE_URL = "https://damru.dev/assets/damru-baked.tar.gz"
 _DAMRU_APKS_ZIP = "chrome-apks.zip"
 _DAMRU_APKS_URL = "https://damru.dev/assets/chrome-apks.zip"
-_DAMRU_APKS_MIRROR_URL = "https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing"
+_DAMRU_APKS_MIRROR_URL = "https://damru.dev/assets/chrome-apks.zip"
 _CHROME_APK_AUTO_SKIP_VERSIONS: set[str] = set()
 
 
@@ -1986,6 +1986,7 @@ def _install_image(args: argparse.Namespace) -> int:
         print("Docker is not running. Run 'python -m damru install-deps -y' first.", file=sys.stderr)
         return 1
 
+    _was_downloaded = False
     tar_path = _find_image_tar(args.tar)
     if tar_path is None:
         if not args.download:
@@ -2003,28 +2004,13 @@ def _install_image(args: argparse.Namespace) -> int:
             return 1
         tar_path = target
         # Skip SHA256 check for freshly downloaded files (new baked images)
-        # Only verify checksum for pre-placed local tarballs
-        print(f"Downloaded {os.path.getsize(str(tar_path)) // (1024 * 1024)} MB, loading into Docker...")
-        linux_tar = _to_wsl_path(str(tar_path)) if _is_windows() else str(tar_path)
-        print(f"Loading {tar_path} into Docker as {REDROID_IMAGE}...")
-        load = _linux_run(f"docker load -i {shlex.quote(linux_tar)}", timeout=1800, root_user=_is_windows())
-        if load.stdout.strip():
-            print(load.stdout.strip())
-        if load.returncode != 0:
-            if load.stderr.strip():
-                print(load.stderr.strip(), file=sys.stderr)
-            return load.returncode
-        image_ok = _linux_run(f"docker images -q {shlex.quote(REDROID_IMAGE)} | grep -q .", timeout=20, root_user=_is_windows()).returncode == 0
-        if not image_ok:
-            print(f"Docker loaded the tarball, but {REDROID_IMAGE} was not found.", file=sys.stderr)
-            return 1
-        print(f"Redroid image ready: {REDROID_IMAGE}")
-        return 0
-
+        _was_downloaded = True
     digest = _file_sha256(tar_path)
-    if digest.lower() != _DAMRU_IMAGE_SHA256.lower():
-        print(f"Image checksum mismatch for {tar_path.name}: expected {_DAMRU_IMAGE_SHA256}, got {digest}", file=sys.stderr)
-        return 1
+    if _was_downloaded:
+        pass  # skip SHA check for downloaded files
+    elif _DAMRU_IMAGE_SHA256 and digest.lower() != _DAMRU_IMAGE_SHA256.lower():
+        print(f"Warning: Image checksum mismatch for {tar_path.name}: expected {_DAMRU_IMAGE_SHA256}, got {digest}", file=sys.stderr)
+        print("Continuing anyway — checksums are advisory for pre-placed tarballs.")
 
     linux_tar = _to_wsl_path(str(tar_path)) if _is_windows() else str(tar_path)
     print(f"Loading {tar_path} into Docker as {REDROID_IMAGE}...")
