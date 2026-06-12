@@ -747,7 +747,7 @@ def _apply_sync_overrides(ctx, overrides: Dict[str, Any]):
     touch_points = overrides.get("touch_points")
     net_params = overrides.get("network_params")
     quota_bytes = overrides.get("storage_quota_bytes")
-    enable_cdp_sensors = os.environ.get("DAMRU_EXPERIMENTAL_CDP_SENSORS") == "1"
+    enable_cdp_sensors = os.environ.get("DAMRU_EXPERIMENTAL_CDP_SENSORS", "1") == "1"
     seen_origins = set()
 
     def _extract_origin(raw_url: str) -> Optional[str]:

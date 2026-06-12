@@ -664,12 +664,12 @@ class AsyncDamru:
                 android_version=target_device.android_version,
             ),
         )
-        if os.environ.get("DAMRU_EXPERIMENTAL_CDP_SENSORS") == "1":
+        if os.environ.get("DAMRU_EXPERIMENTAL_CDP_SENSORS", "1") == "1":
             await self._apply_sensor_emulation()
 
         # Browser-level worker auto-attach is experimental on Android Chrome;
         # page-level hardware override above is stable and keeps CDP alive.
-        if os.environ.get("DAMRU_EXPERIMENTAL_WORKER_CORE_CDP") == "1":
+        if os.environ.get("DAMRU_EXPERIMENTAL_WORKER_CORE_CDP", "1") == "1":
             await self._arm_worker_core_override(target_device.hardware_concurrency)
             await self._verify_worker_cores(target_device.hardware_concurrency)
         # Keep Android Chrome's initial tab alive. Creating/navigating a fresh
@@ -847,7 +847,7 @@ class AsyncDamru:
                         })
                     if timezone:
                         await cdp.send("Emulation.setTimezoneOverride", {"timezoneId": timezone})
-                if os.environ.get("DAMRU_EXPERIMENTAL_CDP_SENSORS") == "1":
+                if os.environ.get("DAMRU_EXPERIMENTAL_CDP_SENSORS", "1") == "1":
                     await self._apply_sensor_to_page(page)
                 await asyncio.sleep(0.2)
             except Exception:

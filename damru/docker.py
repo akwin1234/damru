@@ -1,4 +1,4 @@
-"""RedroidManager — container lifecycle for damru auto mode.
+﻿"""RedroidManager — container lifecycle for damru auto mode.
 
 Redroid needs Linux kernel modules (binder via binderfs) so:
   - Windows: all docker commands run via WSL2 (auto-installs Docker if missing)
@@ -883,9 +883,9 @@ class RedroidManager:
         """
         enable_aidl = (
             os.environ.get("DAMRU_ENABLE_NATIVE_SENSOR_HAL") == "1"
-            or os.environ.get("DAMRU_EXPERIMENTAL_SENSOR_HAL") == "1"
+            or os.environ.get("DAMRU_EXPERIMENTAL_SENSOR_HAL", "1") == "1"
         )
-        enable_hidl = os.environ.get("DAMRU_EXPERIMENTAL_HIDL_SENSOR_HAL") == "1"
+        enable_hidl = os.environ.get("DAMRU_EXPERIMENTAL_HIDL_SENSOR_HAL", "1") == "1"
         if not enable_aidl and not enable_hidl:
             return False
         if await self._sensor_hal_present(serial):
@@ -2132,7 +2132,7 @@ chmod 755 "$target"
 
         await self._wait_for_boot(serial, name=temp_name, timeout=CONTAINER_BOOT_TIMEOUT)
 
-        if (os.environ.get("DAMRU_ENABLE_NATIVE_SENSOR_HAL") == "1" or os.environ.get("DAMRU_EXPERIMENTAL_SENSOR_HAL") == "1") and not await self._sensor_hal_present(serial):
+        if (os.environ.get("DAMRU_ENABLE_NATIVE_SENSOR_HAL", "1") == "1" or os.environ.get("DAMRU_EXPERIMENTAL_SENSOR_HAL", "1") == "1") and not await self._sensor_hal_present(serial):
             logger.info("Installing native sensor HAL into baked image")
             await self._install_aidl_sensor_hal(temp_name, serial)
             logger.info("Restarting %s to activate native sensor HAL", temp_name)

@@ -21,6 +21,7 @@ avigator.keyboard verified working on HTTPS pages (previously undefined on about
 
 ## Unreleased
 
+- Made experimental features default-on: DAMRU_EXPERIMENTAL_CDP_SENSORS, DAMRU_EXPERIMENTAL_BATTERY_DUMPSYS, DAMRU_EXPERIMENTAL_SENSOR_HAL, DAMRU_ENABLE_NATIVE_SENSOR_HAL, DAMRU_EXPERIMENTAL_HIDL_SENSOR_HAL are now =1 by default. Set to =0 to disable.
 - Documented all experimental env vars (DAMRU_EXPERIMENTAL_SENSOR_HAL, HIDL_SENSOR_HAL, BATTERY_DUMPSYS, CDP_SENSORS, WORKER_CORE_CDP, RAW_WORKER_CDP, ENABLE_NATIVE_SENSOR_HAL, PROFILE_TIER) in README.md Experimental Features section.
 
 
