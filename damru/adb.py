@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+from contextlib import suppress
 import os
 import sys
 import re
@@ -109,6 +110,20 @@ class ADB:
         env = os.environ.copy()
         env["MSYS_NO_PATHCONV"] = "1"
 
+        async def _communicate_or_kill(
+            proc: asyncio.subprocess.Process,
+            timeout_s: float,
+        ) -> tuple[bytes, bytes]:
+            try:
+                return await asyncio.wait_for(proc.communicate(), timeout=timeout_s)
+            except (asyncio.TimeoutError, asyncio.CancelledError):
+                if proc.returncode is None:
+                    with suppress(ProcessLookupError):
+                        proc.kill()
+                with suppress(Exception):
+                    await asyncio.wait_for(proc.communicate(), timeout=5.0)
+                raise
+
         async def _exec(command: List[str], timeout_s: float) -> tuple[int, str, str]:
             proc = await asyncio.create_subprocess_exec(
                 *command,
@@ -116,7 +131,7 @@ class ADB:
                 stderr=asyncio.subprocess.PIPE,
                 env=env,
             )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_s)
+            stdout, stderr = await _communicate_or_kill(proc, timeout_s)
             out_s = stdout.decode("utf-8", errors="replace").strip()
             err_s = stderr.decode("utf-8", errors="replace").strip()
             return proc.returncode, out_s, err_s

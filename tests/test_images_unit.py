@@ -5,6 +5,7 @@ Behaviour under test: which docker commands ensure_image / _image_exists
 issue, and when. _is_windows is forced False so _docker_cmd is
 deterministic regardless of the host running the tests.
 """
+import asyncio
 from unittest.mock import AsyncMock
 
 import pytest
@@ -95,3 +96,37 @@ def test_target_chrome_version_is_none_for_single_apk(tmp_path):
     apk.write_text("")
 
     assert RedroidManager()._target_chrome_version_from_apk_path(str(apk)) is None
+
+
+async def test_run_cmd_kills_timed_out_process(monkeypatch):
+    class HangingProcess:
+        returncode = None
+        killed = False
+        communicate_calls = 0
+
+        async def communicate(self):
+            self.communicate_calls += 1
+            if not self.killed:
+                await asyncio.sleep(60)
+            self.returncode = -9
+            return b"", b""
+
+        def kill(self):
+            self.killed = True
+            self.returncode = -9
+
+    process = HangingProcess()
+
+    async def fake_create_subprocess_exec(*args, **kwargs):
+        return process
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+
+    mgr = RedroidManager()
+    mgr._is_windows = False
+
+    with pytest.raises(DamruError, match="Command timed out"):
+        await mgr._run_cmd(["docker", "ps"], timeout=0.01)
+
+    assert process.killed is True
+    assert process.communicate_calls == 2

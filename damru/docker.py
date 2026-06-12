@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+from contextlib import suppress
 import os
 import re
 import shlex
@@ -442,6 +443,7 @@ class RedroidManager:
     ) -> str:
         """Run a shell command and return stdout."""
         logger.debug("cmd: %s", " ".join(cmd))
+        proc: asyncio.subprocess.Process | None = None
         try:
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -451,7 +453,14 @@ class RedroidManager:
             stdout, stderr = await asyncio.wait_for(
                 proc.communicate(), timeout=timeout
             )
-        except asyncio.TimeoutError:
+        except (asyncio.TimeoutError, asyncio.CancelledError) as exc:
+            if proc is not None and proc.returncode is None:
+                with suppress(ProcessLookupError):
+                    proc.kill()
+                with suppress(Exception):
+                    await asyncio.wait_for(proc.communicate(), timeout=5.0)
+            if isinstance(exc, asyncio.CancelledError):
+                raise
             if allow_failure:
                 return ""
             raise DamruError(f"Command timed out: {' '.join(cmd)}")
