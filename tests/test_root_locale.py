@@ -24,7 +24,8 @@ async def test_apply_locale_sets_legacy_language_country_props() -> None:
 
     await root.apply_locale("pt-BR")
 
-    assert 'setprop persist.sys.locale "pt-BR"' in adb.root_commands
-    assert 'setprop persist.sys.language "pt"' in adb.root_commands
-    assert 'setprop persist.sys.country "BR"' in adb.root_commands
+    joined_root_commands = "\n".join(adb.root_commands)
+    assert "setprop persist.sys.locale pt-BR" in joined_root_commands
+    assert "setprop persist.sys.language pt" in joined_root_commands
+    assert "setprop persist.sys.country BR" in joined_root_commands
     assert "settings put system system_locales pt-BR" in adb.shell_commands

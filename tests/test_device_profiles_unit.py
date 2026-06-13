@@ -31,10 +31,20 @@ def test_moto_g_5s_plus_profile_from_adb_device() -> None:
     assert props["ro.product.model"] == "Moto G (5S) Plus"
     assert props["ro.product.device"] == "sanders"
     assert props["ro.product.name"] == "sanders_retail"
+    assert props["ro.product.board"] == "sanders"
+    assert props["ro.product.system.model"] == "Moto G (5S) Plus"
+    assert props["ro.product.vendor.device"] == "sanders"
+    assert props["ro.product.vendor_dlkm.device"] == "sanders"
     assert props["ro.build.fingerprint"] == device.build_fingerprint
+    assert props["ro.build.flavor"] == "sanders_retail-user"
+    assert props["ro.system.build.fingerprint"] == device.build_fingerprint
+    assert props["ro.vendor.build.fingerprint"] == device.build_fingerprint
+    assert props["ro.vendor.build.flavor"] == "sanders_retail-user"
+    assert props["ro.vendor_dlkm.build.tags"] == "release-keys"
     assert props["ro.build.version.release"] == "8.1.0"
     assert props["ro.build.version.sdk"] == "27"
     assert props["ro.build.version.security_patch"] == "2020-01-05"
+    assert "ro.system.build.version.sdk" not in props
 
 
 def test_redmi_9a_profile_from_adb_device() -> None:
@@ -67,10 +77,42 @@ def test_redmi_9a_profile_from_adb_device() -> None:
     assert props["ro.product.model"] == "M2006C3LG"
     assert props["ro.product.device"] == "dandelion"
     assert props["ro.product.name"] == "dandelion_global"
+    assert props["ro.product.product.brand"] == "Redmi"
+    assert props["ro.product.odm.manufacturer"] == "Xiaomi"
+    assert props["ro.product.odm_dlkm.name"] == "dandelion_global"
     assert props["ro.build.fingerprint"] == device.build_fingerprint
+    assert props["ro.product.build.fingerprint"] == device.build_fingerprint
+    assert props["ro.product.build.flavor"] == "dandelion_global-user"
+    assert props["ro.odm.build.type"] == "user"
     assert props["ro.build.version.release"] == "11"
     assert props["ro.build.version.sdk"] == "30"
     assert props["ro.build.version.security_patch"] == "2022-07-01"
+
+
+def test_safe_profile_covers_partition_identity_without_spoofing_sdk() -> None:
+    device = get_device("google_pixel_8_pro")
+
+    props = device.system_props()
+    version_props = device.version_release_props()
+
+    assert props["ro.product.system.model"] == "Pixel 8 Pro"
+    assert props["ro.product.vendor.name"] == "husky"
+    assert props["ro.product.vendor_dlkm.manufacturer"] == "Google"
+    assert props["ro.system.build.fingerprint"] == device.build_fingerprint
+    assert props["ro.vendor.build.fingerprint"] == device.build_fingerprint
+    assert props["ro.odm.build.version.incremental"] == device.build_incremental
+    assert "ro.build.version.release" not in props
+    assert "ro.build.version.sdk" not in props
+    assert "ro.system.build.version.sdk" not in props
+
+    assert version_props["ro.build.version.release"] == device.android_version
+    assert version_props["ro.build.version.release_or_codename"] == device.android_version
+    assert version_props["ro.build.version.release_or_preview_display"] == device.android_version
+    assert version_props["ro.system.build.version.release"] == device.android_version
+    assert version_props["ro.system.build.version.release_or_codename"] == device.android_version
+    assert version_props["ro.vendor.build.version.security_patch"] == device.security_patch
+    assert "ro.build.version.sdk" not in version_props
+    assert "ro.system.build.version.sdk" not in version_props
 
 
 def test_profile_tiers_default_random_is_premium_only() -> None:

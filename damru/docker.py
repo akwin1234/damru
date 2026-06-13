@@ -20,10 +20,14 @@ from __future__ import annotations
 
 import asyncio
 import base64
+from contextlib import suppress
 import os
 import re
 import shlex
 import sys
+import tempfile
+import uuid
+import zipfile
 from pathlib import Path
 from pathlib import PureWindowsPath
 from typing import List, Optional
@@ -47,10 +51,20 @@ from .config import (
 )
 from .netfix import android_dns_repair_command, wsl_runtime_network_repair_lines
 from .utils import logger
+from .webview_native_patch import (
+    WebViewNativePatchError,
+    is_webview_native_library_entry,
+    patch_linux_armv8l_platform_string,
+    patch_linux_armv8l_platform_string_in_apk,
+    patch_x_requested_with_header_block,
+)
 
 _CHROME_APK_AUTO_SKIP_VERSIONS: set[str] = set()
 _REDROID_SENSOR_SOURCE_IMAGE = "redroid/redroid:11.0.0-latest"
 _SENSOR_MOCK_BIN = "android.hardware.sensors@2.1-service.mock"
+_REDROID_STREAM_BOOT_ARG = "androidboot.use_redroid_stream=1"
+_INPUT_NODE_FIX_SCRIPT = "/system/bin/damru-input-node-fix.sh"
+_INPUT_NODE_FIX_RC = "/system/etc/init/damru-input-node-fix.rc"
 
 
 def _kernel_config_enabled(config_text: str, option: str) -> Optional[bool]:
@@ -432,6 +446,7 @@ class RedroidManager:
     ) -> str:
         """Run a shell command and return stdout."""
         logger.debug("cmd: %s", " ".join(cmd))
+        proc: asyncio.subprocess.Process | None = None
         try:
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -441,7 +456,14 @@ class RedroidManager:
             stdout, stderr = await asyncio.wait_for(
                 proc.communicate(), timeout=timeout
             )
-        except asyncio.TimeoutError:
+        except (asyncio.TimeoutError, asyncio.CancelledError) as exc:
+            if proc is not None and proc.returncode is None:
+                with suppress(ProcessLookupError):
+                    proc.kill()
+                with suppress(Exception):
+                    await asyncio.wait_for(proc.communicate(), timeout=5.0)
+            if isinstance(exc, asyncio.CancelledError):
+                raise
             if allow_failure:
                 return ""
             raise DamruError(f"Command timed out: {' '.join(cmd)}")
@@ -876,6 +898,34 @@ class RedroidManager:
             )
             await self._run_cmd(["bash", "-lc", cmd], timeout=300)
 
+    async def _install_input_node_boot_repair(self, name: str) -> None:
+        """Install the boot-time /dev/input materializer into a container rootfs."""
+        root = Path(__file__).resolve().parent.parent
+        input_dir = root / "native" / "input"
+        script = input_dir / "damru-input-node-fix.sh"
+        rc_file = input_dir / "damru-input-node-fix.rc"
+        if not script.exists() or not rc_file.exists():
+            raise DamruError(f"Native input-node repair assets missing under {input_dir}")
+
+        script_src = self._to_wsl_path(str(script)) if self._is_windows else str(script)
+        rc_src = self._to_wsl_path(str(rc_file)) if self._is_windows else str(rc_file)
+        await self._run_cmd(
+            self._docker_cmd("exec", name, "mkdir", "-p", "/system/bin", "/system/etc/init"),
+            timeout=20,
+        )
+        await self._run_cmd(self._docker_cmd("cp", script_src, f"{name}:{_INPUT_NODE_FIX_SCRIPT}"), timeout=60)
+        await self._run_cmd(self._docker_cmd("cp", rc_src, f"{name}:{_INPUT_NODE_FIX_RC}"), timeout=60)
+        await self._run_cmd(
+            self._docker_cmd(
+                "exec",
+                name,
+                "sh",
+                "-lc",
+                f"chmod 755 {_INPUT_NODE_FIX_SCRIPT}; chmod 644 {_INPUT_NODE_FIX_RC}",
+            ),
+            timeout=20,
+        )
+
     async def _ensure_sensor_hal(self, serial: str, container_name: Optional[str] = None) -> bool:
         """Install Damru's native sensor HAL into the running Redroid image.
 
@@ -1016,6 +1066,11 @@ class RedroidManager:
             except DamruError as exc:
                 logger.warning("Recreating unhealthy %s: %s", name, exc)
                 return await self.restart_container(index)
+            try:
+                await self._wait_for_touchscreen_input(serial)
+            except DamruError as exc:
+                logger.warning("Recreating unhealthy %s: %s", name, exc)
+                return await self.restart_container(index)
             if not await self._wait_for_android_dns_usable(serial):
                 logger.warning("Android DNS not fully confirmed on %s after repair; reusing %s", serial, name)
             if await self._ensure_sensor_hal(serial):
@@ -1063,6 +1118,11 @@ class RedroidManager:
             await self._repair_docker_bridge_nat()
             try:
                 await self._wait_for_package_service(serial, timeout=60)
+            except DamruError as exc:
+                logger.warning("Recreating unhealthy %s: %s", name, exc)
+                return await self.restart_container(index)
+            try:
+                await self._wait_for_touchscreen_input(serial)
             except DamruError as exc:
                 logger.warning("Recreating unhealthy %s: %s", name, exc)
                 return await self.restart_container(index)
@@ -1169,7 +1229,7 @@ chmod 755 "$target"
         )
         return target
 
-    async def start_container(self, index: int) -> str:
+    async def start_container(self, index: int, *, _touch_retry: int = 1) -> str:
         """Start one redroid container and return its ADB serial."""
         name = f"{REDROID_CONTAINER_PREFIX}{index}"
         port = REDROID_BASE_PORT + index
@@ -1199,6 +1259,9 @@ chmod 755 "$target"
         )
         boot_args = [
             "androidboot.use_memfd=true",
+            # Starts Redroid's native uinput service early enough for Android's
+            # InputReader to expose a real direct-touch device.
+            _REDROID_STREAM_BOOT_ARG,
             f"androidboot.redroid_gpu_mode={REDROID_GPU_MODE}",
             "androidboot.redroid_net_ndns=2",
             "androidboot.redroid_net_dns1=1.1.1.1",
@@ -1240,12 +1303,16 @@ chmod 755 "$target"
             self._docker_cmd(*run_args),
             timeout=60,
         )
+        await self._materialize_input_event_nodes_early(name)
 
         try:
             if use_host_network:
                 await self._wait_for_container_boot_internal(name, timeout=boot_timeout)
                 await self._remap_adbd_port(name, port)
                 await self._repair_docker_bridge_nat()
+            else:
+                await self._wait_for_container_boot_internal(name, timeout=boot_timeout)
+            await self._seed_adb_authorized_keys_early(name)
             serial = await self._serial_for_container(name, port, use_host_network)
 
             # Connect ADB. On Windows, Redroid ADB runs inside WSL because direct
@@ -1260,6 +1327,18 @@ chmod 755 "$target"
             await self._wait_for_boot(serial, name=name, timeout=boot_timeout)
             await self._repair_docker_bridge_nat()
             await self._wait_for_package_service(serial, timeout=90)
+            try:
+                await self._wait_for_touchscreen_input(serial)
+            except DamruError as exc:
+                if _touch_retry > 0:
+                    logger.warning("Recreating %s after native touchscreen startup race: %s", name, exc)
+                    await self._run_cmd(
+                        self._docker_cmd("rm", "-f", name),
+                        timeout=15,
+                        allow_failure=True,
+                    )
+                    return await self.start_container(index, _touch_retry=_touch_retry - 1)
+                raise
             if not await self._wait_for_android_dns_usable(serial):
                 logger.warning(
                     "Android DNS did not fully confirm on %s; continuing with repaired resolver props",
@@ -1391,6 +1470,151 @@ chmod 755 "$target"
             await asyncio.sleep(interval)
             elapsed += interval
         raise DamruError(f"Container {name} failed to boot internally within {timeout}s")
+
+    async def _materialize_input_event_nodes_early(self, name: str, timeout: float = 25.0) -> None:
+        """Create /dev/input and event nodes before Android InputReader scans.
+
+        Redroid can expose input devices in sysfs while /dev/input is still
+        missing. InputReader starts early and will not build a phone-like touch
+        device list if the directory is absent, so this runs immediately after
+        docker run while Android continues booting in parallel.
+        """
+        script = (
+            "timeout=${1:-25}; "
+            "case \"$timeout\" in ''|*[!0-9]*) timeout=25;; esac; "
+            "mkdir -p /dev/input; chmod 0755 /dev/input 2>/dev/null || true; "
+            "end=$(( $(date +%s) + timeout )); "
+            "while [ \"$(date +%s)\" -le \"$end\" ]; do "
+            "touch_ready=0; "
+            "for event_path in /sys/class/input/event*; do "
+            "[ -r \"$event_path/dev\" ] || continue; "
+            "event_name=\"${event_path##*/}\"; node=\"/dev/input/$event_name\"; "
+            "major_minor=$(cat \"$event_path/dev\" 2>/dev/null || true); "
+            "[ -n \"$major_minor\" ] || continue; "
+            "major=\"${major_minor%:*}\"; minor=\"${major_minor#*:}\"; "
+            "device_name=$(cat \"$event_path/device/name\" 2>/dev/null || true); "
+            "[ -e \"$node\" ] || mknod \"$node\" c \"$major\" \"$minor\" 2>/dev/null || true; "
+            "chown 0:1000 \"$node\" 2>/dev/null || true; "
+            "chmod 0660 \"$node\" 2>/dev/null || true; "
+            "chcon u:object_r:input_device:s0 \"$node\" 2>/dev/null || true; "
+            "case \"$device_name\" in *touch*|*Touch*|*TOUCH*|redroid\\ vinput|damru-virtual-multitouch|damru\\ virtual\\ touchscreen) touch_ready=1;; esac; "
+            "done; "
+            "[ \"$touch_ready\" = 1 ] && exit 0; "
+            "sleep 0.25; "
+            "done; exit 0"
+        )
+        await self._run_cmd(
+            self._docker_cmd(
+                "exec",
+                name,
+                "sh",
+                "-lc",
+                script,
+                "damru-input-node-fix",
+                str(int(timeout)),
+            ),
+            timeout=timeout + 10,
+            allow_failure=True,
+        )
+
+    @staticmethod
+    def _candidate_adb_public_key_paths() -> list[Path]:
+        paths: list[Path] = []
+        vendor_keys = os.environ.get("ADB_VENDOR_KEYS", "")
+        for raw in vendor_keys.split(os.pathsep):
+            raw = raw.strip()
+            if not raw:
+                continue
+            candidate = Path(raw).expanduser()
+            if candidate.is_dir():
+                paths.append(candidate / "adbkey.pub")
+            elif candidate.name.endswith(".pub"):
+                paths.append(candidate)
+            else:
+                paths.append(Path(str(candidate) + ".pub"))
+        paths.append(Path.home() / ".android" / "adbkey.pub")
+        return paths
+
+    @classmethod
+    def _host_adb_public_keys(cls) -> list[str]:
+        keys: list[str] = []
+        seen: set[str] = set()
+        for path in cls._candidate_adb_public_key_paths():
+            try:
+                lines = path.read_text(encoding="utf-8").splitlines()
+            except OSError:
+                continue
+            for line in lines:
+                key = line.strip()
+                if not key or key in seen:
+                    continue
+                seen.add(key)
+                keys.append(key)
+        return keys
+
+    async def _seed_adb_authorized_keys_early(self, name: str, timeout: float = 10.0) -> None:
+        """Seed fresh Redroid containers with this host's ADB public key."""
+        keys = self._host_adb_public_keys()
+        if not keys:
+            await self._run_cmd(self._adb_cmd("start-server"), timeout=10, allow_failure=True)
+            keys = self._host_adb_public_keys()
+        if not keys:
+            logger.warning("No host ADB public key found; %s may require manual ADB authorization", name)
+            return
+        payload = base64.b64encode(("\n".join(keys) + "\n").encode("utf-8")).decode("ascii")
+        script = (
+            "set -eu; "
+            "mkdir -p /data/misc/adb; "
+            f"printf %s {shlex.quote(payload)} | base64 -d > /data/misc/adb/adb_keys; "
+            "chown system:shell /data/misc/adb /data/misc/adb/adb_keys 2>/dev/null || true; "
+            "chmod 02750 /data/misc/adb 2>/dev/null || true; "
+            "chmod 0640 /data/misc/adb/adb_keys 2>/dev/null || true; "
+            "restorecon /data/misc/adb /data/misc/adb/adb_keys 2>/dev/null || true; "
+            "setprop ctl.restart adbd 2>/dev/null || true"
+        )
+        await self._run_cmd(
+            self._docker_cmd("exec", name, "sh", "-lc", script),
+            timeout=timeout,
+            allow_failure=True,
+        )
+
+    async def _touchscreen_input_ready(self, serial: str) -> bool:
+        out = await self._run_cmd(
+            self._adb_cmd(
+                "shell",
+                "dumpsys input 2>/dev/null | grep -q 'Sources: .*TOUCHSCREEN' && echo ready",
+                serial=serial,
+            ),
+            timeout=10,
+            allow_failure=True,
+        )
+        return out.strip() == "ready"
+
+    async def _wait_for_touchscreen_input(self, serial: str, timeout: float = 30.0) -> None:
+        """Let Redroid's native uinput service register before profile warmup.
+
+        If profile hardening starts immediately after boot, Android can miss the
+        `redroid vinput` uinput node even though it later appears in
+        `/proc/bus/input/devices`. Waiting for InputReader avoids that native
+        race without patching browser-visible JavaScript.
+        """
+        if os.environ.get("DAMRU_SKIP_TOUCHSCREEN_WAIT", "").strip() in {"1", "true", "TRUE", "yes", "YES"}:
+            return
+        elapsed = 0.0
+        interval = 2.0
+        while elapsed <= timeout:
+            if await self._touchscreen_input_ready(serial):
+                logger.info("Android touchscreen input ready on %s (%.0fs)", serial, elapsed)
+                return
+            if elapsed >= timeout:
+                break
+            await asyncio.sleep(interval)
+            elapsed += interval
+        message = f"Android touchscreen input was not visible on {serial} after {timeout:.0f}s"
+        if os.environ.get("DAMRU_ALLOW_MISSING_TOUCHSCREEN_INPUT", "").strip() in {"1", "true", "TRUE", "yes", "YES"}:
+            logger.warning("%s; continuing because DAMRU_ALLOW_MISSING_TOUCHSCREEN_INPUT is set", message)
+            return
+        raise DamruError(message)
 
     async def _android_services_ready_internal(self, name: str) -> bool:
         script = " && ".join([
@@ -1588,7 +1812,41 @@ chmod 755 "$target"
             return None
         return f'{REDROID_CONTAINER_PREFIX}{index}', port
 
-    async def _replace_system_webview_apk(self, serial: str, webview_apk: Path) -> None:
+    @staticmethod
+    def _patch_local_webview_native_library(lib_path: Path) -> list[str]:
+        changed_patches: list[str] = []
+        if os.environ.get("DAMRU_ENABLE_WEBVIEW_XRW_NATIVE_PATCH") == "1":
+            try:
+                if patch_x_requested_with_header_block(lib_path):
+                    changed_patches.append("x-requested-with")
+            except WebViewNativePatchError as exc:
+                logger.warning("WebView X-Requested-With native patch skipped for %s: %s", lib_path, exc)
+        try:
+            if patch_linux_armv8l_platform_string(lib_path):
+                changed_patches.append("platform-armv8l")
+        except WebViewNativePatchError as exc:
+            logger.warning("WebView platform native patch skipped for %s: %s", lib_path, exc)
+        return changed_patches
+
+    @staticmethod
+    def _extract_webview_native_library(apk_path: Path, output_dir: Path) -> tuple[Path, str]:
+        with zipfile.ZipFile(apk_path, "r") as zf:
+            names = [name for name in zf.namelist() if is_webview_native_library_entry(name)]
+            if not names:
+                raise WebViewNativePatchError(f"WebView native library entry not found in {apk_path}")
+            preferred = next((name for name in names if name == "lib/x86_64/libmonochrome_64.so"), names[0])
+            parts = preferred.split("/")
+            abi = parts[1] if len(parts) >= 3 and parts[0] == "lib" else "x86_64"
+            output_path = output_dir / "libmonochrome_64.so"
+            output_path.write_bytes(zf.read(preferred))
+            return output_path, abi
+
+    async def _replace_system_webview_apk(
+        self,
+        serial: str,
+        webview_apk: Path,
+        native_library_apk: Path | None = None,
+    ) -> None:
         plain = self._plain_serial(serial)
         try:
             port = int(plain.rsplit(':', 1)[1])
@@ -1614,10 +1872,58 @@ chmod 755 "$target"
             )
         name, port = target
         src = self._to_wsl_path(str(webview_apk.resolve())) if self._is_windows else str(webview_apk.resolve())
-        await self._run_cmd(
-            self._docker_cmd('cp', src, f'{name}:/system/product/app/webview/webview.apk'),
-            timeout=APK_INSTALL_TIMEOUT,
-        )
+        patched_lib: Path | None = None
+        patched_lib_abi = "x86_64"
+        native_source = native_library_apk or webview_apk
+        tmpdir_obj = tempfile.TemporaryDirectory(prefix="damru-system-webview-lib-")
+        tmpdir = Path(tmpdir_obj.name)
+        try:
+            try:
+                patched_lib, patched_lib_abi = self._extract_webview_native_library(native_source, tmpdir)
+                changed = self._patch_local_webview_native_library(patched_lib)
+                if changed:
+                    logger.info(
+                        "Prepared patched system WebView native library from %s: %s",
+                        native_source,
+                        ", ".join(changed),
+                    )
+                else:
+                    logger.info("System WebView native library already patched in %s", native_source)
+            except WebViewNativePatchError as exc:
+                logger.warning("System WebView native library extraction skipped: %s", exc)
+
+            await self._run_cmd(
+                self._docker_cmd('cp', src, f'{name}:/system/product/app/webview/webview.apk'),
+                timeout=APK_INSTALL_TIMEOUT,
+            )
+            remote_tmp_lib = "/data/local/tmp/damru-system-webview-libmonochrome_64.so"
+            if patched_lib is not None:
+                lib_src = self._to_wsl_path(str(patched_lib.resolve())) if self._is_windows else str(patched_lib.resolve())
+                await self._run_cmd(
+                    self._docker_cmd('cp', lib_src, f'{name}:{remote_tmp_lib}'),
+                    timeout=APK_INSTALL_TIMEOUT,
+                )
+                quoted_abi = shlex.quote(patched_lib_abi)
+                quoted_tmp_lib = shlex.quote(remote_tmp_lib)
+                await self._run_cmd(
+                    self._docker_cmd(
+                        'exec', name, 'sh', '-lc',
+                        (
+                            'mount -o remount,rw /system 2>/dev/null || true; '
+                            'mkdir -p /system/product/app/webview/lib/'
+                            f'{quoted_abi}; '
+                            f'cat {quoted_tmp_lib} > /system/product/app/webview/lib/{quoted_abi}/libmonochrome_64.so; '
+                            f'chown root:root /system/product/app/webview/lib/{quoted_abi}/libmonochrome_64.so; '
+                            f'chmod 0644 /system/product/app/webview/lib/{quoted_abi}/libmonochrome_64.so; '
+                            'chmod 0755 /system/product/app/webview/lib '
+                            f'/system/product/app/webview/lib/{quoted_abi}; '
+                            f'rm -f {quoted_tmp_lib}'
+                        ),
+                    ),
+                    timeout=60,
+                )
+        finally:
+            tmpdir_obj.cleanup()
         await self._run_cmd(
             self._docker_cmd(
                 'exec', name, 'sh', '-lc',
@@ -1648,6 +1954,171 @@ chmod 755 "$target"
         else:
             await self._remap_adbd_port(name, port)
         await self._wait_for_package_service(serial)
+
+    async def _patch_webview_x_requested_with_header(self, serial: str) -> None:
+        if (
+            os.environ.get("DAMRU_ENABLE_INSTALLED_WEBVIEW_NATIVE_PATCH") != "1"
+            and os.environ.get("DAMRU_ENABLE_WEBVIEW_XRW_NATIVE_PATCH") != "1"
+        ):
+            logger.info("Installed WebView native library patch disabled by default")
+            return
+        find_command = (
+            "for f in "
+            "/data/app/*/app.vanadium.trichromelibrary_*/lib/*/libmonochrome_64.so "
+            "/data/app/*/app.vanadium.trichromelibrary_*/lib/*/libmonochrome.so "
+            "/data/app/*/com.google.android.trichromelibrary_*/lib/*/libmonochrome_64.so "
+            "/data/app/*/com.google.android.trichromelibrary_*/lib/*/libmonochrome.so "
+            "/data/app/*/*/lib/*/libmonochrome_64.so "
+            "/data/app/*/*/lib/*/libmonochrome.so; do "
+            '[ -f "$f" ] && echo "$f"; '
+            "done | sort -u"
+        )
+        root_find_command = f"su 0 sh -c {shlex.quote(find_command)}"
+        lib_paths = [
+            line.strip()
+            for line in (
+                await self._run_cmd(
+                    self._adb_cmd("shell", root_find_command, serial=serial),
+                    timeout=20,
+                    allow_failure=True,
+                )
+            ).strip().splitlines()
+            if line.strip()
+        ]
+        if not lib_paths:
+            logger.warning("WebView X-Requested-With native patch skipped: libmonochrome_64.so not found")
+        else:
+            for remote_lib in lib_paths:
+                await self._patch_one_webview_x_requested_with_library(serial, remote_lib)
+        # Do not live-mutate installed APK files under /data/app. APK-entry
+        # edits can invalidate package/signature state for static shared
+        # Trichrome libraries. The durable platform fix is to install a patched
+        # extracted native library beside the system WebView APK during image
+        # bake/replacement.
+
+    async def _patch_one_webview_x_requested_with_library(self, serial: str, remote_lib: str) -> None:
+        logger.info("Patching WebView native library in %s", remote_lib)
+        with tempfile.TemporaryDirectory(prefix="damru-webview-patch-") as tmp:
+            local_lib = Path(tmp) / "libmonochrome_64.so"
+            remote_source_tmp = f"/data/local/tmp/damru-libmonochrome-native-source-{uuid.uuid4().hex}.so"
+            quoted_lib = shlex.quote(remote_lib)
+            quoted_source_tmp = shlex.quote(remote_source_tmp)
+            copy_command = f"cat {quoted_lib} > {quoted_source_tmp}; chmod 0644 {quoted_source_tmp}"
+            try:
+                await self._run_cmd(
+                    self._adb_cmd(
+                        "shell",
+                        f"su 0 sh -c {shlex.quote(copy_command)}",
+                        serial=serial,
+                    ),
+                    timeout=60,
+                )
+                await self._run_cmd(
+                    self._adb_cmd("pull", remote_source_tmp, str(local_lib), serial=serial),
+                    timeout=APK_INSTALL_TIMEOUT,
+                )
+            finally:
+                await self._run_cmd(
+                    self._adb_cmd(
+                        "shell",
+                        f"su 0 sh -c {shlex.quote(f'rm -f {quoted_source_tmp}')}",
+                        serial=serial,
+                    ),
+                    timeout=10,
+                    allow_failure=True,
+                )
+            changed_patches: list[str] = []
+            if os.environ.get("DAMRU_ENABLE_WEBVIEW_XRW_NATIVE_PATCH") == "1":
+                try:
+                    if patch_x_requested_with_header_block(local_lib):
+                        changed_patches.append("x-requested-with")
+                except WebViewNativePatchError as exc:
+                    logger.warning("WebView X-Requested-With native patch skipped for %s: %s", remote_lib, exc)
+            try:
+                if patch_linux_armv8l_platform_string(local_lib):
+                    changed_patches.append("platform-armv8l")
+            except WebViewNativePatchError as exc:
+                logger.warning("WebView platform native patch skipped for %s: %s", remote_lib, exc)
+            if not changed_patches:
+                logger.info("WebView native patches already present in %s", remote_lib)
+                return
+            remote_tmp = "/data/local/tmp/damru-libmonochrome-native-patched.so"
+            await self._run_cmd(
+                self._adb_cmd("push", str(local_lib), remote_tmp, serial=serial),
+                timeout=APK_INSTALL_TIMEOUT,
+            )
+            quoted_tmp = shlex.quote(remote_tmp)
+            await self._run_cmd(
+                self._adb_cmd(
+                    "shell",
+                    "su 0 sh -c "
+                    + shlex.quote(
+                        f"owner=$(stat -c '%u:%g' {quoted_lib}); "
+                        f"mode=$(stat -c '%a' {quoted_lib}); "
+                        f"cat {quoted_tmp} > {quoted_lib}; "
+                        f"chown \"$owner\" {quoted_lib}; "
+                        f"chmod \"$mode\" {quoted_lib}; "
+                        f"rm -f {quoted_tmp}; "
+                        "am force-stop com.android.webview 2>/dev/null || true; "
+                        "am force-stop com.android.chrome 2>/dev/null || true; "
+                        "am force-stop com.android.browser 2>/dev/null || true; "
+                        "am force-stop org.chromium.webview_shell 2>/dev/null || true; "
+                        "killall webview_zygote 2>/dev/null || true"
+                    ),
+                    serial=serial,
+                ),
+                timeout=60,
+            )
+        logger.info("WebView native patches applied to %s: %s", remote_lib, ", ".join(changed_patches))
+
+    async def _patch_one_webview_platform_apk(self, serial: str, remote_apk: str) -> None:
+        logger.info("Patching WebView APK native library entry in %s", remote_apk)
+        with tempfile.TemporaryDirectory(prefix="damru-webview-apk-patch-") as tmp:
+            local_apk = Path(tmp) / "base.apk"
+            await self._run_cmd(
+                self._adb_cmd("pull", remote_apk, str(local_apk), serial=serial),
+                timeout=APK_INSTALL_TIMEOUT,
+            )
+            try:
+                changed = patch_linux_armv8l_platform_string_in_apk(local_apk)
+            except WebViewNativePatchError as exc:
+                logger.warning("WebView APK platform native patch skipped for %s: %s", remote_apk, exc)
+                return
+            if not changed:
+                logger.info("WebView APK platform native patch already present in %s", remote_apk)
+                return
+            remote_tmp = "/data/local/tmp/damru-trichrome-platform-patched.apk"
+            await self._run_cmd(
+                self._adb_cmd("push", str(local_apk), remote_tmp, serial=serial),
+                timeout=APK_INSTALL_TIMEOUT,
+            )
+            quoted_apk = shlex.quote(remote_apk)
+            quoted_tmp = shlex.quote(remote_tmp)
+            await self._run_cmd(
+                self._adb_cmd(
+                    "shell",
+                    "su",
+                    "0",
+                    "sh",
+                    "-lc",
+                    (
+                        f"owner=$(stat -c '%u:%g' {quoted_apk}); "
+                        f"mode=$(stat -c '%a' {quoted_apk}); "
+                        f"cat {quoted_tmp} > {quoted_apk}; "
+                        f"chown \"$owner\" {quoted_apk}; "
+                        f"chmod \"$mode\" {quoted_apk}; "
+                        f"rm -f {quoted_tmp}; "
+                        "am force-stop com.android.webview 2>/dev/null || true; "
+                        "am force-stop com.android.chrome 2>/dev/null || true; "
+                        "am force-stop com.android.browser 2>/dev/null || true; "
+                        "am force-stop org.chromium.webview_shell 2>/dev/null || true; "
+                        "killall webview_zygote 2>/dev/null || true"
+                    ),
+                    serial=serial,
+                ),
+                timeout=60,
+            )
+        logger.info("WebView APK platform native patch applied to %s", remote_apk)
 
     async def install_chrome(self, serial: str, apk_path: str) -> None:
         """Install Chrome on a container via ADB.
@@ -1685,6 +2156,7 @@ chmod 755 "$target"
                 if candidate.exists():
                     vanadium_library = candidate
                     break
+            trichrome = p / "google_trichrome_library.apk"
             if vanadium_library is not None:
                 logger.info('Installing matching WebView TrichromeLibrary on %s...', serial)
                 try:
@@ -1695,16 +2167,21 @@ chmod 755 "$target"
                 except DamruError as exc:
                     logger.warning('Optional Vanadium TrichromeLibrary install failed; continuing with Google library: %s', exc)
             logger.info('Replacing system WebView on %s from %s...', serial, matching_webview)
-            await self._replace_system_webview_apk(serial, matching_webview)
+            await self._replace_system_webview_apk(
+                serial,
+                matching_webview,
+                native_library_apk=vanadium_library or (trichrome if trichrome.exists() else None),
+            )
 
             # Install TrichromeLibrary first if present (Chrome needs it)
-            trichrome = p / "google_trichrome_library.apk"
             if trichrome.exists():
                 logger.info("Installing TrichromeLibrary on %s...", serial)
                 await self._run_cmd(
                     self._adb_cmd("install", "-r", "-d", str(trichrome), serial=serial),
                     timeout=APK_INSTALL_TIMEOUT,
                 )
+            if trichrome.exists() or vanadium_library is not None:
+                await self._patch_webview_x_requested_with_header(serial)
 
             # Install Chrome split APKs (exclude trichrome library)
             chrome_apks = [
@@ -1728,6 +2205,12 @@ chmod 755 "$target"
                         f'Chrome {installed_chrome}, WebView {installed_webview}. '
                         f'Use a matching WebView APK for {p.name}. Provider: {provider_detail}'
                     )
+            if trichrome.exists() or vanadium_library is not None:
+                # Chrome/WebView split installs can create or replace extracted
+                # Trichrome native-library paths after the first library patch.
+                # Reapply here so the active /data/app provider libs carry the
+                # same native XRW patch as the baked system WebView lib.
+                await self._patch_webview_x_requested_with_header(serial)
             logger.info("Chrome installed on %s (%d split APKs)", serial, len(chrome_apks))
         else:
             await self._run_cmd(
@@ -1868,6 +2351,47 @@ chmod 755 "$target"
         if index in self._started_indices:
             self._started_indices.remove(index)
         return await self.start_container(index)
+
+    async def restart_existing_container(self, index: int) -> str:
+        """Restart an existing container without removing its writable layer."""
+        await self._ensure_binderfs()
+        name = f"{REDROID_CONTAINER_PREFIX}{index}"
+        port = REDROID_BASE_PORT + index
+        use_host_network = self._should_use_host_network()
+        boot_timeout = self._boot_timeout_for_index(index)
+        state = await self._get_container_state(name)
+        if state == "none":
+            return await self.start_container(index)
+
+        logger.info("Restarting existing container %s without removing its writable layer", name)
+        await self._run_cmd(
+            self._docker_cmd("restart", name),
+            timeout=60,
+            allow_failure=False,
+        )
+        if use_host_network:
+            await self._wait_for_container_boot_internal(name, timeout=boot_timeout)
+            await self._remap_adbd_port(name, port)
+            await self._repair_docker_bridge_nat()
+        serial = await self._serial_for_container(name, port, use_host_network)
+        await self._run_cmd(
+            self._adb_cmd("connect", serial),
+            timeout=10,
+            allow_failure=True,
+        )
+        await self._wait_for_boot(serial, name=name, timeout=boot_timeout)
+        await self._repair_docker_bridge_nat()
+        if not await self._android_dns_usable(serial):
+            raise DamruError(f"Android DNS is not usable after restarting {name}")
+        await self._wait_for_package_service(serial, timeout=60)
+        try:
+            await self._wait_for_touchscreen_input(serial)
+        except DamruError as exc:
+            logger.warning("Recreating unhealthy %s after restart: %s", name, exc)
+            return await self.restart_container(index)
+        if index not in self._started_indices:
+            self._started_indices.append(index)
+        return serial
 
     async def is_container_alive(self, index: int) -> bool:
         """Check if a container is running."""
@@ -2057,7 +2581,7 @@ chmod 755 "$target"
 
         Creates a custom image where every new container starts as "warm":
         Chrome is installed, FRE is dismissed, Preferences exist, fonts are
-        pushed, eSpeak is configured, ro.debuggable=1 is persistent.
+        pushed, eSpeak is configured, and production-like security props are set.
 
         This means has_preferences() = True on first boot → warm path always.
         No cold start ever — every session gets 10-15s setup.
@@ -2067,15 +2591,16 @@ chmod 755 "$target"
           2.  Install Chrome + TrichromeLibrary APKs
           3.  Install eSpeak-NG (100+ offline TTS voices)
           4.  Push resetprop binary
-          5.  Install extra fonts to /system/fonts/
-          6.  Configure eSpeak as default TTS engine
-          7.  Backup original vulkan.pastel.so for GPU patching
-          8.  Apply audio 48kHz fix
-          9.  Set ro.debuggable=1 in build.prop (persistent)
-          10. Launch Chrome → dismiss FRE → create Preferences
-          11. Patch universal Preferences (DoH, WebRTC, DNS, etc.)
-          12. docker commit → custom image
-          13. Remove temp container
+          5.  Install native preload assets for optional runtime hooks
+          6.  Install extra fonts to /system/fonts/
+          7.  Configure eSpeak as default TTS engine
+          8.  Backup original vulkan.pastel.so for GPU patching
+          9.  Apply audio 48kHz fix
+          10. Set production-like security props in build.prop (persistent)
+          11. Launch Chrome → dismiss FRE → create Preferences
+          12. Patch universal Preferences (DoH, WebRTC, DNS, etc.)
+          13. docker commit → custom image
+          14. Remove temp container
 
         Args:
             chrome_apk: Path to Chrome APK or split-APK directory.
@@ -2094,7 +2619,12 @@ chmod 755 "$target"
         port = 5699  # Use a high port to avoid conflicts
 
         logger.info("=== BAKING DAMRU IMAGE ===")
-        base_image = REDROID_BASE_IMAGE if image_name == REDROID_IMAGE else REDROID_IMAGE
+        base_image = os.environ.get("DAMRU_BAKE_BASE_IMAGE", "").strip()
+        if not base_image:
+            if os.environ.get("DAMRU_BAKE_FROM_LAUNCH_IMAGE") == "1" and image_name != REDROID_IMAGE:
+                base_image = REDROID_IMAGE
+            else:
+                base_image = REDROID_BASE_IMAGE
         logger.info("Base image: %s", base_image)
         logger.info("Target image: %s", image_name)
 
@@ -2114,6 +2644,7 @@ chmod 755 "$target"
                 "-p", f"{port}:5555",
                 base_image,
                 "androidboot.use_memfd=true",
+                _REDROID_STREAM_BOOT_ARG,
                 f"androidboot.redroid_gpu_mode={REDROID_GPU_MODE}",
                 "androidboot.redroid_net_dns1=1.1.1.1",
                 "androidboot.redroid_net_dns2=8.8.8.8",
@@ -2134,6 +2665,12 @@ chmod 755 "$target"
             await asyncio.sleep(2)
 
         await self._wait_for_boot(serial, name=temp_name, timeout=CONTAINER_BOOT_TIMEOUT)
+
+        try:
+            logger.info("Installing boot-time input node repair into baked image")
+            await self._install_input_node_boot_repair(temp_name)
+        except Exception as exc:
+            logger.warning("Input node boot repair install skipped: %s", exc)
 
         if (os.environ.get("DAMRU_ENABLE_NATIVE_SENSOR_HAL", "1") == "1" or os.environ.get("DAMRU_EXPERIMENTAL_SENSOR_HAL", "1") == "1") and not await self._sensor_hal_present(serial):
             try:
@@ -2168,6 +2705,24 @@ chmod 755 "$target"
                 logger.info("Installing Chrome from %s...", apk_path)
                 await self.install_chrome(serial, apk_path)
 
+            logger.info("Baking WebView native platform and touch repairs...")
+            try:
+                await root.ensure_installed_webview_apk_platform_patch()
+            except Exception as exc:
+                logger.warning("Installed WebView APK platform bake repair skipped: %s", exc)
+            try:
+                await root.ensure_system_webview_native_lib_patch()
+            except Exception as exc:
+                logger.warning("System WebView native lib bake repair skipped: %s", exc)
+            try:
+                await self._patch_webview_x_requested_with_header(serial)
+            except Exception as exc:
+                logger.warning("Installed WebView native XRW bake repair skipped: %s", exc)
+            try:
+                await root.ensure_multitouch_stack()
+            except Exception as exc:
+                logger.warning("Multitouch bake repair skipped: %s", exc)
+
             # Step 3: Install local TTS engines/voices
             logger.info("Installing local TTS engines...")
             await root.ensure_speech_voices()
@@ -2176,11 +2731,15 @@ chmod 755 "$target"
             logger.info("Pushing resetprop binary...")
             await root._ensure_resetprop()
 
-            # Step 5: Install extra fonts
+            # Step 5: Install native preload assets but do not activate wrap.*.
+            logger.info("Installing native preload assets...")
+            await root.install_native_preload_assets()
+
+            # Step 6: Install extra fonts
             logger.info("Installing extra fonts...")
             await root.install_extra_fonts()
 
-            # Step 6: Configure eSpeak as default TTS
+            # Step 7: Configure eSpeak as default TTS
             logger.info("Configuring TTS engine...")
             espeak_pkg = "com.reecedunn.espeak"
             for cmd in [
@@ -2192,7 +2751,7 @@ chmod 755 "$target"
             ]:
                 await adb.shell(cmd, allow_failure=True)
 
-            # Step 7: Backup original vulkan.pastel.so
+            # Step 8: Backup original vulkan.pastel.so
             vulkan_so = "/vendor/lib64/hw/vulkan.pastel.so"
             backup_so = "/data/local/tmp/damru_vk_pastel_orig.so"
             vk_exists = "OK" in await adb.shell(
@@ -2202,34 +2761,38 @@ chmod 755 "$target"
                 await adb.shell_root(f"cp {vulkan_so} {backup_so}")
                 logger.info("Backed up original vulkan.pastel.so")
 
-            # Step 8: Apply audio 48kHz fix
+            # Step 9: Apply audio 48kHz fix
             await root.apply_audio_48khz()
 
-            # Step 9: Set ro.debuggable=1 persistently in build.prop
-            # (resetprop is in-memory only — build.prop survives docker commit)
-            logger.info("Setting ro.debuggable=1 in build.prop (persistent)...")
+            # Step 10: Keep fresh workers root-manageable during warmup.
+            # Runtime profile application hardens these props again before
+            # browser navigation. This image-level baseline is only the boot
+            # state needed for native OS/WebView repairs.
+            logger.info("Setting root-manageable startup security props in build.prop (persistent)...")
             await adb.shell(
                 "su 0 mount -o remount,rw /system 2>/dev/null", allow_failure=True,
             )
-            dbg_check = await adb.shell(
-                "grep 'ro.debuggable=' /system/build.prop",
-                timeout=5, allow_failure=True,
-            )
-            if "ro.debuggable=1" not in dbg_check:
-                if "ro.debuggable=" in dbg_check:
-                    await adb.shell_root(
-                        "sed -i 's/ro.debuggable=0/ro.debuggable=1/' /system/build.prop",
-                    )
-                else:
-                    await adb.shell_root(
-                        "echo 'ro.debuggable=1' >> /system/build.prop",
-                    )
-                logger.info("ro.debuggable=1 set in build.prop")
+            for prop_key, prop_value in (
+                ("ro.debuggable", "1"),
+                ("ro.secure", "0"),
+                # Keep fresh workers ADB/root-connectable; runtime setup
+                # hardens ro.adb.secure before browser navigation.
+                ("ro.adb.secure", "0"),
+                ("ro.build.type", "user"),
+            ):
+                prop_pattern = prop_key.replace(".", "[.]")
+                await adb.shell_root(
+                    "if grep -q '^%s=' /system/build.prop; then "
+                    "sed -i 's|^%s=.*|%s=%s|' /system/build.prop; "
+                    "else echo '%s=%s' >> /system/build.prop; fi"
+                    % (prop_pattern, prop_pattern, prop_key, prop_value, prop_key, prop_value)
+                )
+            logger.info("Startup security props persisted: ro.debuggable=1 ro.secure=0 ro.adb.secure=0 ro.build.type=user")
             await adb.shell(
                 "su 0 mount -o remount,ro /system 2>/dev/null", allow_failure=True,
             )
 
-            # Step 10: Launch Chrome → dismiss FRE → create Preferences
+            # Step 11: Launch Chrome → dismiss FRE → create Preferences
             # This makes has_preferences() = True on every new container,
             # so ALL sessions take the warm (fast) path. No cold start ever.
             logger.info("Pre-launching Chrome to dismiss FRE...")
@@ -2241,7 +2804,7 @@ chmod 755 "$target"
             await chrome.force_stop()
             await asyncio.sleep(1)
 
-            # Step 11: Patch universal Preferences (DoH, WebRTC, privacy)
+            # Step 12: Patch universal Preferences (DoH, WebRTC, privacy)
             # Per-session locale will overwrite intl.selected_languages later.
             logger.info("Patching universal Chrome Preferences...")
             prefs_path = f"/data/data/{chrome.package}/app_chrome/Default/Preferences"
@@ -2268,6 +2831,7 @@ chmod 755 "$target"
             })
             # Default language (overwritten per-session by patch_preferences)
             prefs.setdefault("intl", {})["selected_languages"] = "en-US,en"
+            prefs.setdefault("intl", {})["accept_languages"] = "en-US,en"
 
             import base64 as _b64
             patched_json = _json.dumps(prefs, separators=(",", ":"))
@@ -2342,7 +2906,7 @@ chmod 755 "$target"
                 except Exception:
                     pass
 
-            # Step 12: docker commit → custom image
+            # Step 13: docker commit → custom image
             logger.info("Committing image as %s (this may take a minute)...", image_name)
             await self._run_cmd(
                 self._docker_cmd("commit", temp_name, image_name),
@@ -2353,7 +2917,7 @@ chmod 755 "$target"
             logger.info("Use in config.py: REDROID_IMAGE = \"%s\"", image_name)
 
         finally:
-            # Step 13: Cleanup temp container
+            # Step 14: Cleanup temp container
             await self._run_cmd(
                 self._docker_cmd("rm", "-f", temp_name),
                 timeout=15, allow_failure=True,

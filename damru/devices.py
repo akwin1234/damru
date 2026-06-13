@@ -112,6 +112,25 @@ GPU_EXTENSIONS: Dict[str, str] = {
     # "adreno" is NOT here — native Adreno extensions are already correct
 }
 
+_PRODUCT_PROP_PARTITIONS = (
+    "product",
+    "system",
+    "system_ext",
+    "vendor",
+    "odm",
+    "vendor_dlkm",
+    "odm_dlkm",
+)
+_BUILD_PROP_PARTITIONS = (
+    "product",
+    "system",
+    "system_ext",
+    "vendor",
+    "odm",
+    "vendor_dlkm",
+    "odm_dlkm",
+)
+
 
 @dataclass(frozen=True)
 class AndroidDevice:
@@ -194,6 +213,23 @@ class AndroidDevice:
         """True when this profile is in the default random selection pool."""
         return self.profile_tier in {"premium_verified", "premium_new"}
 
+    @property
+    def build_incremental(self) -> str:
+        """Return the build incremental component embedded in the fingerprint."""
+        try:
+            return self.build_fingerprint.split(":", 1)[1].split("/")[2].split(":", 1)[0]
+        except IndexError:
+            return ""
+
+    @property
+    def build_description(self) -> str:
+        incremental = self.build_incremental
+        return f"{self.product}-user {self.android_version} {self.build_id} {incremental} release-keys"
+
+    @property
+    def build_flavor(self) -> str:
+        return f"{self.product}-user"
+
     def system_props(self, safe_only: bool = True) -> Dict[str, str]:
         """Return dict of Android system properties to set via resetprop.
 
@@ -202,17 +238,45 @@ class AndroidDevice:
                        to avoid crashing Chrome when the target Android version
                        differs from the emulator's actual version.
         """
-        incremental = self.build_fingerprint.rsplit("/", 1)[0].rsplit(":", 1)[-1] if "/" in self.build_fingerprint else ""
         props = {
             "ro.product.model": self.model,
             "ro.product.brand": self.brand,
             "ro.product.manufacturer": self.manufacturer,
             "ro.product.device": self.device,
             "ro.product.name": self.product,
+            "ro.product.board": self.device,
+            "ro.build.product": self.device,
             "ro.build.fingerprint": self.build_fingerprint,
-            "ro.build.description": f"{self.product}-user {self.android_version} {self.build_id} {incremental} release-keys",
+            "ro.build.description": self.build_description,
+            "ro.build.flavor": self.build_flavor,
+            "ro.build.id": self.build_id,
             "ro.build.display.id": self.build_id,
+            "ro.build.type": "user",
+            "ro.build.tags": "release-keys",
+            "ro.build.version.incremental": self.build_incremental,
+            "ro.product.build.fingerprint": self.build_fingerprint,
+            "ro.vendor.build.security_patch": self.security_patch,
         }
+        for partition in _PRODUCT_PROP_PARTITIONS:
+            prefix = f"ro.product.{partition}"
+            props.update({
+                f"{prefix}.model": self.model,
+                f"{prefix}.brand": self.brand,
+                f"{prefix}.manufacturer": self.manufacturer,
+                f"{prefix}.device": self.device,
+                f"{prefix}.name": self.product,
+            })
+        for partition in _BUILD_PROP_PARTITIONS:
+            prefix = f"ro.{partition}.build"
+            props.update({
+                f"{prefix}.fingerprint": self.build_fingerprint,
+                f"{prefix}.description": self.build_description,
+                f"{prefix}.flavor": self.build_flavor,
+                f"{prefix}.id": self.build_id,
+                f"{prefix}.type": "user",
+                f"{prefix}.tags": "release-keys",
+                f"{prefix}.version.incremental": self.build_incremental,
+            })
         if not safe_only:
             props.update({
                 "ro.build.version.release": self.android_version,
@@ -229,10 +293,20 @@ class AndroidDevice:
         ro.build.version.release is just the display string Chrome uses for its
         User-Agent at startup — Workers inherit it automatically.
         """
-        return {
+        props = {
             "ro.build.version.release": self.android_version,
+            "ro.build.version.release_or_codename": self.android_version,
+            "ro.build.version.release_or_preview_display": self.android_version,
             "ro.build.version.security_patch": self.security_patch,
         }
+        for partition in _BUILD_PROP_PARTITIONS:
+            prefix = f"ro.{partition}.build.version"
+            props.update({
+                f"{prefix}.release": self.android_version,
+                f"{prefix}.release_or_codename": self.android_version,
+                f"{prefix}.security_patch": self.security_patch,
+            })
+        return props
 
 
 # ---------------------------------------------------------------------------

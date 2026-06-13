@@ -27,6 +27,19 @@ WEBVIEW_SHELL_PACKAGES = {
 WEBVIEW_SHELL_PACKAGE = "org.chromium.webview_shell"
 
 
+def _command_line_arg(flag: str) -> str:
+    """Return one Chromium command-line-file token.
+
+    Android Chromium reads these files as argv text, not as a shell command.
+    Quote tokens containing whitespace so values such as --user-agent stay
+    intact when Chromium parses the file.
+    """
+    if not any(ch.isspace() for ch in flag) and '"' not in flag and "\\" not in flag:
+        return flag
+    escaped = flag.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
 class ChromeError(Exception):
     """Chrome operation failed."""
 
@@ -126,6 +139,9 @@ class ChromeManager:
 
         # Build final flag list with merged disable-features
         final_flags = other_flags[:]
+        if user_agent:
+            final_flags = [flag for flag in final_flags if not flag.startswith("--user-agent=")]
+            final_flags.append(f"--user-agent={user_agent}")
         if not any(
             flag.startswith("--remote-debugging-socket-name=")
             or flag.startswith("--remote-debugging-port=")
@@ -141,7 +157,9 @@ class ChromeManager:
         # Android Chromium expects argv[0] to look like a browser binary name.
         # Some builds tolerate any placeholder, but Chrome 145 on Redroid only
         # honored remote debugging when this token was `chrome`.
-        cmd_line = self._command_line_argv0() + " " + " ".join(final_flags)
+        cmd_line = self._command_line_argv0() + " " + " ".join(
+            _command_line_arg(flag) for flag in final_flags
+        )
 
         # Write via printf to avoid shell quoting issues with echo
         # Escape special chars for shell
@@ -152,24 +170,34 @@ class ChromeManager:
         await self.adb.shell_root(f"chmod 644 {self._command_line_path()}")
         logger.debug("Chromium command-line for %s: %s", self.package, cmd_line[:200])
 
-    async def write_webview_command_line(self, flags: List[str], user_agent: Optional[str] = None) -> None:
+    async def write_webview_command_line(
+        self,
+        flags: List[str],
+        user_agent: Optional[str] = None,
+        *,
+        remote_allow_origins: bool = True,
+    ) -> None:
         """Write WebView Shell flags, preserving a WebView-specific UA when provided."""
         final_flags: List[str] = []
         for flag in flags:
             flag = flag.strip()
             if not flag:
                 continue
-            if flag.startswith("--remote-debugging-socket-name="):
+            if flag.startswith("--remote-debugging-socket-name=") or flag.startswith("--remote-debugging-port="):
+                continue
+            if not remote_allow_origins and flag.startswith("--remote-allow-origins="):
                 continue
             final_flags.append(flag)
 
         if user_agent and not any(f.startswith("--user-agent=") for f in final_flags):
             final_flags.append(f"--user-agent={user_agent}")
-        if not any(f.startswith("--remote-allow-origins=") for f in final_flags):
+        if remote_allow_origins and not any(f.startswith("--remote-allow-origins=") for f in final_flags):
             final_flags.append("--remote-allow-origins=*")
 
         manager = ChromeManager(self.adb, package=WEBVIEW_SHELL_PACKAGE)
-        cmd_line = manager._command_line_argv0() + " " + " ".join(final_flags)
+        cmd_line = manager._command_line_argv0() + " " + " ".join(
+            _command_line_arg(flag) for flag in final_flags
+        )
         safe_line = cmd_line.replace("\\", "\\\\").replace('"', '\\"').replace("$", "\\$").replace("`", "\\`")
         await self.adb.shell_root(f'printf "%s" "{safe_line}" > {manager._command_line_path()}')
         await self.adb.shell_root(f"chmod 644 {manager._command_line_path()}")
@@ -534,6 +562,7 @@ class ChromeManager:
         if "intl" not in prefs:
             prefs["intl"] = {}
         prefs["intl"]["selected_languages"] = selected
+        prefs["intl"]["accept_languages"] = selected
 
         # --- WebRTC IP handling policy ---
         # "default_public_interface_only" hides private/local IPs (10.x, 172.x)
@@ -650,7 +679,5 @@ class ChromeManager:
     async def webview_shell_installed(self, package: str = WEBVIEW_SHELL_PACKAGE) -> bool:
         out = await self.adb.shell(f"pm list packages {package}", timeout=8, allow_failure=True)
         return f"package:{package}" in out
-
-
 
 
