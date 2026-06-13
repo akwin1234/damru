@@ -100,6 +100,20 @@ def test_profile_can_use_pre_resolved_android_bridge(monkeypatch):
     assert profile.timezone == "Pacific/Honolulu"
     assert profile.android_http_proxy == "172.17.0.1:18993"
 
+
+def test_profile_native_user_agent_uses_concrete_chrome_version():
+    profile = build_profile(
+        get_device("pixel_8_pro"),
+        timezone="America/Sao_Paulo",
+        locale="pt-BR",
+        chrome_version="148.0.7778.178",
+    )
+
+    ua_flags = [flag for flag in profile.chrome_flags if flag.startswith("--user-agent=")]
+    assert len(ua_flags) == 1
+    assert "Chrome/148.0.7778.178" in ua_flags[0]
+    assert "Chrome/..." not in ua_flags[0]
+
 def test_geo_locale_uses_real_country_variants(monkeypatch):
     monkeypatch.setattr("damru.proxy.random.choice", lambda values: values[1] if len(values) > 1 else values[0])
 

@@ -10,21 +10,34 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 from importlib import resources
+import json
 import os
+from pathlib import Path
 import random
+import re
+import shutil
+import shlex
 import subprocess
 import sys
 import tempfile
 import urllib.request
+import uuid
 import xml.etree.ElementTree as ET
 import zipfile
 from typing import Dict, Optional
 
 from .adb import ADB
-from .apk_assets import bundled_magisk_apk, find_any_bundle_apk
+from .apk_assets import bundled_magisk_apk, candidate_apk_bundle_roots, find_any_bundle_apk
 from .devices import AndroidDevice
 from .utils import logger, sleep
+from .webview_native_patch import (
+    WebViewNativePatchError,
+    is_webview_native_library_entry,
+    patch_linux_armv8l_platform_string,
+    patch_x_requested_with_header_block,
+)
 
 
 def _locale_language_country(locale: str) -> tuple[str, str]:
@@ -54,6 +67,255 @@ def _detect_gpu_family(gles_string: str) -> str:
         return "powervr"
     return "unknown"
 
+
+def _cpuinfo_hardware_label(device: AndroidDevice | None) -> str:
+    if device is None:
+        return "ARMv8 Processor"
+    chipset = (device.chipset or "").strip()
+    low = f"{chipset} {device.webgl_vendor} {device.webgl_renderer}".lower()
+    if "snapdragon" in low or "qualcomm" in low or "adreno" in low:
+        return f"Qualcomm Technologies, Inc {chipset or device.model}".strip()
+    if "exynos" in low or "xclipse" in low:
+        return f"Samsung Exynos {chipset or device.model}".strip()
+    if "tensor" in low:
+        return f"Google {chipset or 'Tensor'}".strip()
+    if "mediatek" in low or "dimensity" in low or "helio" in low:
+        return f"MediaTek {chipset or device.model}".strip()
+    if "unisoc" in low:
+        return f"Unisoc {chipset or device.model}".strip()
+    return chipset or device.model or "ARMv8 Processor"
+
+
+def _build_proc_cpuinfo_spoof(target_cores: int, device: AndroidDevice | None = None) -> str:
+    features = (
+        "fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp "
+        "cpuid asimdrdm lrcpc dcpop asimddp"
+    )
+    cores = max(1, int(target_cores or 1))
+    hardware = _cpuinfo_hardware_label(device)
+    blocks: list[str] = []
+    for index in range(cores):
+        blocks.append(
+            "\n".join(
+                [
+                    f"processor\t: {index}",
+                    "BogoMIPS\t: 38.40",
+                    f"Features\t: {features}",
+                    "CPU implementer\t: 0x41",
+                    "CPU architecture: 8",
+                    "CPU variant\t: 0x0",
+                    "CPU part\t: 0xd05",
+                    "CPU revision\t: 0",
+                ]
+            )
+        )
+    blocks.append(f"Hardware\t: {hardware}")
+    return "\n\n".join(blocks) + "\n"
+
+
+def _runtime_hardware_prop(device: AndroidDevice) -> str:
+    low = f"{device.chipset} {device.webgl_vendor} {device.webgl_renderer}".lower()
+    if "snapdragon" in low or "qualcomm" in low or "adreno" in low:
+        return "qcom"
+    if "exynos" in low or "xclipse" in low:
+        return "exynos"
+    if "tensor g1" in low:
+        return "gs101"
+    if "tensor g2" in low:
+        return "gs201"
+    if "tensor" in low:
+        return "zuma"
+    if "mediatek" in low or "dimensity" in low or "helio" in low or "mali" in low:
+        return "mtk"
+    if "unisoc" in low:
+        return "ums"
+    return device.device or "qcom"
+
+
+def _runtime_arch_props(device: AndroidDevice) -> Dict[str, str]:
+    hardware = _runtime_hardware_prop(device)
+    props = {
+        "ro.product.cpu.abi": "arm64-v8a",
+        "ro.product.cpu.abilist": "arm64-v8a,armeabi-v7a,armeabi",
+        "ro.product.cpu.abilist64": "arm64-v8a",
+        "ro.product.cpu.abilist32": "armeabi-v7a,armeabi",
+        "ro.bionic.arch": "arm64",
+        "ro.dalvik.vm.isa.arm64": "arm64",
+        "ro.debuggable": "0",
+        "ro.secure": "1",
+        "ro.adb.secure": "1",
+        "ro.hardware": hardware,
+        "ro.boot.hardware": hardware,
+        "ro.hardware.gralloc": "default",
+    }
+    for partition in ("odm", "system", "vendor"):
+        prefix = f"ro.{partition}.product.cpu"
+        props[f"{prefix}.abi"] = "arm64-v8a"
+        props[f"{prefix}.abilist"] = "arm64-v8a,armeabi-v7a,armeabi"
+        props[f"{prefix}.abilist64"] = "arm64-v8a"
+        props[f"{prefix}.abilist32"] = "armeabi-v7a,armeabi"
+    return props
+
+
+def _runtime_arch_deleted_props() -> tuple[str, ...]:
+    return (
+        "ro.dalvik.vm.isa.x86_64",
+        "dalvik.vm.isa.x86_64.features",
+        "dalvik.vm.isa.x86_64.variant",
+        "ro.boot.redroid_gpu_mode",
+        "ro.boot.redroid_net_dns1",
+        "ro.boot.redroid_net_dns2",
+        "ro.boot.redroid_net_ndns",
+        "ro.boot.use_redroid_c2",
+        "ro.boot.use_redroid_stream",
+        "ro.product.product.cpu.abi",
+        "ro.product.product.cpu.abilist",
+        "ro.product.product.cpu.abilist64",
+        "ro.product.product.cpu.abilist32",
+    )
+
+
+def _webview_version_candidates(version: str | None) -> list[str]:
+    value = (version or "").strip()
+    if not value:
+        return []
+    candidates = [value]
+    if value.endswith(".0"):
+        candidates.append(value[:-2])
+    major = value.split(".", 1)[0]
+    if major and major not in candidates:
+        candidates.append(major)
+    return list(dict.fromkeys(candidates))
+
+
+def _find_webview_native_library_apk(version: str | None = None) -> Path | None:
+    names = (
+        "vanadium_trichrome_library.apk",
+        "TrichromeLibrary.apk",
+        "app_vanadium_trichromelibrary.apk",
+        "google_trichrome_library.apk",
+    )
+    candidates = _webview_version_candidates(version)
+    for root in candidate_apk_bundle_roots():
+        if not root.is_dir():
+            continue
+        search_dirs: list[Path] = []
+        for candidate in candidates:
+            exact = root / candidate
+            if exact.is_dir():
+                search_dirs.append(exact)
+        search_dirs.append(root)
+        search_dirs.extend(
+            sorted(
+                (child for child in root.iterdir() if child.is_dir()),
+                key=lambda path: path.name,
+                reverse=True,
+            )
+        )
+        seen: set[Path] = set()
+        for directory in search_dirs:
+            resolved = directory.resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            for name in names:
+                path = directory / name
+                if path.is_file():
+                    return path.resolve()
+    return None
+
+
+def _extract_webview_native_library(apk_path: Path, output_path: Path) -> bool:
+    with zipfile.ZipFile(apk_path, "r") as zf:
+        names = [name for name in zf.namelist() if is_webview_native_library_entry(name)]
+        if not names:
+            raise WebViewNativePatchError(f"WebView native library entry not found in {apk_path}")
+        preferred = next((name for name in names if name == "lib/x86_64/libmonochrome_64.so"), names[0])
+        output_path.write_bytes(zf.read(preferred))
+    changed = False
+    if os.environ.get("DAMRU_ENABLE_WEBVIEW_XRW_NATIVE_PATCH") == "1":
+        try:
+            changed = patch_x_requested_with_header_block(output_path) or changed
+        except WebViewNativePatchError as exc:
+            logger.warning("WebView X-Requested-With native patch skipped for %s: %s", apk_path, exc)
+    try:
+        changed = patch_linux_armv8l_platform_string(output_path) or changed
+    except WebViewNativePatchError as exc:
+        logger.warning("WebView platform native patch skipped for %s: %s", apk_path, exc)
+    return changed
+
+
+def _find_multitouch_event(devices_text: str) -> tuple[str, int] | None:
+    for block in re.split(r"\n\s*\n", devices_text or ""):
+        lowered = block.lower()
+        if not any(token in lowered for token in ("touch", "goodix", "fts", "synaptics")):
+            continue
+        match = _INPUT_EVENT_RE.search(block)
+        if not match:
+            continue
+        index = int(match.group(1))
+        return f"event{index}", 64 + index
+    return None
+
+
+def _stable_android_id(seed: str) -> str:
+    digest = hashlib.sha256(f"damru-android-id:{seed}".encode("utf-8")).hexdigest()
+    value = digest[:16]
+    if value == "0" * 16:
+        return "1" + value[1:]
+    return value
+
+
+def _stable_uuid(seed: str, purpose: str) -> str:
+    digest = hashlib.sha256(f"damru-{purpose}:{seed}".encode("utf-8")).hexdigest()
+    return str(uuid.UUID(digest[:32]))
+
+
+def _android_kernel_version(device: AndroidDevice | None) -> str:
+    try:
+        version = int((device.android_version if device else "").split(".", 1)[0])
+    except (TypeError, ValueError):
+        version = 14
+    if version >= 15:
+        return "6.1.75-android14-11-g4f6f93a3c9d8"
+    if version >= 14:
+        return "5.15.123-android13-8-g2d4b84c79d7a"
+    if version >= 12:
+        return "5.10.198-android12-9-g7b2f5f3a6c01"
+    return "4.19.275-android12-9-g3d9a73f8e4d5"
+
+
+def _build_proc_version_spoof(device: AndroidDevice | None = None) -> str:
+    kernel = _android_kernel_version(device)
+    build_user = "android-build"
+    build_host = "abfarm-release-2004"
+    clang = (
+        "Android (10600000, +pgo, +bolt, +lto, +mlgo, based on r530567) "
+        "clang version 18.0.1"
+    )
+    return (
+        f"Linux version {kernel} ({build_user}@{build_host}) "
+        f"({clang}, LLD 18.0.1) #1 SMP PREEMPT "
+        "Fri Nov 15 00:00:00 UTC 2024\n"
+    )
+
+
+def _build_proc_mountinfo_spoof() -> str:
+    return "\n".join(
+        [
+            "1 0 0:1 / / rw,relatime shared:1 - rootfs rootfs rw",
+            "2 1 0:2 / /proc rw,nosuid,nodev,noexec,relatime shared:2 - proc proc rw",
+            "3 1 0:3 / /sys rw,nosuid,nodev,noexec,relatime shared:3 - sysfs sysfs rw",
+            "4 1 0:4 / /dev rw,nosuid,relatime shared:4 - tmpfs tmpfs rw,seclabel,mode=755",
+            "5 4 0:5 / /dev/pts rw,nosuid,noexec,relatime shared:5 - devpts devpts rw,seclabel,mode=600",
+            "6 1 259:1 / /system ro,seclabel,relatime shared:6 - ext4 /dev/block/dm-1 ro",
+            "7 1 259:2 / /vendor ro,seclabel,relatime shared:7 - ext4 /dev/block/dm-2 ro",
+            "8 1 259:3 / /product ro,seclabel,relatime shared:8 - ext4 /dev/block/dm-3 ro",
+            "9 1 259:4 / /data rw,seclabel,nosuid,nodev,noatime shared:9 - ext4 /dev/block/dm-4 rw",
+            "10 1 0:6 / /apex com.android.runtime ro,nodev,relatime shared:10 - tmpfs tmpfs ro,seclabel,mode=755",
+        ]
+    ) + "\n"
+
 # Path where we push the standalone resetprop binary on device.
 # MUST be named "resetprop" because Magisk's binary is multi-call (like busybox)
 # and uses argv[0] to determine which applet to run.
@@ -64,6 +326,18 @@ _FAKEMEM_SO = "/data/local/tmp/libfakemem.so"
 _FAKEMEM_TARGET = "/data/local/tmp/damru_fakemem_gb"
 _FAKEMEM_WRAP = "/data/local/tmp/damru_chrome_wrap.sh"
 _APP_PROCESS_REAL = "/system/bin/app_process64.real"
+_WEBVIEW_SYSTEM_LIB = "/system/product/app/webview/lib/x86_64/libmonochrome_64.so"
+_WEBVIEW_PATCH_TMP = "/data/local/tmp/damru-system-webview-libmonochrome_64.so"
+_WEBVIEW_APK_PATCH_TMP = "/data/local/tmp/damru-trichrome-platform-patched.apk"
+_MULTITOUCH_FEATURE_XML = "/vendor/etc/permissions/damru_multitouch.xml"
+_GPU_BINARY_MARKER = "/data/local/tmp/damru_gpu_binary_spoof.json"
+_PROC_BOOT_ID_SPOOF = "/data/local/tmp/damru_proc_boot_id"
+_PROC_VERSION_SPOOF = "/data/local/tmp/damru_proc_version"
+_PROC_MOUNTINFO_SPOOF = "/data/local/tmp/damru_proc_mountinfo"
+
+_PACKAGE_UID_RE = re.compile(r"(?:^|\s)package:([A-Za-z0-9_.]+)\s+uid:(\d+)(?:\s|$)")
+_ANDROID_PACKAGE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+$")
+_INPUT_EVENT_RE = re.compile(r"\bevent(\d+)\b")
 
 # Font paths
 _FONTS_XML = "/system/etc/fonts.xml"
@@ -109,6 +383,28 @@ class RootError(Exception):
     """Root operation failed."""
 
 
+def _parse_pm_package_uids(output: str) -> list[tuple[str, int]]:
+    """Parse `pm list packages -U` output into safe package/uid pairs."""
+    packages: list[tuple[str, int]] = []
+    seen: set[str] = set()
+    for line in output.splitlines():
+        match = _PACKAGE_UID_RE.search(line.strip())
+        if not match:
+            continue
+        package, uid_text = match.groups()
+        if package in seen or not _ANDROID_PACKAGE_RE.match(package):
+            continue
+        try:
+            uid = int(uid_text)
+        except ValueError:
+            continue
+        if uid < 0:
+            continue
+        seen.add(package)
+        packages.append((package, uid))
+    return packages
+
+
 class RootOps:
     """Root-level operations on an Android device."""
 
@@ -117,6 +413,20 @@ class RootOps:
         self._resetprop_cmd: Optional[str] = None
         self._original_props: Dict[str, str] = {}
         self._battery_state: Optional[dict[str, int]] = None
+
+    async def _pull_root_readable_file(self, remote_path: str, local_path: str | Path, timeout: float = 240.0) -> None:
+        """Copy a root-only Android file to /data/local/tmp, then pull it."""
+        temp_remote = f"/data/local/tmp/damru-root-pull-{uuid.uuid4().hex}"
+        quoted_remote = shlex.quote(remote_path)
+        quoted_temp = shlex.quote(temp_remote)
+        await self.adb.shell_root(
+            f"cat {quoted_remote} > {quoted_temp}; chmod 0644 {quoted_temp}",
+            timeout=timeout,
+        )
+        try:
+            await self.adb.pull(temp_remote, str(local_path), timeout=timeout)
+        finally:
+            await self.adb.shell_root(f"rm -f {quoted_temp}", timeout=10)
 
     async def check_root(self) -> bool:
         """Verify root access is available."""
@@ -277,16 +587,10 @@ class RootOps:
         Uses resetprop for ro.* props, setprop for others.
         Handles values with spaces (e.g. 'Pixel 8 Pro') via proper quoting.
         """
-        # Use double quotes to handle values with spaces
-        escaped_value = value.replace('"', '\\"')
         last_error: Exception | None = None
         for attempt in range(3):
             try:
-                if key.startswith("ro."):
-                    resetprop = await self._ensure_resetprop()
-                    await self.adb.shell_root(f'{resetprop} {key} "{escaped_value}"')
-                else:
-                    await self.adb.shell_root(f'setprop {key} "{escaped_value}"')
+                await self.set_props_batch({key: value}, timeout=15.0)
                 return
             except Exception as exc:
                 last_error = exc
@@ -294,6 +598,33 @@ class RootOps:
                     await asyncio.sleep(0.15 * (attempt + 1))
         if last_error:
             raise last_error
+
+    @staticmethod
+    def _set_prop_script_line(resetprop: str | None, key: str, value: str) -> str:
+        setter = shlex.quote(resetprop) if key.startswith("ro.") and resetprop else "setprop"
+        return f"{setter} {shlex.quote(key)} {shlex.quote(value)}"
+
+    async def set_props_batch(
+        self,
+        props: Dict[str, str],
+        *,
+        timeout: float | None = None,
+    ) -> None:
+        """Set multiple Android properties through one root shell.
+
+        Redroid can leak sleeping shell/resetprop processes when many parallel
+        `adb shell` calls time out. Batching keeps warmup native and fast while
+        avoiding a resetprop storm inside Android.
+        """
+        if not props:
+            return
+        resetprop = await self._ensure_resetprop() if any(k.startswith("ro.") for k in props) else None
+        lines = ["set -e"]
+        lines.extend(self._set_prop_script_line(resetprop, key, value) for key, value in props.items())
+        await self.adb.shell_root(
+            "\n".join(lines),
+            timeout=timeout or max(15.0, min(60.0, 5.0 + len(props) * 0.75)),
+        )
 
     async def get_prop(self, key: str) -> str:
         """Get current value of a system property."""
@@ -317,9 +648,10 @@ class RootOps:
                      len(props), device.name, safe_only, parallel)
 
         if parallel:
-            # All props are independent — run concurrently for speed.
-            # Skip saving originals (not restored on exit anyway).
-            await asyncio.gather(*(self.set_prop(k, v) for k, v in props.items()))
+            # Skip saving originals (not restored on exit anyway), but keep the
+            # Android-side work in one shell so failed warmups do not leave a
+            # herd of sleeping resetprop shells behind.
+            await self.set_props_batch(props)
         else:
             for key, value in props.items():
                 if key not in self._original_props:
@@ -335,6 +667,259 @@ class RootOps:
                 "Device model mismatch: expected %s, got %s "
                 "(resetprop may not be available)", device.model, actual_model
             )
+
+    async def apply_runtime_arch_props(self, device: AndroidDevice) -> None:
+        """Spoof runtime ABI/hardware properties after native packages are installed.
+
+        These props are intentionally not part of the early generic device prop
+        set. Package installs and resetprop bootstrap must still use the real
+        x86_64 userspace. Once the slot is being profiled for browser use, we
+        can expose ARM-like ABI/hardware properties to native property readers.
+        """
+        props = _runtime_arch_props(device)
+        if not await self.wait_for_package_manager(timeout=45.0):
+            raise RootError("PackageManager not ready before runtime arch prop spoof")
+        await self.set_props_batch(props)
+        resetprop = await self._ensure_resetprop()
+        delete_script = "; ".join(
+            f"{resetprop} --delete {prop} 2>/dev/null || true"
+            for prop in _runtime_arch_deleted_props()
+        )
+        await self.adb.shell_root(delete_script, timeout=10)
+        abi = (await self.get_prop("ro.product.cpu.abi")).strip()
+        hardware = (await self.get_prop("ro.hardware")).strip()
+        bionic_arch = (await self.get_prop("ro.bionic.arch")).strip()
+        gralloc = (await self.get_prop("ro.hardware.gralloc")).strip()
+        if abi == "arm64-v8a" and hardware == props["ro.hardware"] and bionic_arch == "arm64":
+            logger.info(
+                "Runtime arch props spoofed: abi=%s hardware=%s bionic=%s gralloc=%s",
+                abi,
+                hardware,
+                bionic_arch,
+                gralloc,
+            )
+        else:
+            logger.warning(
+                "Runtime arch prop spoof partial: abi=%s hardware=%s bionic=%s expected_hardware=%s",
+                abi, hardware, bionic_arch, props["ro.hardware"],
+            )
+
+    async def apply_slot_identity_spoof(
+        self,
+        seed: str | None,
+        *,
+        device: AndroidDevice | None = None,
+    ) -> bool:
+        """Give a warmed slot stable native identity values derived from a seed."""
+        clean_seed = (seed or "").strip()
+        if not clean_seed:
+            return False
+
+        android_id = _stable_android_id(clean_seed)
+        boot_id = _stable_uuid(clean_seed, "boot-id")
+        version_text = _build_proc_version_spoof(device)
+        version_b64 = base64.b64encode(version_text.encode("utf-8")).decode("ascii")
+        mountinfo_b64 = base64.b64encode(_build_proc_mountinfo_spoof().encode("utf-8")).decode("ascii")
+        script = (
+            "settings put secure android_id "
+            f"{android_id} 2>/dev/null || true\n"
+            "umount /proc/sys/kernel/random/boot_id 2>/dev/null || true\n"
+            "umount /proc/version 2>/dev/null || true\n"
+            f"printf '%s\\n' {boot_id} > {_PROC_BOOT_ID_SPOOF}\n"
+            f"echo '{version_b64}' | base64 -d > {_PROC_VERSION_SPOOF}\n"
+            f"echo '{mountinfo_b64}' | base64 -d > {_PROC_MOUNTINFO_SPOOF}\n"
+            f"chmod 0644 {_PROC_BOOT_ID_SPOOF} {_PROC_VERSION_SPOOF} {_PROC_MOUNTINFO_SPOOF}\n"
+            f"mount --bind {_PROC_BOOT_ID_SPOOF} /proc/sys/kernel/random/boot_id "
+            "2>/dev/null || echo damru_boot_id_mount_failed=1\n"
+            f"mount --bind {_PROC_VERSION_SPOOF} /proc/version "
+            "2>/dev/null || echo damru_proc_version_mount_failed=1\n"
+            "true"
+        )
+        command_output = await self.adb.shell_root(script, timeout=15)
+        current_android_id, current_boot_id, current_version = await asyncio.gather(
+            self.adb.shell("settings get secure android_id", timeout=5, allow_failure=True),
+            self.adb.shell("cat /proc/sys/kernel/random/boot_id", timeout=5, allow_failure=True),
+            self.adb.shell("cat /proc/version", timeout=5, allow_failure=True),
+        )
+        id_ok = current_android_id.strip() == android_id
+        boot_ok = current_boot_id.strip() == boot_id
+        version_lower = current_version.lower()
+        version_ok = (
+            "linux version" in version_lower
+            and "ubuntu" not in version_lower
+            and "x86" not in version_lower
+            and "generic" not in version_lower
+        )
+        if id_ok and boot_ok and version_ok:
+            logger.info(
+                "Slot native identity spoofed: android_id=%s boot_id=%s",
+                android_id,
+                boot_id,
+            )
+        else:
+            logger.warning(
+                "Slot native identity spoof partial: android_id_ok=%s boot_id_ok=%s "
+                "proc_version_ok=%s output=%s",
+                id_ok,
+                boot_ok,
+                version_ok,
+                command_output.strip()[:200],
+            )
+        return id_ok and boot_ok and version_ok
+
+    async def ensure_system_webview_native_lib_patch(self) -> bool:
+        """Install a patched extracted WebView native library if needed."""
+        current = await self.adb.shell_root(
+            f"if [ -f {_WEBVIEW_SYSTEM_LIB} ]; then "
+            f"grep -ao 'Linux armv8.' {_WEBVIEW_SYSTEM_LIB} 2>/dev/null | head -1; "
+            "else echo missing; fi",
+            timeout=10,
+        )
+        if "Linux armv8l" in current:
+            return False
+
+        version = (
+            await self.adb.shell(
+                "dumpsys package com.android.webview | sed -n 's/^ *versionName=//p' | head -1",
+                timeout=10,
+                allow_failure=True,
+            )
+        ).strip()
+        source_apk = _find_webview_native_library_apk(version)
+        if source_apk is None:
+            logger.warning("System WebView native lib patch skipped: matching Trichrome library APK not found")
+            return False
+
+        with tempfile.TemporaryDirectory(prefix="damru-webview-system-lib-") as tmp:
+            local_lib = Path(tmp) / "libmonochrome_64.so"
+            _extract_webview_native_library(source_apk, local_lib)
+            await self.adb.push(str(local_lib), _WEBVIEW_PATCH_TMP)
+
+        await self.adb.shell_root(
+            "mount -o rw,remount /system 2>/dev/null || true; "
+            "mount -o rw,remount /system/product 2>/dev/null || true; "
+            "mkdir -p /system/product/app/webview/lib/x86_64; "
+            f"cat {_WEBVIEW_PATCH_TMP} > {_WEBVIEW_SYSTEM_LIB}; "
+            f"chown root:root {_WEBVIEW_SYSTEM_LIB}; "
+            f"chmod 0644 {_WEBVIEW_SYSTEM_LIB}; "
+            f"restorecon {_WEBVIEW_SYSTEM_LIB} 2>/dev/null || true; "
+            f"rm -f {_WEBVIEW_PATCH_TMP}; "
+            "am force-stop com.android.webview 2>/dev/null || true; "
+            "am force-stop com.android.browser 2>/dev/null || true; "
+            "am force-stop org.chromium.webview_shell 2>/dev/null || true",
+            timeout=30,
+        )
+        logger.info("System WebView native lib patched from %s", source_apk)
+        return True
+
+    async def ensure_installed_webview_apk_platform_patch(self) -> bool:
+        """Patch the installed Trichrome APK payload that WebView actually maps.
+
+        WebView can mmap libmonochrome directly from the static Trichrome APK in
+        `/data/app`. Repacking that APK changes ZIP layout and can break mmap
+        alignment, so this uses a same-length byte replacement on the APK file
+        itself and then restarts only WebView processes.
+        """
+        if os.environ.get("DAMRU_ENABLE_INSTALLED_WEBVIEW_NATIVE_PATCH") != "1":
+            logger.info("Installed WebView APK platform patch disabled by default")
+            return False
+        find_command = (
+            "for f in "
+            "/data/app/*/app.vanadium.trichromelibrary_*/base.apk "
+            "/data/app/*/com.google.android.trichromelibrary_*/base.apk "
+            "/data/app/*/*trichromelibrary*/base.apk; do "
+            '[ -f "$f" ] && echo "$f"; '
+            "done | sort -u"
+        )
+        output = await self.adb.shell_root(find_command, timeout=20)
+        apk_paths = [line.strip() for line in output.splitlines() if line.strip()]
+        if not apk_paths:
+            logger.warning("Installed WebView APK platform patch skipped: Trichrome base.apk not found")
+            return False
+        vanadium_paths = [path for path in apk_paths if "/app.vanadium.trichromelibrary_" in path]
+        google_paths = [path for path in apk_paths if "/com.google.android.trichromelibrary_" in path]
+        apk_paths = (vanadium_paths or google_paths or apk_paths)[:1]
+
+        patched_any = False
+        for remote_apk in apk_paths:
+            quoted_apk = shlex.quote(remote_apk)
+            current = await self.adb.shell_root(
+                f"grep -ao 'Linux armv8.' {quoted_apk} 2>/dev/null | sort -u",
+                timeout=20,
+            )
+            if "Linux armv8l" in current and "Linux armv81" not in current:
+                continue
+            with tempfile.TemporaryDirectory(prefix="damru-trichrome-apk-platform-") as tmp:
+                local_apk = Path(tmp) / "base.apk"
+                await self._pull_root_readable_file(remote_apk, local_apk, timeout=240.0)
+                try:
+                    changed = patch_linux_armv8l_platform_string(local_apk)
+                except WebViewNativePatchError as exc:
+                    logger.warning("Installed WebView APK platform patch skipped for %s: %s", remote_apk, exc)
+                    continue
+                if not changed:
+                    continue
+                await self.adb.push(str(local_apk), _WEBVIEW_APK_PATCH_TMP)
+
+            await self.adb.shell_root(
+                f"apk={quoted_apk}; "
+                f"owner=$(stat -c '%u:%g' \"$apk\"); "
+                f"mode=$(stat -c '%a' \"$apk\"); "
+                f"cat {_WEBVIEW_APK_PATCH_TMP} > \"$apk\"; "
+                f"chown \"$owner\" \"$apk\"; "
+                f"chmod \"$mode\" \"$apk\"; "
+                f"restorecon \"$apk\" 2>/dev/null || true; "
+                f"rm -f {_WEBVIEW_APK_PATCH_TMP}; "
+                "rm -f /data/misc/shared_relro/libwebviewchromium*.relro "
+                "/data/misc/shared_relro/libmonochrome*.relro 2>/dev/null || true; "
+                "am force-stop com.android.webview 2>/dev/null || true; "
+                "am force-stop com.android.browser 2>/dev/null || true; "
+                "am force-stop org.chromium.webview_shell 2>/dev/null || true; "
+                "killall webview_zygote 2>/dev/null || true",
+                timeout=60,
+            )
+            logger.info("Installed WebView APK platform patched in %s", remote_apk)
+            patched_any = True
+        return patched_any
+
+    async def ensure_multitouch_stack(self) -> bool:
+        """Expose a direct multitouch input node and Android feature XML."""
+        xml = """<?xml version=\"1.0\" encoding=\"utf-8\"?>
+<permissions>
+    <feature name=\"android.hardware.touchscreen.multitouch\" />
+    <feature name=\"android.hardware.touchscreen.multitouch.distinct\" />
+    <feature name=\"android.hardware.touchscreen.multitouch.jazzhand\" />
+</permissions>
+"""
+        encoded_xml = base64.b64encode(xml.encode("utf-8")).decode("ascii")
+        await self.adb.shell_root(
+            "mkdir -p /vendor/etc/permissions; "
+            f"echo '{encoded_xml}' | base64 -d > {_MULTITOUCH_FEATURE_XML}; "
+            f"chmod 0644 {_MULTITOUCH_FEATURE_XML}; "
+            f"restorecon {_MULTITOUCH_FEATURE_XML} 2>/dev/null || true",
+            timeout=10,
+        )
+
+        devices = await self.adb.shell("cat /proc/bus/input/devices 2>/dev/null", timeout=10, allow_failure=True)
+        event = _find_multitouch_event(devices)
+        if event is None:
+            logger.warning("Multitouch input node skipped: no direct touch event found in /proc/bus/input/devices")
+            return False
+        event_name, minor = event
+        await self.adb.shell_root(
+            "mkdir -p /dev/input; "
+            f"rm -f /dev/input/{event_name}; "
+            f"mknod /dev/input/{event_name} c 13 {minor}; "
+            f"chown 0:1000 /dev/input/{event_name} 2>/dev/null || true; "
+            f"chmod 660 /dev/input/{event_name}; "
+            f"chcon u:object_r:input_device:s0 /dev/input/{event_name} 2>/dev/null || true",
+            timeout=10,
+        )
+        features = await self.adb.shell("pm list features | grep touchscreen || true", timeout=10, allow_failure=True)
+        if "android.hardware.touchscreen.multitouch" not in features:
+            logger.info("Multitouch feature XML installed; PackageManager will load it on next Android boot")
+        logger.info("Multitouch stack ensured with /dev/input/%s", event_name)
+        return True
 
     async def apply_version_release(self, device: "AndroidDevice") -> None:
         """Override ro.build.version.release and security_patch for Android version spoofing.
@@ -353,6 +938,80 @@ class RootOps:
             "Android version spoofed: %s (security_patch=%s)",
             device.android_version, device.security_patch,
         )
+
+    async def wait_for_package_manager(self, timeout: float = 30.0) -> bool:
+        """Wait until Android PackageManager can list installed packages."""
+        deadline = asyncio.get_running_loop().time() + timeout
+        while True:
+            out = await self.adb.shell(
+                "cmd package list packages 2>/dev/null | head -1",
+                timeout=5,
+                allow_failure=True,
+            )
+            if out.strip().startswith("package:"):
+                return True
+            if asyncio.get_running_loop().time() >= deadline:
+                logger.warning("PackageManager not ready after %.0fs, continuing anyway", timeout)
+                return False
+            await sleep(1.0)
+
+    async def repair_app_data_dirs(self) -> tuple[int, int]:
+        """Ensure installed packages have CE/DE user-0 data dirs.
+
+        Redroid workers can boot with PackageManager knowing about packages
+        while `/data/user_de/0/<package>` is missing. Android zygote then dies
+        trying to bind-mount `/data_mirror/data_de/null/0/<package>` during
+        app process startup. This repair stays below WebView/JS: it reconciles
+        Android package data directories from PackageManager state.
+
+        Returns:
+            Tuple of `(package_count, created_dir_count)`.
+        """
+        output = await self.adb.shell(
+            "pm list packages -U",
+            timeout=30,
+            allow_failure=True,
+        )
+        packages = _parse_pm_package_uids(output)
+        if not packages:
+            logger.warning("Android app-data dir repair skipped: no package UIDs found")
+            return 0, 0
+
+        rows = "\n".join(f"{package} {uid}" for package, uid in packages)
+        script = f"""created=0
+while read pkg uid; do
+  [ -n "$pkg" ] || continue
+  [ -n "$uid" ] || continue
+  for base in /data/user_de/0 /data/user/0; do
+    [ -d "$base" ] || continue
+    path="$base/$pkg"
+    if [ ! -d "$path" ]; then
+      mkdir -p "$path" || continue
+      chown "$uid:$uid" "$path" 2>/dev/null || true
+      chmod 700 "$path" 2>/dev/null || true
+      created=$((created + 1))
+    fi
+  done
+done <<'DAMRU_PACKAGES'
+{rows}
+DAMRU_PACKAGES
+restorecon -R /data/user_de/0 /data/user/0 2>/dev/null || true
+echo damru_app_data_dirs_created=$created
+"""
+        result = await self.adb.shell_root(script, timeout=max(30.0, len(packages) * 0.25))
+        created = 0
+        match = re.search(r"damru_app_data_dirs_created=(\d+)", result)
+        if match:
+            created = int(match.group(1))
+        if created:
+            logger.info(
+                "Android app-data dirs repaired: created %d dirs for %d packages",
+                created,
+                len(packages),
+            )
+        else:
+            logger.info("Android app-data dirs verified for %d packages", len(packages))
+        return len(packages), created
 
     async def apply_timezone(self, timezone: str) -> None:
         """Set the device timezone and sync device clock.
@@ -382,12 +1041,13 @@ class RootOps:
         so Chrome picks up the new locale immediately without reboot.
         """
         language, country = _locale_language_country(locale)
-        prop_tasks = [
-            self.set_prop("persist.sys.locale", locale),
-            self.set_prop("persist.sys.language", language),
-            self.set_prop("persist.sys.country", country),
-        ]
-        await asyncio.gather(*prop_tasks)
+        await self.set_props_batch(
+            {
+                "persist.sys.locale": locale,
+                "persist.sys.language": language,
+                "persist.sys.country": country,
+            }
+        )
         # Android settings locale takes effect immediately for apps
         await self.adb.shell(
             f"settings put system system_locales {locale}",
@@ -587,22 +1247,30 @@ class RootOps:
             await self.adb.shell_root(f"{rule} 2>/dev/null || true")
         logger.info("WebRTC iptables rules removed")
 
-    async def apply_cpu_cores_spoof(self, target_cores: int, restart_zygote: bool = False) -> None:
-        """Override visible CPU count via bind-mounts on /sys and /proc/stat.
+    async def apply_cpu_cores_spoof(
+        self,
+        target_cores: int,
+        restart_zygote: bool = False,
+        device: AndroidDevice | None = None,
+    ) -> None:
+        """Override visible CPU count and CPU identity via bind-mounts.
 
         Chrome can read CPU topology from multiple kernel views. Spoof both:
           - /sys/devices/system/cpu/online (sysconf/getconf path)
           - /proc/stat (worker/process-level enumeration path)
+          - /proc/cpuinfo (native CPU/vendor/architecture path)
 
         Args:
             target_cores: Number of cores to report.
             restart_zygote: Restart zygote to flush stale cached CPU count.
+            device: Selected Android profile, used to make /proc/cpuinfo
+                coherent with the claimed SoC/GPU family.
         """
         if target_cores < 1:
             logger.warning("Invalid target cores: %d", target_cores)
             return
 
-        for path in ("/sys/devices/system/cpu/online", "/proc/stat"):
+        for path in ("/sys/devices/system/cpu/online", "/proc/stat", "/proc/cpuinfo"):
             try:
                 await self.adb.shell_root(f"umount {path} 2>/dev/null || true")
             except Exception:
@@ -655,6 +1323,17 @@ class RootOps:
         await self.adb.shell_root(
             "mount --bind /data/local/tmp/proc_stat_spoof /proc/stat",
         )
+        cpuinfo = _build_proc_cpuinfo_spoof(target_cores, device)
+        cpuinfo_b64 = base64.b64encode(cpuinfo.encode("utf-8")).decode("ascii")
+        await self.adb.shell_root(
+            "out=/data/local/tmp/proc_cpuinfo_spoof; "
+            f"echo '{cpuinfo_b64}' | base64 -d > \"$out\"; "
+            "chmod 0644 \"$out\"",
+            timeout=10,
+        )
+        await self.adb.shell_root(
+            "mount --bind /data/local/tmp/proc_cpuinfo_spoof /proc/cpuinfo",
+        )
 
         if restart_zygote:
             try:
@@ -685,16 +1364,21 @@ class RootOps:
             timeout=5, allow_failure=True,
         )
         proc_count = proc_verify.strip()
+        cpuinfo_leaks = await self.adb.shell(
+            "grep -E 'AuthenticAMD|GenuineIntel|hypervisor|x86|EPYC' /proc/cpuinfo | head -1",
+            timeout=5, allow_failure=True,
+        )
+        cpuinfo_ok = not cpuinfo_leaks.strip()
 
-        if verify_count == str(target_cores) and proc_count == str(target_cores):
+        if verify_count == str(target_cores) and proc_count == str(target_cores) and cpuinfo_ok:
             logger.info(
-                "CPU cores spoofed: %d -> %d (/sys + /proc/stat bind-mounts)",
+                "CPU spoofed: %d -> %d cores (/sys + /proc/stat + /proc/cpuinfo bind-mounts)",
                 real_cores, target_cores,
             )
         else:
             logger.warning(
-                "CPU spoof partial: getconf=%s, /proc/stat cpu lines=%s (expected %d)",
-                verify_count, proc_count, target_cores,
+                "CPU spoof partial: getconf=%s, /proc/stat cpu lines=%s, cpuinfo_ok=%s (expected %d)",
+                verify_count, proc_count, cpuinfo_ok, target_cores,
             )
 
     async def apply_battery_spoof(self, quiet: bool = False) -> None:
@@ -1251,6 +1935,65 @@ class RootOps:
         )
         return "YES" in result
 
+    async def _gpu_binary_marker_matches(
+        self,
+        *,
+        target_renderer: str,
+        target_vendor: str,
+        target_vendor_id: int | None,
+        target_device_id: int | None,
+        gpu_family: str,
+    ) -> bool:
+        marker = await self._read_gpu_binary_marker()
+        if not marker:
+            return False
+        expected = {
+            "renderer": target_renderer,
+            "vendor": target_vendor,
+            "vendor_id": target_vendor_id,
+            "device_id": target_device_id,
+            "gpu_family": gpu_family,
+        }
+        return all(marker.get(key) == value for key, value in expected.items())
+
+    async def _read_gpu_binary_marker(self) -> dict | None:
+        raw = await self.adb.shell(
+            f"cat {_GPU_BINARY_MARKER} 2>/dev/null || true",
+            timeout=5,
+            allow_failure=True,
+        )
+        if not raw.strip():
+            return None
+        try:
+            marker = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+        return marker if isinstance(marker, dict) else None
+
+    async def _write_gpu_binary_marker(
+        self,
+        *,
+        target_renderer: str,
+        target_vendor: str,
+        target_vendor_id: int | None,
+        target_device_id: int | None,
+        gpu_family: str,
+    ) -> None:
+        payload = {
+            "renderer": target_renderer,
+            "vendor": target_vendor,
+            "vendor_id": target_vendor_id,
+            "device_id": target_device_id,
+            "gpu_family": gpu_family,
+        }
+        encoded = base64.b64encode(
+            (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+        ).decode("ascii")
+        await self.adb.shell_root(
+            f"echo '{encoded}' | base64 -d > {_GPU_BINARY_MARKER}; chmod 0644 {_GPU_BINARY_MARKER}",
+            timeout=10,
+        )
+
     @staticmethod
     def effective_renderer(device: AndroidDevice) -> str:
         """Compute the actual renderer string that would be patched into the .so.
@@ -1311,20 +2054,7 @@ class RootOps:
 
         # Keep renderer names reasonable; binary patcher will still enforce
         # in-slot writes and truncate safely if the storage slot is smaller.
-        target_renderer = device.webgl_renderer.strip()
-        if device.gpu_family == "xclipse":
-            # Fits the SwiftShader slot while retaining the exact model family.
-            target_renderer = "Xclipse 920"
-        max_renderer_len = 24
-        if len(target_renderer.encode("utf-8")) > max_renderer_len:
-            short_renderer = {
-                "adreno": "Adreno (TM) 740",
-                "mali": "Mali-G715",
-                "xclipse": "Xclipse 920",
-                "powervr": "PowerVR GE8320",
-            }.get(device.gpu_family, target_renderer)
-            target_renderer = short_renderer[:max_renderer_len]
-
+        target_renderer = self.effective_renderer(device)
         target_vendor = device.webgl_vendor       # e.g. "Qualcomm"
 
         # Determine target Vulkan vendor ID
@@ -1341,6 +2071,27 @@ class RootOps:
             }
             vendor_key = family_vendor_map.get(family, "")
             target_vendor_id = self._VULKAN_VENDOR_IDS.get(vendor_key)
+        target_device_id = self._VULKAN_DEVICE_IDS.get(device.gpu_family)
+
+        marker = await self._read_gpu_binary_marker()
+        marker_family = str(marker.get("gpu_family") or "") if marker else ""
+        if marker_family and marker_family != device.gpu_family:
+            raise RootError(
+                "GPU binary spoof is already patched for "
+                f"{marker_family}; recreate the Redroid worker before switching "
+                f"to {device.gpu_family}."
+            )
+
+        if await self._gpu_binary_marker_matches(
+            target_renderer=target_renderer,
+            target_vendor=target_vendor,
+            target_vendor_id=target_vendor_id,
+            target_device_id=target_device_id,
+            gpu_family=device.gpu_family,
+        ):
+            logger.info("GPU binary spoof already present: %s; skipping SurfaceFlinger restart", target_renderer)
+            await self.wait_for_package_manager(timeout=15.0)
+            return
 
         await self.adb.shell("su 0 mount -o remount,rw /vendor 2>/dev/null", allow_failure=True)
 
@@ -1360,7 +2111,6 @@ class RootOps:
             "powervr": "PowerVR",
         }
         driver_name = _DRIVER_NAMES.get(device.gpu_family, target_renderer.split()[0])
-        target_device_id = self._VULKAN_DEVICE_IDS.get(device.gpu_family)
 
         # ANGLE builds GL_RENDERER from Vulkan device properties:
         #   ANGLE (<vendor>, Vulkan X.X.X (<deviceName> (0x<ID>)), <driverName>-X.X.X)
@@ -1389,6 +2139,13 @@ class RootOps:
 
         if patched:
             self._gpu_binary_spoofed = True
+            await self._write_gpu_binary_marker(
+                target_renderer=target_renderer,
+                target_vendor=target_vendor,
+                target_vendor_id=target_vendor_id,
+                target_device_id=target_device_id,
+                gpu_family=device.gpu_family,
+            )
             vid_str = f", vendorID=0x{target_vendor_id:04X}" if target_vendor_id else ""
             logger.info("GPU binary spoofed: %s (%s%s) via vulkan.pastel.so patch",
                         target_renderer, target_vendor, vid_str)
@@ -1423,17 +2180,9 @@ class RootOps:
                 logger.warning("ADB reconnect failed after 5 attempts, continuing anyway")
 
             # Poll PackageManager readiness — system needs time to respawn
-            # Zygote and re-register package activities.
-            for _poll in range(20):
-                out = await self.adb.shell(
-                    "pm path com.android.chrome 2>&1 | head -1",
-                    timeout=5, allow_failure=True,
-                )
-                if "base.apk" in out:
-                    break
-                await sleep(1.0)
-            else:
-                logger.warning("PackageManager not ready after 20s, continuing anyway")
+            # Zygote and re-register package activities. Use a generic package
+            # query because raw WebView workers may not install Chrome.
+            await self.wait_for_package_manager(timeout=30.0)
             await sleep(3.0)  # Extra buffer for Activity Manager to re-register
         else:
             logger.warning("GPU binary spoof: no patches applied")
@@ -1701,25 +2450,32 @@ class RootOps:
         repo_native_dir = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "native"
         )
-        c_path = os.path.join(repo_native_dir, "libfakemem.c")
-        build_dir = repo_native_dir
+        source_c_path = os.path.join(repo_native_dir, "libfakemem.c")
+        build_dir = os.environ.get("DAMRU_NATIVE_BUILD_DIR") or os.path.join(
+            tempfile.gettempdir(), "damru-native"
+        )
+        os.makedirs(build_dir, exist_ok=True)
+        c_path = os.path.join(build_dir, "libfakemem.c")
 
-        if not os.path.isfile(c_path):
+        if os.path.isfile(source_c_path):
+            if (
+                not os.path.isfile(c_path)
+                or os.path.getmtime(c_path) < os.path.getmtime(source_c_path)
+                or os.path.getsize(c_path) != os.path.getsize(source_c_path)
+            ):
+                shutil.copy2(source_c_path, c_path)
+        elif not os.path.isfile(c_path):
             try:
                 asset = resources.files("damru.assets").joinpath("libfakemem.c")
                 data = asset.read_bytes()
-                build_dir = os.path.join(tempfile.gettempdir(), "damru-native")
-                os.makedirs(build_dir, exist_ok=True)
-                c_path = os.path.join(build_dir, "libfakemem.c")
                 with open(c_path, "wb") as f:
                     f.write(data)
             except Exception:
                 pass
 
-        os.makedirs(build_dir, exist_ok=True)
         so_path = os.path.join(build_dir, "libfakemem_x86_64.so")
 
-        if os.path.isfile(so_path):
+        if os.path.isfile(so_path) and os.path.getmtime(so_path) >= os.path.getmtime(c_path):
             return so_path
 
         if not os.path.isfile(c_path):
@@ -1782,6 +2538,14 @@ class RootOps:
         logger.info("Compiled libfakemem.so (%s)", so_path)
         return so_path
 
+    @staticmethod
+    def _file_sha256(path: str) -> str:
+        digest = hashlib.sha256()
+        with open(path, "rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+
     async def apply_memory_spoof(self, target_gb: float) -> None:
         """Push libfakemem.so and write target GB file to device.
 
@@ -1791,23 +2555,67 @@ class RootOps:
 
         Must call setup_memory_preload() once per container boot to activate.
         """
-        # Push .so if not already on device
+        await self.install_native_preload_assets(target_gb=target_gb, force=False)
+        logger.debug("Memory spoof target: %d GB", int(target_gb))
+
+    async def install_native_preload_assets(
+        self,
+        *,
+        target_gb: float | None = None,
+        force: bool = True,
+    ) -> None:
+        """Install native preload support files into Android.
+
+        This is safe for image baking because it only places files on disk. It
+        does not set any ``wrap.*`` properties, so the preload remains inactive
+        until profile application explicitly enables it for a package.
+        """
+        so_local = self._compile_fakemem()
+        local_sha = self._file_sha256(so_local)
         out = await self.adb.shell(
-            f"test -f {_FAKEMEM_SO} && echo OK",
+            f"sha256sum {_FAKEMEM_SO} 2>/dev/null | awk '{{print $1}}'",
             timeout=5, allow_failure=True,
         )
-        if "OK" not in out:
-            so_local = self._compile_fakemem()
+        device_sha = out.strip().split()[0] if out.strip() else ""
+        if force or device_sha != local_sha:
             await self.adb.push(so_local, _FAKEMEM_SO)
             await self.adb.shell_root(f"chmod 755 {_FAKEMEM_SO}")
-            logger.info("Pushed libfakemem.so to device")
+            logger.info(
+                "Installed libfakemem.so native preload asset (%s -> %s)",
+                device_sha or "missing",
+                local_sha,
+            )
+        else:
+            logger.debug("Native preload asset already current (%s)", local_sha)
 
-        # Write target GB (Chrome reads this on startup via the .so)
-        target_int = int(target_gb)
-        await self.adb.shell_root(f"echo {target_int} > {_FAKEMEM_TARGET}")
-        logger.debug("Memory spoof target: %d GB", target_int)
+        commands: list[str] = []
+        if target_gb is not None:
+            target_int = int(target_gb)
+            if target_int > 0:
+                commands.extend(
+                    [
+                        f"printf '%s\\n' {target_int} > {_FAKEMEM_TARGET}",
+                        f"chmod 0644 {_FAKEMEM_TARGET}",
+                    ]
+                )
 
-    async def setup_memory_preload(self, chrome_package: str = "com.android.chrome") -> None:
+        mountinfo_b64 = base64.b64encode(_build_proc_mountinfo_spoof().encode("utf-8")).decode("ascii")
+        commands.extend(
+            [
+                f"echo '{mountinfo_b64}' | base64 -d > {_PROC_MOUNTINFO_SPOOF}",
+                f"chmod 0644 {_PROC_MOUNTINFO_SPOOF}",
+            ]
+        )
+        await self.adb.shell_root("\n".join(commands), timeout=10)
+        logger.info("Installed native preload proc spoof assets")
+
+    async def setup_memory_preload(
+        self,
+        chrome_package: str = "com.android.chrome",
+        *,
+        extra_packages: tuple[str, ...] = (),
+        restart_webview_zygote: bool = False,
+    ) -> None:
         """Enable per-Chrome LD_PRELOAD memory spoofing.
 
         Prefer Android's ``wrap.<package>`` property over replacing
@@ -1815,19 +2623,16 @@ class RootOps:
         system processes and can destabilize ADB/Android after a live restart.
         """
         await self._restore_global_memory_preload_if_needed()
-        if await self.is_memory_preload_active(chrome_package):
-            logger.debug("Memory preload already active")
-            return
+        wrap_targets = tuple(dict.fromkeys((chrome_package, *extra_packages)))
+        for target in wrap_targets:
+            if not re.fullmatch(r"[A-Za-z0-9_.:-]+", target):
+                raise RootError(f"Unsafe wrap target for memory preload: {target!r}")
 
-        # Ensure .so is on device
-        out = await self.adb.shell(
-            f"test -f {_FAKEMEM_SO} && echo OK",
-            timeout=5, allow_failure=True,
-        )
-        if "OK" not in out:
-            so_local = self._compile_fakemem()
-            await self.adb.push(so_local, _FAKEMEM_SO)
-            await self.adb.shell_root(f"chmod 755 {_FAKEMEM_SO}")
+        await self.install_native_preload_assets(target_gb=None, force=False)
+        active = [target for target in wrap_targets if await self.is_memory_preload_active(target)]
+        if len(active) == len(wrap_targets):
+            logger.debug("Memory preload already active for %s", ", ".join(wrap_targets))
+            return
 
         wrapper = (
             "#!/system/bin/sh\n"
@@ -1837,17 +2642,55 @@ class RootOps:
         b64 = base64.b64encode(wrapper.encode()).decode()
         await self.adb.shell_root(f"echo '{b64}' | base64 -d > {_FAKEMEM_WRAP}")
         await self.adb.shell_root(f"chmod 755 {_FAKEMEM_WRAP}")
-        await self.adb.shell_root(f"setprop wrap.{chrome_package} {_FAKEMEM_WRAP}")
-        value = await self.adb.shell(
-            f"getprop wrap.{chrome_package}", timeout=5, allow_failure=True,
-        )
-        if _FAKEMEM_WRAP not in value:
-            raise RootError(f"Failed to set wrap.{chrome_package} for memory preload")
-        logger.info("Memory preload active for %s via Android wrap property", chrome_package)
+        for target in wrap_targets:
+            await self.adb.shell_root(f"setprop wrap.{target} {_FAKEMEM_WRAP}")
+            value = await self.adb.shell(
+                f"getprop wrap.{target}", timeout=5, allow_failure=True,
+            )
+            if _FAKEMEM_WRAP not in value:
+                raise RootError(f"Failed to set wrap.{target} for memory preload")
+        if restart_webview_zygote:
+            await self.adb.shell_root(
+                "am force-stop com.android.webview 2>/dev/null || true; "
+                "killall webview_zygote 2>/dev/null || true"
+            )
+        logger.info("Memory preload active for %s via Android wrap property", ", ".join(wrap_targets))
 
-    async def remove_memory_preload(self, chrome_package: str = "com.android.chrome") -> None:
+    async def setup_native_proc_preload(
+        self,
+        browser_package: str,
+        *,
+        extra_packages: tuple[str, ...] = (),
+        restart_webview_zygote: bool = False,
+    ) -> None:
+        """Enable the native preload only for proc/status/mountinfo cleanup.
+
+        The shared library also supports memory spoofing, but memory spoofing is
+        activated by the target-GB file. Removing that file lets raw WebView
+        canaries exercise the same deeper /proc filtering without changing the
+        memory surface that previously made harness warmup fragile.
+        """
+        await self.install_native_preload_assets(target_gb=None, force=False)
+        await self.adb.shell_root(f"rm -f {_FAKEMEM_TARGET}", timeout=10)
+        await self.setup_memory_preload(
+            browser_package,
+            extra_packages=extra_packages,
+            restart_webview_zygote=restart_webview_zygote,
+        )
+        logger.info(
+            "Native proc preload active for %s via Android wrap property",
+            browser_package,
+        )
+
+    async def remove_memory_preload(
+        self,
+        chrome_package: str = "com.android.chrome",
+        *,
+        extra_packages: tuple[str, ...] = (),
+    ) -> None:
         """Restore original app_process64 (best-effort cleanup)."""
-        await self.adb.shell_root(f"setprop wrap.{chrome_package} ''")
+        for target in tuple(dict.fromkeys((chrome_package, *extra_packages))):
+            await self.adb.shell_root(f"setprop wrap.{target} ''")
         await self._restore_global_memory_preload_if_needed()
 
     async def _restore_global_memory_preload_if_needed(self) -> None:

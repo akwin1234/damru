@@ -37,6 +37,7 @@ def build_profile(
     android_proxy: Optional[str] = None,
     timezone: Optional[str] = None,
     locale: Optional[str] = None,
+    chrome_version: Optional[str] = None,
 ) -> DamruProfile:
     """Build a complete spoofing profile for the given device.
 
@@ -47,6 +48,9 @@ def build_profile(
             "http://host:port"). Auto-derived from proxy if None.
         timezone: IANA timezone. Auto-detected from proxy IP if None.
         locale: BCP-47 locale. Auto-detected from timezone if None.
+        chrome_version: Installed Chrome/WebView version used for the native
+            command-line user-agent. Callers that can inspect the device should
+            pass the real installed version before Chrome starts.
     """
     # Resolve Android system HTTP proxy first. When present, use that same
     # path for GeoIP so browser timezone matches the proxy Chrome actually uses.
@@ -69,7 +73,7 @@ def build_profile(
         locale = resolve_locale(timezone)
 
     system_props = device.system_props()
-    chrome_flags = _build_chrome_flags(device, timezone, locale)
+    chrome_flags = _build_chrome_flags(device, timezone, locale, chrome_version)
 
     # Randomize screen resolution for devices with WQHD+/FHD+ modes
     sw, sh, sdpi = pick_screen_variant(device)
@@ -96,6 +100,7 @@ def _build_chrome_flags(
     device: AndroidDevice,
     timezone: str,
     locale: str,
+    chrome_version: Optional[str] = None,
 ) -> List[str]:
     """Assemble Chrome command-line flags.
 
@@ -171,12 +176,11 @@ def _build_chrome_flags(
     # page load already has correct platform (Linux armv8l) instead of
     # the Redroid default. CDP overrides apply after page load, which
     # leaves a detectable window where navigator.platform leaks.
-    # Chrome version placeholder ... is filled in during runtime.
-    import random
+    chrome_ver = _effective_chrome_version(chrome_version)
     ua = (
         'Mozilla/5.0 (Linux; Android ' + device.android_version + '; ' + device.model + ') '
         'AppleWebKit/537.36 (KHTML, like Gecko) '
-        'Chrome/... Mobile Safari/537.36'
+        'Chrome/' + chrome_ver + ' Mobile Safari/537.36'
     )
     flags.append('--user-agent=' + ua)
 
@@ -193,6 +197,14 @@ def _build_chrome_flags(
     flags.append(f"--disable-features={','.join(disabled_features)}")
 
     return flags
+
+
+def _effective_chrome_version(chrome_version: Optional[str]) -> str:
+    """Return a concrete Chrome version for native command-line flags."""
+    value = (chrome_version or "").strip()
+    if value and value.lower() != "unknown" and "..." not in value:
+        return value
+    return "145.0.0.0"
 
 
 # ── TLS cipher suites safe to blacklist ────────────────────────

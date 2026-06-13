@@ -46,17 +46,49 @@ class FakeRootOps:
     async def apply_locale(self, locale: str) -> None:
         self.calls.append(("root.locale", locale))
 
-    async def apply_cpu_cores_spoof(self, target_cores: int) -> None:
-        self.calls.append(("root.cpu", target_cores))
+    async def apply_cpu_cores_spoof(self, target_cores: int, **kwargs) -> None:
+        device = kwargs.get("device")
+        self.calls.append(("root.cpu", target_cores, getattr(device, "name", None)))
 
     async def apply_gpu_binary_spoof(self, device) -> None:
         self.calls.append(("root.gpu", device.name, device.webgl_renderer))
 
+    async def apply_runtime_arch_props(self, device) -> None:
+        self.calls.append(("root.runtime_arch", device.name))
+
+    async def apply_slot_identity_spoof(self, seed: str, **kwargs) -> bool:
+        device = kwargs.get("device")
+        self.calls.append(("root.slot_identity", seed, getattr(device, "name", None)))
+        return True
+
+    async def ensure_system_webview_native_lib_patch(self) -> bool:
+        self.calls.append(("root.webview_lib",))
+        return True
+
+    async def ensure_installed_webview_apk_platform_patch(self) -> bool:
+        self.calls.append(("root.webview_apk",))
+        return True
+
+    async def ensure_multitouch_stack(self) -> bool:
+        self.calls.append(("root.multitouch",))
+        return True
+
+    async def wait_for_package_manager(self, timeout: float = 30.0) -> bool:
+        self.calls.append(("root.pm_ready", timeout))
+        return True
+
+    async def repair_app_data_dirs(self) -> tuple[int, int]:
+        self.calls.append(("root.app_data_dirs",))
+        return (42, 0)
+
     async def apply_memory_spoof(self, target_gb: float) -> None:
         self.calls.append(("root.memory", target_gb))
 
-    async def setup_memory_preload(self, chrome_package: str) -> None:
-        self.calls.append(("root.memory_preload", chrome_package))
+    async def setup_memory_preload(self, chrome_package: str, **kwargs) -> None:
+        self.calls.append(("root.memory_preload", chrome_package, kwargs))
+
+    async def setup_native_proc_preload(self, browser_package: str, **kwargs) -> None:
+        self.calls.append(("root.proc_preload", browser_package, kwargs))
 
     async def apply_webrtc_block(self, chrome_package: str) -> None:
         self.calls.append(("root.webrtc", chrome_package))
@@ -84,8 +116,8 @@ class FakeChromeManager:
         self.calls.append(("chrome.version",))
         return "148.0.7778.217"
 
-    async def write_command_line(self, flags: list[str]) -> None:
-        self.calls.append(("chrome.flags", tuple(flags)))
+    async def write_command_line(self, flags: list[str], user_agent: str | None = None) -> None:
+        self.calls.append(("chrome.flags", tuple(flags), user_agent))
 
     async def patch_preferences(self, locale: str, accept_lang: str) -> None:
         self.calls.append(("chrome.prefs", locale, accept_lang))
@@ -96,6 +128,9 @@ def _reset_fakes(monkeypatch: pytest.MonkeyPatch) -> None:
     FakeADB.calls = []
     FakeRootOps.calls = []
     FakeChromeManager.calls = []
+    monkeypatch.delenv("DAMRU_PATCH_INSTALLED_WEBVIEW_APK", raising=False)
+    monkeypatch.delenv("DAMRU_DISABLE_NATIVE_PRELOAD", raising=False)
+    monkeypatch.delenv("DAMRU_DISABLE_SLOT_IDENTITY_SPOOF", raising=False)
     monkeypatch.setattr(profile_apply, "ADB", FakeADB)
     monkeypatch.setattr(profile_apply, "RootOps", FakeRootOps)
     monkeypatch.setattr(profile_apply, "ChromeManager", FakeChromeManager)
@@ -122,11 +157,20 @@ async def test_force_device_profile_applies_named_profile() -> None:
 
     assert ("root.props", "Xiaomi Redmi 9A", True, True) in FakeRootOps.calls
     assert ("root.version", "11") in FakeRootOps.calls
-    assert ("root.cpu", 8) in FakeRootOps.calls
+    assert ("root.cpu", 8, "Xiaomi Redmi 9A") in FakeRootOps.calls
     assert any(call[:2] == ("root.gpu", "Xiaomi Redmi 9A") for call in FakeRootOps.calls)
+    assert ("root.runtime_arch", "Xiaomi Redmi 9A") in FakeRootOps.calls
+    assert not any(call[0] == "root.slot_identity" for call in FakeRootOps.calls)
+    assert ("root.webview_apk",) not in FakeRootOps.calls
+    assert ("root.webview_lib",) in FakeRootOps.calls
+    assert ("root.multitouch",) in FakeRootOps.calls
+    assert ("root.app_data_dirs",) in FakeRootOps.calls
     assert ("root.memory", 2) in FakeRootOps.calls
-    assert ("root.memory_preload", "com.android.chrome") in FakeRootOps.calls
+    assert ("root.memory_preload", "com.android.chrome", {}) in FakeRootOps.calls
     assert any(call[0] == "chrome.flags" for call in FakeChromeManager.calls)
+    flag_call = next(call for call in FakeChromeManager.calls if call[0] == "chrome.flags")
+    assert any("Chrome/148.0.7778.217" in flag for flag in flag_call[1])
+    assert not any("Chrome/..." in flag for flag in flag_call[1])
     assert ("chrome.prefs", "pt-BR", "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7") in FakeChromeManager.calls
     shell_commands = [call[1] for call in FakeADB.calls if call[0] == "adb.shell"]
     assert "wm size 720x1600" in shell_commands
@@ -152,7 +196,13 @@ async def test_force_device_profile_can_skip_chrome_and_cpu() -> None:
     assert result.chrome_note == "chrome=skipped"
     assert not FakeChromeManager.calls
     assert not any(call[0] == "root.cpu" for call in FakeRootOps.calls)
+    assert not any(call[0] == "root.runtime_arch" for call in FakeRootOps.calls)
+    assert not any(call[0] == "root.slot_identity" for call in FakeRootOps.calls)
     assert any(call[0] == "root.gpu" for call in FakeRootOps.calls)
+    assert ("root.webview_apk",) not in FakeRootOps.calls
+    assert ("root.webview_lib",) in FakeRootOps.calls
+    assert ("root.multitouch",) in FakeRootOps.calls
+    assert ("root.app_data_dirs",) in FakeRootOps.calls
     assert not any(call[0] == "root.memory" for call in FakeRootOps.calls)
     shell_commands = [call[1] for call in FakeADB.calls if call[0] == "adb.shell"]
     assert "settings put global http_proxy :0" in shell_commands
@@ -177,7 +227,144 @@ async def test_force_device_profile_can_harden_webview_shell() -> None:
     assert result.chrome_note == "org.chromium.webview_shell=148.0.7778.217"
     assert ("chrome.init", "127.0.0.1:5600", "org.chromium.webview_shell") in FakeChromeManager.calls
     assert ("chrome.prefs", "pt-BR", "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7") in FakeChromeManager.calls
-    assert ("root.memory_preload", "org.chromium.webview_shell") in FakeRootOps.calls
+    assert (
+        "root.memory_preload",
+        "org.chromium.webview_shell",
+        {"extra_packages": (), "restart_webview_zygote": False},
+    ) in FakeRootOps.calls
+
+
+@pytest.mark.unit
+async def test_force_device_profile_preloads_non_chrome_raw_webview_package() -> None:
+    await profile_apply.force_device_profile(
+        "127.0.0.1:5600",
+        "xiaomi_redmi_9a",
+        timezone="America/Sao_Paulo",
+        locale="pt-BR",
+        configure_chrome=False,
+        browser_package="com.android.browser",
+    )
+
+    assert ("root.memory", 2) in FakeRootOps.calls
+    assert ("root.memory_preload", "com.android.browser", {"extra_packages": (), "restart_webview_zygote": False}) in FakeRootOps.calls
+
+
+@pytest.mark.unit
+async def test_force_device_profile_can_opt_into_webview_renderer_preload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DAMRU_ENABLE_WEBVIEW_RENDERER_PRELOAD", "1")
+
+    await profile_apply.force_device_profile(
+        "127.0.0.1:5600",
+        "xiaomi_redmi_9a",
+        timezone="America/Sao_Paulo",
+        locale="pt-BR",
+        configure_chrome=False,
+        browser_package="com.android.browser",
+    )
+
+    assert (
+        "root.memory_preload",
+        "com.android.browser",
+        {
+            "extra_packages": profile_apply.WEBVIEW_RENDERER_WRAP_TARGETS,
+            "restart_webview_zygote": True,
+        },
+    ) in FakeRootOps.calls
+
+
+@pytest.mark.unit
+async def test_force_device_profile_can_disable_non_chrome_native_preload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DAMRU_DISABLE_NATIVE_PRELOAD", "1")
+
+    await profile_apply.force_device_profile(
+        "127.0.0.1:5600",
+        "xiaomi_redmi_9a",
+        timezone="America/Sao_Paulo",
+        locale="pt-BR",
+        configure_chrome=False,
+        browser_package="com.android.browser",
+    )
+
+    assert ("root.memory", 2) not in FakeRootOps.calls
+    assert not any(
+        call[0] == "root.memory_preload" and call[1] == "com.android.browser"
+        for call in FakeRootOps.calls
+    )
+
+
+@pytest.mark.unit
+async def test_force_device_profile_can_enable_proc_preload_without_memory() -> None:
+    await profile_apply.force_device_profile(
+        "127.0.0.1:5600",
+        "xiaomi_redmi_9a",
+        timezone="America/Sao_Paulo",
+        locale="pt-BR",
+        configure_chrome=False,
+        browser_package="com.android.browser",
+        apply_memory=False,
+        apply_proc_preload=True,
+    )
+
+    assert ("root.memory", 2) not in FakeRootOps.calls
+    assert not any(call[0] == "root.memory_preload" for call in FakeRootOps.calls)
+    assert (
+        "root.proc_preload",
+        "com.android.browser",
+        {"extra_packages": (), "restart_webview_zygote": False},
+    ) in FakeRootOps.calls
+
+
+@pytest.mark.unit
+async def test_force_device_profile_applies_slot_identity_seed() -> None:
+    await profile_apply.force_device_profile(
+        "127.0.0.1:5600",
+        "xiaomi_redmi_9a",
+        timezone="America/Sao_Paulo",
+        locale="pt-BR",
+        configure_chrome=False,
+        slot_identity_seed="host-0|profile",
+    )
+
+    assert ("root.slot_identity", "host-0|profile", "Xiaomi Redmi 9A") in FakeRootOps.calls
+
+
+@pytest.mark.unit
+async def test_force_device_profile_can_disable_slot_identity_seed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DAMRU_DISABLE_SLOT_IDENTITY_SPOOF", "1")
+
+    await profile_apply.force_device_profile(
+        "127.0.0.1:5600",
+        "xiaomi_redmi_9a",
+        timezone="America/Sao_Paulo",
+        locale="pt-BR",
+        configure_chrome=False,
+        slot_identity_seed="host-0|profile",
+    )
+
+    assert not any(call[0] == "root.slot_identity" for call in FakeRootOps.calls)
+
+
+@pytest.mark.unit
+async def test_force_device_profile_can_opt_into_installed_webview_apk_patch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DAMRU_PATCH_INSTALLED_WEBVIEW_APK", "1")
+
+    await profile_apply.force_device_profile(
+        "127.0.0.1:5600",
+        "xiaomi_redmi_9a",
+        timezone="America/Sao_Paulo",
+        locale="pt-BR",
+        configure_chrome=False,
+    )
+
+    assert ("root.webview_apk",) in FakeRootOps.calls
 
 
 @pytest.mark.unit

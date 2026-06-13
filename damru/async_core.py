@@ -257,6 +257,38 @@ class AsyncDamru:
             android_proxy = resolve_android_proxy(self._proxy, self._http_proxy, route_text=route_text)
         except Exception as exc:
             raise DamruError(f"Proxy setup failed: {exc}") from exc
+        self._chrome = ChromeManager(self._adb, package=self._chrome_package)
+
+        async def _detect_chrome():
+            if not self._chrome_package:
+                try:
+                    await self._chrome.detect_package()
+                except Exception:
+                    if not _mumu_chrome_wiped:
+                        raise
+                    # MuMu profile restart wiped Chrome - auto-reinstall.
+                    logger.info("Chrome wiped by MuMu profile restart - reinstalling...")
+                    try:
+                        from .mumu import MuMuManager
+                        from .docker import RedroidManager
+                        apk_path = RedroidManager().find_chrome_apk(None)
+                        _mm = MuMuManager()
+                        twv = find_bundle_apk("TrichromeWebView.apk", apk_path)
+                        if twv is not None:
+                            await self._adb.install_apk(str(twv))
+                            logger.info("TrichromeWebView installed")
+                        await _mm.install_apk(self._serial or "", apk_path)
+                        logger.info("Chrome reinstalled from %s", apk_path)
+                        await self._chrome.detect_package()
+                    except Exception as reinstall_err:
+                        raise type(reinstall_err)(
+                            f"Chrome not found and auto-reinstall failed: {reinstall_err}"
+                        )
+            ver = await self._chrome.get_version()
+            logger.info("Chrome: %s v%s", self._chrome.package, ver)
+            return ver
+
+        version = await _detect_chrome()
         self._profile = build_profile(
             target_device,
             proxy=self._proxy,
@@ -264,6 +296,7 @@ class AsyncDamru:
             android_proxy=android_proxy,
             timezone=self._timezone,
             locale=self._locale,
+            chrome_version=version,
         )
         sensor_seed = hashlib.sha256(
             f"{target_device.model}|{self._profile.timezone}|{self._profile.locale}|{random.getrandbits(64)}".encode()
@@ -277,7 +310,6 @@ class AsyncDamru:
         # |  reuse path: skip pm clear/FRE/TTS setup, overlap GPU.    |
         # #==============================================================#
 
-        self._chrome = ChromeManager(self._adb, package=self._chrome_package)
         warm_start = (not self._force_cold_start) and await self._chrome.has_preferences()
         if warm_start:
             logger.info("WARM START - fast reuse (skip pm clear/FRE/TTS setup)")
@@ -315,35 +347,6 @@ class AsyncDamru:
             if version_match:
                 logger.info("Android version match (%s) - setting ALL props including version", real_android)
 
-        async def _detect_chrome():
-            if not self._chrome_package:
-                try:
-                    await self._chrome.detect_package()
-                except Exception:
-                    if not _mumu_chrome_wiped:
-                        raise
-                    # MuMu profile restart wiped Chrome - auto-reinstall.
-                    logger.info("Chrome wiped by MuMu profile restart - reinstalling...")
-                    try:
-                        from .mumu import MuMuManager
-                        from .docker import RedroidManager
-                        apk_path = RedroidManager().find_chrome_apk(None)
-                        _mm = MuMuManager()
-                        twv = find_bundle_apk("TrichromeWebView.apk", apk_path)
-                        if twv is not None:
-                            await self._adb.install_apk(str(twv))
-                            logger.info("TrichromeWebView installed")
-                        await _mm.install_apk(self._serial or "", apk_path)
-                        logger.info("Chrome reinstalled from %s", apk_path)
-                        await self._chrome.detect_package()
-                    except Exception as reinstall_err:
-                        raise type(reinstall_err)(
-                            f"Chrome not found and auto-reinstall failed: {reinstall_err}"
-                        )
-            ver = await self._chrome.get_version()
-            logger.info("Chrome: %s v%s", self._chrome.package, ver)
-            return ver
-
         async def _apply_all_props():
             await self._root.apply_device_props(
                 target_device, safe_only=not version_match, parallel=warm_start,
@@ -358,20 +361,34 @@ class AsyncDamru:
                 prop_tasks.append(self._root.apply_version_release(target_device))
             await asyncio.gather(*prop_tasks)
 
-        async def _ensure_debuggable():
-            debuggable = await self._adb.get_prop("ro.debuggable")
-            build_type = await self._adb.get_prop("ro.build.type")
+        async def _configure_debug_props():
+            expected = {
+                "ro.debuggable": "0",
+                "ro.secure": "1",
+                "ro.adb.secure": "1",
+                "ro.build.type": "user",
+            }
+            if os.environ.get("DAMRU_ENABLE_DEBUG_PROPS") == "1":
+                expected.update({
+                    "ro.debuggable": "1",
+                    "ro.secure": "1",
+                    "ro.adb.secure": "0",
+                    "ro.build.type": "userdebug",
+                })
+                logger.warning(
+                    "DAMRU_ENABLE_DEBUG_PROPS=1 is enabled; exposing debug/userdebug props"
+                )
+
             tasks = []
-            if debuggable != "1":
-                tasks.append(self._root.set_prop("ro.debuggable", "1"))
-                logger.info("Set ro.debuggable=1 (enables DevTools socket)")
-            # Chrome checks ro.build.type at Java level - "user" builds block devtools
-            # socket creation even when ro.debuggable=1. Must be "userdebug" or "eng".
-            if build_type not in ("userdebug", "eng"):
-                tasks.append(self._root.set_prop("ro.build.type", "userdebug"))
-                logger.info("Set ro.build.type=userdebug (enables DevTools socket on MuMu)")
+            changed = []
+            for key, value in expected.items():
+                current = await self._adb.get_prop(key)
+                if current != value:
+                    tasks.append(self._root.set_prop(key, value))
+                    changed.append(f"{key}={value}")
             if tasks:
                 await asyncio.gather(*tasks)
+                logger.info("Configured Android security props: %s", " ".join(changed))
 
         async def _apply_screen():
             await asyncio.gather(
@@ -417,8 +434,6 @@ class AsyncDamru:
         # framework services are still settling; too many concurrent resetprop,
         # settings, package, and service-manager calls can leave the next Chrome
         # launch with no ActivityManager/DevTools socket.
-        version = await _detect_chrome()
-
         async def _start_tts_service():
             """Start eSpeak TTS service (warm start - already installed)."""
             await self._adb.shell(
@@ -428,7 +443,7 @@ class AsyncDamru:
             )
 
         await _apply_all_props()
-        await _ensure_debuggable()
+        await _configure_debug_props()
         await self._root.apply_audio_48khz()
         await _fonts_setup()
         await _apply_screen()
@@ -493,8 +508,16 @@ class AsyncDamru:
             else:
                 await self._chrome.clear_all_data()
             accept_lang = build_accept_language(self._profile.locale)
+            native_user_agent = (
+                f"Mozilla/5.0 (Linux; Android {target_device.android_version}; {target_device.model}) "
+                f"AppleWebKit/537.36 (KHTML, like Gecko) "
+                f"Chrome/{version or '145.0.0.0'} Mobile Safari/537.36"
+            )
             await asyncio.gather(
-                self._chrome.write_command_line(self._profile.chrome_flags),
+                self._chrome.write_command_line(
+                    self._profile.chrome_flags,
+                    user_agent=native_user_agent,
+                ),
                 self._chrome.patch_preferences(self._profile.locale, accept_lang),
             )
 

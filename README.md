@@ -833,7 +833,7 @@ export DAMRU_EXPERIMENTAL_SENSOR_HAL=1   # Linux/WSL
 
 | Flag | What it does | When to use |
 |------|-------------|-------------|
-| DAMRU_EXPERIMENTAL_SENSOR_HAL=1 | **Native Android sensors** (gyro/accel/mag). Streams real-looking data at 50-100Hz. Requires baking the sensor HAL into the image once. | **Best stealth** — most realistic |
+| DAMRU_EXPERIMENTAL_SENSOR_HAL=1 | **Native Android sensors** (gyro/accel/mag). Streams real-looking data at 50-100Hz. Requires baking the sensor HAL into the image once. | **Best stealth** â€” most realistic |
 | DAMRU_EXPERIMENTAL_HIDL_SENSOR_HAL=1 | Same but uses older Android HIDL interface instead of AIDL. | Fallback if AIDL is broken on your image |
 | DAMRU_ENABLE_NATIVE_SENSOR_HAL=1 | **Activates** the sensor HAL at container start. Required if you baked with SENSOR_HAL. | Always needed with SENSOR_HAL |
 | DAMRU_EXPERIMENTAL_CDP_SENSORS=1 | **Browser-level faking** via Chrome DevTools Protocol. Generic readings, no hardware stream. No image rebuild needed. | Quick tests, no-image-change needed |
@@ -1076,7 +1076,7 @@ asyncio.run(main())
 - **Image download**: `install-image --download` now accepts direct HTTPS URLs in addition to Google Drive links
 - **Bake image cleanup**: Pre-commit cleanup removes temp APKs, dalvik-cache, logs, etc. reducing baked image size
 - **WSL serial compatibility**: `wsl:` serial prefix is automatically stripped on Linux hosts
-- **Sensor HAL bake**: Missing AIDL compiler no longer breaks `bake-image` — sensor HAL install is skipped gracefully
+- **Sensor HAL bake**: Missing AIDL compiler no longer breaks `bake-image` â€” sensor HAL install is skipped gracefully
 - **Worker default cap**: Raised from 3 to 10 when NUM_DEVICES is unset
 - **Pool API**: Added `open_url()` convenience method for one-shot stealth navigation
 

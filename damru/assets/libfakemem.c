@@ -37,14 +37,27 @@ struct rlimit {
     unsigned long rlim_max;
 };
 
+struct utsname {
+    char sysname[65];
+    char nodename[65];
+    char release[65];
+    char version[65];
+    char machine[65];
+    char domainname[65];
+};
+
 /* ── x86_64 syscall numbers ── */
 
 #define SYS_read                0
+#define SYS_write               1
 #define SYS_close               3
+#define SYS_lseek               8
+#define SYS_uname              63
 #define SYS_getrlimit          97
 #define SYS_sysinfo            99
 #define SYS_sched_getaffinity 204
 #define SYS_openat            257
+#define SYS_memfd_create      319
 
 /* ── Constants ── */
 
@@ -52,6 +65,11 @@ struct rlimit {
 #define RLIMIT_NOFILE  7
 #define RLIMIT_NPROC   6
 #define AT_FDCWD      -100
+#define SEEK_SET        0
+#define STATUS_BUF_SIZE 16384
+#define MAPS_READ_SIZE   4096
+#define MAPS_LINE_SIZE   8192
+#define MAPS_OUT_SIZE   16384
 
 /* ── Raw x86_64 syscall wrappers ── */
 
@@ -87,6 +105,7 @@ static inline long _open_ro(const char *path) {
 /* ── Target file and cache ── */
 
 static const char _path[] = "/data/local/tmp/damru_fakemem_gb";
+static const char _mountinfo_path[] = "/data/local/tmp/damru_proc_mountinfo";
 static unsigned long _target_bytes = 0;
 static int _done = 0;
 
@@ -134,6 +153,279 @@ static int _check_android(void) {
 }
 
 /* ── Helpers ── */
+
+static void _copy_cstr(char *dst, const char *src, int max) {
+    int i;
+    if (!dst || max <= 0) return;
+    for (i = 0; i < max - 1 && src && src[i]; i++) dst[i] = src[i];
+    dst[i] = '\0';
+}
+
+static int _streq(const char *a, const char *b) {
+    int i = 0;
+    if (!a || !b) return 0;
+    while (a[i] && b[i] && a[i] == b[i]) i++;
+    return a[i] == '\0' && b[i] == '\0';
+}
+
+static int _startswith(const char *s, const char *prefix) {
+    int i = 0;
+    if (!s || !prefix) return 0;
+    while (prefix[i]) {
+        if (s[i] != prefix[i]) return 0;
+        i++;
+    }
+    return 1;
+}
+
+static int _is_digit(char c) {
+    return c >= '0' && c <= '9';
+}
+
+static int _is_mountinfo_path(const char *path) {
+    int i = 6;
+    if (!path) return 0;
+    if (_streq(path, "/proc/self/mountinfo")) return 1;
+    if (!_startswith(path, "/proc/")) return 0;
+    if (!_is_digit(path[i])) return 0;
+    while (_is_digit(path[i])) i++;
+    return _streq(path + i, "/mountinfo");
+}
+
+static int _line_startswith(const char *line, int len, const char *prefix) {
+    int i = 0;
+    if (!line || !prefix) return 0;
+    while (prefix[i]) {
+        if (i >= len || line[i] != prefix[i]) return 0;
+        i++;
+    }
+    return 1;
+}
+
+static int _append_literal(char *out, int pos, int max, const char *value) {
+    int i = 0;
+    if (!out || !value || max <= 0) return pos;
+    while (value[i] && pos < max - 1) {
+        out[pos++] = value[i++];
+    }
+    return pos;
+}
+
+static int _contains_n(const char *line, int len, const char *needle) {
+    int i, j;
+    if (!line || !needle || !needle[0] || len <= 0) return 0;
+    for (i = 0; i < len; i++) {
+        for (j = 0; needle[j] && i + j < len && line[i + j] == needle[j]; j++) {
+        }
+        if (!needle[j]) return 1;
+    }
+    return 0;
+}
+
+static int _match_at(const char *line, int len, int pos, const char *needle) {
+    int j;
+    if (!line || !needle || pos < 0 || pos >= len) return 0;
+    for (j = 0; needle[j]; j++) {
+        if (pos + j >= len || line[pos + j] != needle[j]) return 0;
+    }
+    return 1;
+}
+
+static int _is_status_path(const char *path) {
+    int i = 6;
+    if (!path) return 0;
+    if (_streq(path, "/proc/self/status")) return 1;
+    if (_streq(path, "/proc/thread-self/status")) return 1;
+    if (!_startswith(path, "/proc/")) return 0;
+    if (!_is_digit(path[i])) return 0;
+    while (_is_digit(path[i])) i++;
+    if (_streq(path + i, "/status")) return 1;
+    if (!_startswith(path + i, "/task/")) return 0;
+    i += 6;
+    if (!_is_digit(path[i])) return 0;
+    while (_is_digit(path[i])) i++;
+    return _streq(path + i, "/status");
+}
+
+static int _is_maps_path(const char *path) {
+    int i = 6;
+    if (!path) return 0;
+    if (_streq(path, "/proc/self/maps")) return 1;
+    if (_streq(path, "/proc/thread-self/maps")) return 1;
+    if (_streq(path, "/proc/self/smaps")) return 1;
+    if (_streq(path, "/proc/thread-self/smaps")) return 1;
+    if (!_startswith(path, "/proc/")) return 0;
+    if (!_is_digit(path[i])) return 0;
+    while (_is_digit(path[i])) i++;
+    if (_streq(path + i, "/maps") || _streq(path + i, "/smaps")) return 1;
+    if (!_startswith(path + i, "/task/")) return 0;
+    i += 6;
+    if (!_is_digit(path[i])) return 0;
+    while (_is_digit(path[i])) i++;
+    return _streq(path + i, "/maps") || _streq(path + i, "/smaps");
+}
+
+static int _filter_proc_status(const char *in, int n, char *out, int max) {
+    int i = 0;
+    int pos = 0;
+    if (!in || !out || max <= 0) return 0;
+
+    while (i < n && pos < max - 1) {
+        int start = i;
+        int end;
+        int len;
+        int k;
+
+        while (i < n && in[i] != '\n') i++;
+        end = i;
+        len = end - start;
+        if (i < n && in[i] == '\n') i++;
+
+        if (_line_startswith(in + start, len, "x86_Thread_features:") ||
+            _line_startswith(in + start, len, "x86_Thread_features_locked:") ||
+            _line_startswith(in + start, len, "Speculation")) {
+            continue;
+        }
+        if (_line_startswith(in + start, len, "THP_enabled:")) {
+            continue;
+        }
+        if (_line_startswith(in + start, len, "Seccomp:")) {
+            pos = _append_literal(out, pos, max, "Seccomp:\t2\n");
+            continue;
+        }
+        if (_line_startswith(in + start, len, "Seccomp_filters:")) {
+            pos = _append_literal(out, pos, max, "Seccomp_filters:\t1\n");
+            continue;
+        }
+
+        for (k = start; k < i && pos < max - 1; k++) {
+            out[pos++] = in[k];
+        }
+    }
+
+    out[pos] = '\0';
+    return pos;
+}
+
+static long _open_filtered_status(const char *path) {
+    char in[STATUS_BUF_SIZE];
+    char out[STATUS_BUF_SIZE];
+    long source_fd;
+    long memfd;
+    long n;
+    int out_len;
+    static const char name[] = "damru_proc_status";
+
+    source_fd = _open_ro(path);
+    if (source_fd < 0) return source_fd;
+    n = _sc3(SYS_read, source_fd, (long)in, STATUS_BUF_SIZE - 1);
+    _sc1(SYS_close, source_fd);
+    if (n <= 0) return -1;
+    in[n] = '\0';
+
+    out_len = _filter_proc_status(in, (int)n, out, STATUS_BUF_SIZE);
+    if (out_len <= 0) return -1;
+
+    memfd = _sc3(SYS_memfd_create, (long)name, 0, 0);
+    if (memfd < 0) return -1;
+    if (_sc3(SYS_write, memfd, (long)out, out_len) != out_len) {
+        _sc1(SYS_close, memfd);
+        return -1;
+    }
+    _sc3(SYS_lseek, memfd, 0, SEEK_SET);
+    return memfd;
+}
+
+static int _rewrite_maps_line(const char *in, int len, char *out, int max) {
+    int i = 0;
+    int pos = 0;
+    if (!in || !out || max <= 0) return 0;
+
+    if (_contains_n(in, len, "/data/local/tmp/libfakemem.so") ||
+        _contains_n(in, len, "/data/local/tmp/damru") ||
+        _contains_n(in, len, "libfakemem.so")) {
+        return 0;
+    }
+
+    while (i < len && pos < max - 1) {
+        if (_match_at(in, len, i, "/x86_64/")) {
+            pos = _append_literal(out, pos, max, "/arm64/");
+            i += 8;
+            continue;
+        }
+        if (_match_at(in, len, i, "@x86_64@")) {
+            pos = _append_literal(out, pos, max, "@arm64@");
+            i += 8;
+            continue;
+        }
+        if (_match_at(in, len, i, "x86_64")) {
+            pos = _append_literal(out, pos, max, "arm64");
+            i += 6;
+            continue;
+        }
+        if (_match_at(in, len, i, "/lib/x86/")) {
+            pos = _append_literal(out, pos, max, "/lib/arm/");
+            i += 9;
+            continue;
+        }
+        out[pos++] = in[i++];
+    }
+    out[pos] = '\0';
+    return pos;
+}
+
+static int _write_filtered_maps_line(long memfd, const char *line, int len) {
+    char out[MAPS_OUT_SIZE];
+    int out_len = _rewrite_maps_line(line, len, out, MAPS_OUT_SIZE);
+    if (out_len <= 0) return 0;
+    return _sc3(SYS_write, memfd, (long)out, out_len) == out_len ? 0 : -1;
+}
+
+static long _open_filtered_maps(const char *path) {
+    char buf[MAPS_READ_SIZE];
+    char line[MAPS_LINE_SIZE];
+    long source_fd;
+    long memfd;
+    long n;
+    int line_len = 0;
+    static const char name[] = "damru_proc_maps";
+
+    source_fd = _open_ro(path);
+    if (source_fd < 0) return source_fd;
+    memfd = _sc3(SYS_memfd_create, (long)name, 0, 0);
+    if (memfd < 0) {
+        _sc1(SYS_close, source_fd);
+        return -1;
+    }
+
+    while ((n = _sc3(SYS_read, source_fd, (long)buf, MAPS_READ_SIZE)) > 0) {
+        int i;
+        for (i = 0; i < n; i++) {
+            if (line_len < MAPS_LINE_SIZE - 1) {
+                line[line_len++] = buf[i];
+            }
+            if (buf[i] == '\n') {
+                if (_write_filtered_maps_line(memfd, line, line_len) < 0) {
+                    _sc1(SYS_close, source_fd);
+                    _sc1(SYS_close, memfd);
+                    return -1;
+                }
+                line_len = 0;
+            } else if (line_len >= MAPS_LINE_SIZE - 1) {
+                line_len = 0;
+            }
+        }
+    }
+    if (line_len > 0 && _write_filtered_maps_line(memfd, line, line_len) < 0) {
+        _sc1(SYS_close, source_fd);
+        _sc1(SYS_close, memfd);
+        return -1;
+    }
+
+    _sc1(SYS_close, source_fd);
+    _sc3(SYS_lseek, memfd, 0, SEEK_SET);
+    return memfd;
+}
 
 static int _get_nprocs(void) {
     unsigned long mask[16];
@@ -384,6 +676,63 @@ long sysconf(int name) {
 __attribute__((visibility("default")))
 long __sysconf(int name) {
     return sysconf(name);
+}
+
+/* ── uname/open overrides for wrapped browser processes ── */
+
+__attribute__((visibility("default")))
+int uname(struct utsname *buf) {
+    long ret = _sc1(SYS_uname, (long)buf);
+    if (ret == 0 && buf) {
+        _copy_cstr(buf->sysname, "Linux", 65);
+        _copy_cstr(buf->nodename, "localhost", 65);
+        _copy_cstr(buf->release, "5.15.123-android13-8-g2d4b84c79d7a", 65);
+        _copy_cstr(
+            buf->version,
+            "#1 SMP PREEMPT Fri Nov 15 00:00:00 UTC 2024",
+            65
+        );
+        _copy_cstr(buf->machine, "aarch64", 65);
+        _copy_cstr(buf->domainname, "(none)", 65);
+    }
+    return (int)ret;
+}
+
+__attribute__((visibility("default")))
+int __uname(struct utsname *buf) {
+    return uname(buf);
+}
+
+__attribute__((visibility("default")))
+int openat(int dirfd, const char *pathname, int flags, unsigned long mode) {
+    if (_is_status_path(pathname)) {
+        long fd = _open_filtered_status(pathname);
+        if (fd >= 0) return (int)fd;
+    }
+    if (_is_maps_path(pathname)) {
+        long fd = _open_filtered_maps(pathname);
+        if (fd >= 0) return (int)fd;
+    }
+    if (_is_mountinfo_path(pathname)) {
+        long fd = _open_ro(_mountinfo_path);
+        if (fd >= 0) return (int)fd;
+    }
+    return (int)_sc4(SYS_openat, dirfd, (long)pathname, flags, mode);
+}
+
+__attribute__((visibility("default")))
+int openat64(int dirfd, const char *pathname, int flags, unsigned long mode) {
+    return openat(dirfd, pathname, flags, mode);
+}
+
+__attribute__((visibility("default")))
+int open(const char *pathname, int flags, unsigned long mode) {
+    return openat(AT_FDCWD, pathname, flags, mode);
+}
+
+__attribute__((visibility("default")))
+int open64(const char *pathname, int flags, unsigned long mode) {
+    return openat(AT_FDCWD, pathname, flags, mode);
 }
 
 /* ── sysinfo() override ── */

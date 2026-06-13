@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 
 from damru.adb import ADB, ADBError
@@ -63,3 +65,35 @@ async def test_detect_device_allows_physical_serial_with_explicit_env(monkeypatc
     _stub_devices(monkeypatch, [_device("USB123")])
 
     assert await ADB().detect_device() == "USB123"
+
+
+@pytest.mark.asyncio
+async def test_run_kills_timed_out_adb_process(monkeypatch):
+    class HangingProcess:
+        returncode = None
+        killed = False
+        communicate_calls = 0
+
+        async def communicate(self):
+            self.communicate_calls += 1
+            if not self.killed:
+                await asyncio.sleep(60)
+            self.returncode = -9
+            return b"", b""
+
+        def kill(self):
+            self.killed = True
+            self.returncode = -9
+
+    process = HangingProcess()
+
+    async def fake_create_subprocess_exec(*args, **kwargs):
+        return process
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+
+    with pytest.raises(ADBError, match="adb command timed out"):
+        await ADB()._run(["shell", "sleep 60"], timeout=0.01)
+
+    assert process.killed is True
+    assert process.communicate_calls == 2
