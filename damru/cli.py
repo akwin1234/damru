@@ -1,4 +1,4 @@
-﻿"""Command line interface for Damru."""
+"""Command line interface for Damru."""
 from __future__ import annotations
 
 import argparse
@@ -1917,48 +1917,7 @@ def _find_image_tar(explicit: str | None = None) -> Path | None:
             return path.resolve()
     return None
 
-def _download_google_drive_file(url: str, target: Path) -> None:
-    import requests
-
-    file_id_match = re.search(r"/d/([^/]+)/", url) or re.search(r"[&]id=([^&]+)", url)
-    if not file_id_match:
-        raise RuntimeError("unsupported Drive URL; pass --url with a Google Drive file link")
-    session = requests.Session()
-    response = session.get(
-        "https://drive.google.com/uc",
-        params={"export": "download", "id": file_id_match.group(1)},
-        stream=True,
-        timeout=60,
-    )
-    token = next((value for key, value in response.cookies.items() if key.startswith("download_warning")), None)
-    if token:
-        response.close()
-        response = session.get(
-            "https://drive.google.com/uc",
-            params={"export": "download", "id": file_id_match.group(1), "confirm": token},
-            stream=True,
-            timeout=60,
-        )
-    response.raise_for_status()
-
-    target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_suffix(target.suffix + ".part")
-    downloaded = 0
-    with tmp.open("wb") as fh:
-        for chunk in response.iter_content(chunk_size=1024 * 1024):
-            if not chunk:
-                continue
-            fh.write(chunk)
-            downloaded += len(chunk)
-            if downloaded and downloaded % (100 * 1024 * 1024) < 1024 * 1024:
-                print(f"Downloaded {downloaded // (1024 * 1024)} MB...")
-    tmp.replace(target)
-
 def _download_file(url: str, target: Path) -> None:
-    if "drive.google.com" in url:
-        _download_google_drive_file(url, target)
-        return
-
     import requests
 
     target.parent.mkdir(parents=True, exist_ok=True)

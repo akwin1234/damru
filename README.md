@@ -1,8 +1,8 @@
-﻿<div align="center">
+<div align="center">
   <img src="logo.svg" alt="Damru Logo" width="200" height="200">
   <h1>Damru</h1>
   <p><strong>The Apex Predator of Android Browser Automation</strong></p>
-  <p><em>श्री शिवाय नमस्तुभ्यं</em></p>
+  <p><em>???? ????? ??????????</em></p>
   <p><em>The world's first open-source framework for natively modded Android browser automation.</em></p>
   <p>High-performance, ultra-stealth browser automation framework designed for web scraping and botting at scale.</p>
 
@@ -251,7 +251,7 @@ Default `device="random"` and UI random-profile actions use the premium pool: 51
 
 Download the current pre-baked image:
 
-**[Download damru-redroid-latest.tar](https://drive.google.com/file/d/1AzSTOlGpSfqHB-F-Yty2JqbOEMlgFT5F/view?usp=sharing)**
+**[Download damru-redroid-latest.tar](https://damru.dev/assets/damru-baked.tar.gz)**
 
 Current local artifact prepared for release testing:
 
@@ -280,7 +280,7 @@ Once downloaded, follow **Step 3** in the Deployment Guide below to load it into
 
 Normal users should prefer `python -m damru install-image`; the baked image already contains Chrome, WebView/TTS assets, fonts, and warm preferences. Use the raw APK bundle only when you want to bake your own image or run unbaked raw Redroid containers.
 
-Google Drive bundle: [Chrome/WebView/TTS/resetprop APK assets](https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing)
+APK bundle: [Chrome/WebView/TTS/resetprop APK assets](https://damru.dev/assets/chrome-apks.zip)
 
 Automatic install:
 
@@ -760,7 +760,7 @@ Damru uses a centralized configuration file located at `damru/config.py`. If you
    python -m damru install-apks --download
    ```
 
-   It downloads the Chrome/WebView/TTS/resetprop APK bundle automatically, extracts to `/home/damru/chrome-apks` on Linux/WSL, validates the 143-148 Chrome split-APK folders, and configures `CHROME_APK` only when needed. The [Google Drive APK bundle](https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing) is for manual recovery if automatic download is unavailable.
+   It downloads the Chrome/WebView/TTS/resetprop APK bundle automatically, extracts to `/home/damru/chrome-apks` on Linux/WSL, validates the 143-148 Chrome split-APK folders, and configures `CHROME_APK` only when needed. The [APK bundle](https://damru.dev/assets/chrome-apks.zip) is for manual recovery if automatic download is unavailable.
 
    If you still see an APK asset error, download the same Google Drive bundle manually, extract it as `/home/damru/chrome-apks`, keep the WebView/TTS/Magisk APKs beside the Chrome version folders, then set `CHROME_APK` to a Chrome split-APK version directory, for example:
 
@@ -833,7 +833,7 @@ export DAMRU_EXPERIMENTAL_SENSOR_HAL=1   # Linux/WSL
 
 | Flag | What it does | When to use |
 |------|-------------|-------------|
-| DAMRU_EXPERIMENTAL_SENSOR_HAL=1 | **Native Android sensors** (gyro/accel/mag). Streams real-looking data at 50-100Hz. Requires baking the sensor HAL into the image once. | **Best stealth** — most realistic |
+| DAMRU_EXPERIMENTAL_SENSOR_HAL=1 | **Native Android sensors** (gyro/accel/mag). Streams real-looking data at 50-100Hz. Requires baking the sensor HAL into the image once. | **Best stealth** � most realistic |
 | DAMRU_EXPERIMENTAL_HIDL_SENSOR_HAL=1 | Same but uses older Android HIDL interface instead of AIDL. | Fallback if AIDL is broken on your image |
 | DAMRU_ENABLE_NATIVE_SENSOR_HAL=1 | **Activates** the sensor HAL at container start. Required if you baked with SENSOR_HAL. | Always needed with SENSOR_HAL |
 | DAMRU_EXPERIMENTAL_CDP_SENSORS=1 | **Browser-level faking** via Chrome DevTools Protocol. Generic readings, no hardware stream. No image rebuild needed. | Quick tests, no-image-change needed |
@@ -1069,14 +1069,14 @@ async def main():
 asyncio.run(main())
 ```
 
-### Changelog (v0.1.0-beta → v1.2)
+### Changelog (v0.1.0-beta ? v1.2)
 
 - **WebView version matching**: Relaxed to match on first 3 version segments (x.y.z) allowing minor build skew between Chrome and WebView APKs
 - **APK version selection**: `_preferred_chrome_apk_version_dir` now prefers Chrome versions that have a matching `webview.apk` in their directory
 - **Image download**: `install-image --download` now accepts direct HTTPS URLs in addition to Google Drive links
 - **Bake image cleanup**: Pre-commit cleanup removes temp APKs, dalvik-cache, logs, etc. reducing baked image size
 - **WSL serial compatibility**: `wsl:` serial prefix is automatically stripped on Linux hosts
-- **Sensor HAL bake**: Missing AIDL compiler no longer breaks `bake-image` — sensor HAL install is skipped gracefully
+- **Sensor HAL bake**: Missing AIDL compiler no longer breaks `bake-image` � sensor HAL install is skipped gracefully
 - **Worker default cap**: Raised from 3 to 10 when NUM_DEVICES is unset
 - **Pool API**: Added `open_url()` convenience method for one-shot stealth navigation
 

@@ -12,7 +12,7 @@ python -m damru install-apks --download
 
 The installer downloads the release APK bundle, extracts it to `/home/damru/chrome-apks` on Linux/WSL by default, validates Chrome/WebView/TTS APKs, and copies Damru's packaged `magisk.apk` into the bundle when raw Redroid needs a local `resetprop` source. Damru does not download Magisk, eSpeak, Google TTS, or RHVoice from third-party APK sites at runtime.
 
-Manual fallback bundle: [Chrome/WebView/TTS APK assets](https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing)
+Manual fallback: [Chrome/WebView/TTS APK assets](https://damru.dev/assets/chrome-apks.zip)
 
 ## Expected Layout
 
