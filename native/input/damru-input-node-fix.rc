@@ -1,0 +1,16 @@
+on early-init
+    mkdir /dev/input 0755 root root
+
+on boot
+    mkdir /dev/input 0755 root root
+    start damru-input-node-fix
+
+on property:init.svc.vendor.uinputd=running
+    start damru-input-node-fix
+
+service damru-input-node-fix /system/bin/damru-input-node-fix.sh 25
+    class core
+    user root
+    group root
+    oneshot
+    disabled

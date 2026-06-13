@@ -13,7 +13,7 @@ from damru.webview_native_patch import (
 
 
 def _sample_library(path: Path) -> tuple[int, int]:
-    data = bytearray(b"\x90" * 1024)
+    data = bytearray(b"\x90" * 2048)
     header_offset = 0x300
     data[header_offset:header_offset + len(b"X-Requested-With")] = b"X-Requested-With"
 
@@ -26,6 +26,21 @@ def _sample_library(path: Path) -> tuple[int, int]:
     return guard_offset + 3, header_offset
 
 
+def _add_default_cors_exempt_path(path: Path, *, already_patched: bool = False) -> int:
+    data = bytearray(path.read_bytes())
+    headers_lea_offset = 0x500
+    data[headers_lea_offset:headers_lea_offset + 7] = b"\x48\x8d\xbb\x98\x02\x00\x00"
+    cmp_offset = 0x528
+    data[cmp_offset:cmp_offset + 7] = b"\x48\x3b\x83\xa0\x02\x00\x00"
+    branch_offset = cmp_offset + 7
+    data[branch_offset] = 0xEB if already_patched else 0x75
+    data[branch_offset + 1] = 0x4A
+    cors_exempt_offset = 0x560
+    data[cors_exempt_offset:cors_exempt_offset + 7] = b"\x4c\x8d\xab\xb0\x02\x00\x00"
+    path.write_bytes(data)
+    return branch_offset
+
+
 def test_patch_x_requested_with_header_block_turns_guard_into_unconditional_jump(tmp_path):
     lib = tmp_path / "libmonochrome_64.so"
     patch_offset, _ = _sample_library(lib)
@@ -36,9 +51,37 @@ def test_patch_x_requested_with_header_block_turns_guard_into_unconditional_jump
     assert patched[patch_offset] == 0xEB
 
 
+def test_patch_x_requested_with_header_block_patches_default_cors_exempt_path(tmp_path):
+    lib = tmp_path / "libmonochrome_64.so"
+    legacy_patch_offset, _ = _sample_library(lib)
+    default_branch_offset = _add_default_cors_exempt_path(lib)
+
+    assert patch_x_requested_with_header_block(lib) is True
+
+    patched = lib.read_bytes()
+    assert patched[legacy_patch_offset] == 0xEB
+    assert patched[default_branch_offset] == 0xEB
+
+
+def test_patch_x_requested_with_header_block_patches_default_when_legacy_already_patched(tmp_path):
+    lib = tmp_path / "libmonochrome_64.so"
+    legacy_patch_offset, _ = _sample_library(lib)
+    data = bytearray(lib.read_bytes())
+    data[legacy_patch_offset] = 0xEB
+    lib.write_bytes(data)
+    default_branch_offset = _add_default_cors_exempt_path(lib)
+
+    assert patch_x_requested_with_header_block(lib) is True
+
+    patched = lib.read_bytes()
+    assert patched[legacy_patch_offset] == 0xEB
+    assert patched[default_branch_offset] == 0xEB
+
+
 def test_patch_x_requested_with_header_block_is_idempotent(tmp_path):
     lib = tmp_path / "libmonochrome_64.so"
     _sample_library(lib)
+    _add_default_cors_exempt_path(lib)
 
     assert patch_x_requested_with_header_block(lib) is True
     assert patch_x_requested_with_header_block(lib) is False

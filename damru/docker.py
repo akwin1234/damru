@@ -62,6 +62,9 @@ from .webview_native_patch import (
 _CHROME_APK_AUTO_SKIP_VERSIONS: set[str] = set()
 _REDROID_SENSOR_SOURCE_IMAGE = "redroid/redroid:11.0.0-latest"
 _SENSOR_MOCK_BIN = "android.hardware.sensors@2.1-service.mock"
+_REDROID_STREAM_BOOT_ARG = "androidboot.use_redroid_stream=1"
+_INPUT_NODE_FIX_SCRIPT = "/system/bin/damru-input-node-fix.sh"
+_INPUT_NODE_FIX_RC = "/system/etc/init/damru-input-node-fix.rc"
 
 
 def _kernel_config_enabled(config_text: str, option: str) -> Optional[bool]:
@@ -895,6 +898,34 @@ class RedroidManager:
             )
             await self._run_cmd(["bash", "-lc", cmd], timeout=300)
 
+    async def _install_input_node_boot_repair(self, name: str) -> None:
+        """Install the boot-time /dev/input materializer into a container rootfs."""
+        root = Path(__file__).resolve().parent.parent
+        input_dir = root / "native" / "input"
+        script = input_dir / "damru-input-node-fix.sh"
+        rc_file = input_dir / "damru-input-node-fix.rc"
+        if not script.exists() or not rc_file.exists():
+            raise DamruError(f"Native input-node repair assets missing under {input_dir}")
+
+        script_src = self._to_wsl_path(str(script)) if self._is_windows else str(script)
+        rc_src = self._to_wsl_path(str(rc_file)) if self._is_windows else str(rc_file)
+        await self._run_cmd(
+            self._docker_cmd("exec", name, "mkdir", "-p", "/system/bin", "/system/etc/init"),
+            timeout=20,
+        )
+        await self._run_cmd(self._docker_cmd("cp", script_src, f"{name}:{_INPUT_NODE_FIX_SCRIPT}"), timeout=60)
+        await self._run_cmd(self._docker_cmd("cp", rc_src, f"{name}:{_INPUT_NODE_FIX_RC}"), timeout=60)
+        await self._run_cmd(
+            self._docker_cmd(
+                "exec",
+                name,
+                "sh",
+                "-lc",
+                f"chmod 755 {_INPUT_NODE_FIX_SCRIPT}; chmod 644 {_INPUT_NODE_FIX_RC}",
+            ),
+            timeout=20,
+        )
+
     async def _ensure_sensor_hal(self, serial: str, container_name: Optional[str] = None) -> bool:
         """Install Damru's native sensor HAL into the running Redroid image.
 
@@ -1035,6 +1066,11 @@ class RedroidManager:
             except DamruError as exc:
                 logger.warning("Recreating unhealthy %s: %s", name, exc)
                 return await self.restart_container(index)
+            try:
+                await self._wait_for_touchscreen_input(serial)
+            except DamruError as exc:
+                logger.warning("Recreating unhealthy %s: %s", name, exc)
+                return await self.restart_container(index)
             if not await self._wait_for_android_dns_usable(serial):
                 logger.warning("Android DNS not fully confirmed on %s after repair; reusing %s", serial, name)
             if await self._ensure_sensor_hal(serial):
@@ -1082,6 +1118,11 @@ class RedroidManager:
             await self._repair_docker_bridge_nat()
             try:
                 await self._wait_for_package_service(serial, timeout=60)
+            except DamruError as exc:
+                logger.warning("Recreating unhealthy %s: %s", name, exc)
+                return await self.restart_container(index)
+            try:
+                await self._wait_for_touchscreen_input(serial)
             except DamruError as exc:
                 logger.warning("Recreating unhealthy %s: %s", name, exc)
                 return await self.restart_container(index)
@@ -1188,7 +1229,7 @@ chmod 755 "$target"
         )
         return target
 
-    async def start_container(self, index: int) -> str:
+    async def start_container(self, index: int, *, _touch_retry: int = 1) -> str:
         """Start one redroid container and return its ADB serial."""
         name = f"{REDROID_CONTAINER_PREFIX}{index}"
         port = REDROID_BASE_PORT + index
@@ -1218,6 +1259,9 @@ chmod 755 "$target"
         )
         boot_args = [
             "androidboot.use_memfd=true",
+            # Starts Redroid's native uinput service early enough for Android's
+            # InputReader to expose a real direct-touch device.
+            _REDROID_STREAM_BOOT_ARG,
             f"androidboot.redroid_gpu_mode={REDROID_GPU_MODE}",
             "androidboot.redroid_net_ndns=2",
             "androidboot.redroid_net_dns1=1.1.1.1",
@@ -1259,12 +1303,16 @@ chmod 755 "$target"
             self._docker_cmd(*run_args),
             timeout=60,
         )
+        await self._materialize_input_event_nodes_early(name)
 
         try:
             if use_host_network:
                 await self._wait_for_container_boot_internal(name, timeout=boot_timeout)
                 await self._remap_adbd_port(name, port)
                 await self._repair_docker_bridge_nat()
+            else:
+                await self._wait_for_container_boot_internal(name, timeout=boot_timeout)
+            await self._seed_adb_authorized_keys_early(name)
             serial = await self._serial_for_container(name, port, use_host_network)
 
             # Connect ADB. On Windows, Redroid ADB runs inside WSL because direct
@@ -1279,6 +1327,18 @@ chmod 755 "$target"
             await self._wait_for_boot(serial, name=name, timeout=boot_timeout)
             await self._repair_docker_bridge_nat()
             await self._wait_for_package_service(serial, timeout=90)
+            try:
+                await self._wait_for_touchscreen_input(serial)
+            except DamruError as exc:
+                if _touch_retry > 0:
+                    logger.warning("Recreating %s after native touchscreen startup race: %s", name, exc)
+                    await self._run_cmd(
+                        self._docker_cmd("rm", "-f", name),
+                        timeout=15,
+                        allow_failure=True,
+                    )
+                    return await self.start_container(index, _touch_retry=_touch_retry - 1)
+                raise
             if not await self._wait_for_android_dns_usable(serial):
                 logger.warning(
                     "Android DNS did not fully confirm on %s; continuing with repaired resolver props",
@@ -1410,6 +1470,151 @@ chmod 755 "$target"
             await asyncio.sleep(interval)
             elapsed += interval
         raise DamruError(f"Container {name} failed to boot internally within {timeout}s")
+
+    async def _materialize_input_event_nodes_early(self, name: str, timeout: float = 25.0) -> None:
+        """Create /dev/input and event nodes before Android InputReader scans.
+
+        Redroid can expose input devices in sysfs while /dev/input is still
+        missing. InputReader starts early and will not build a phone-like touch
+        device list if the directory is absent, so this runs immediately after
+        docker run while Android continues booting in parallel.
+        """
+        script = (
+            "timeout=${1:-25}; "
+            "case \"$timeout\" in ''|*[!0-9]*) timeout=25;; esac; "
+            "mkdir -p /dev/input; chmod 0755 /dev/input 2>/dev/null || true; "
+            "end=$(( $(date +%s) + timeout )); "
+            "while [ \"$(date +%s)\" -le \"$end\" ]; do "
+            "touch_ready=0; "
+            "for event_path in /sys/class/input/event*; do "
+            "[ -r \"$event_path/dev\" ] || continue; "
+            "event_name=\"${event_path##*/}\"; node=\"/dev/input/$event_name\"; "
+            "major_minor=$(cat \"$event_path/dev\" 2>/dev/null || true); "
+            "[ -n \"$major_minor\" ] || continue; "
+            "major=\"${major_minor%:*}\"; minor=\"${major_minor#*:}\"; "
+            "device_name=$(cat \"$event_path/device/name\" 2>/dev/null || true); "
+            "[ -e \"$node\" ] || mknod \"$node\" c \"$major\" \"$minor\" 2>/dev/null || true; "
+            "chown 0:1000 \"$node\" 2>/dev/null || true; "
+            "chmod 0660 \"$node\" 2>/dev/null || true; "
+            "chcon u:object_r:input_device:s0 \"$node\" 2>/dev/null || true; "
+            "case \"$device_name\" in *touch*|*Touch*|*TOUCH*|redroid\\ vinput|damru-virtual-multitouch|damru\\ virtual\\ touchscreen) touch_ready=1;; esac; "
+            "done; "
+            "[ \"$touch_ready\" = 1 ] && exit 0; "
+            "sleep 0.25; "
+            "done; exit 0"
+        )
+        await self._run_cmd(
+            self._docker_cmd(
+                "exec",
+                name,
+                "sh",
+                "-lc",
+                script,
+                "damru-input-node-fix",
+                str(int(timeout)),
+            ),
+            timeout=timeout + 10,
+            allow_failure=True,
+        )
+
+    @staticmethod
+    def _candidate_adb_public_key_paths() -> list[Path]:
+        paths: list[Path] = []
+        vendor_keys = os.environ.get("ADB_VENDOR_KEYS", "")
+        for raw in vendor_keys.split(os.pathsep):
+            raw = raw.strip()
+            if not raw:
+                continue
+            candidate = Path(raw).expanduser()
+            if candidate.is_dir():
+                paths.append(candidate / "adbkey.pub")
+            elif candidate.name.endswith(".pub"):
+                paths.append(candidate)
+            else:
+                paths.append(Path(str(candidate) + ".pub"))
+        paths.append(Path.home() / ".android" / "adbkey.pub")
+        return paths
+
+    @classmethod
+    def _host_adb_public_keys(cls) -> list[str]:
+        keys: list[str] = []
+        seen: set[str] = set()
+        for path in cls._candidate_adb_public_key_paths():
+            try:
+                lines = path.read_text(encoding="utf-8").splitlines()
+            except OSError:
+                continue
+            for line in lines:
+                key = line.strip()
+                if not key or key in seen:
+                    continue
+                seen.add(key)
+                keys.append(key)
+        return keys
+
+    async def _seed_adb_authorized_keys_early(self, name: str, timeout: float = 10.0) -> None:
+        """Seed fresh Redroid containers with this host's ADB public key."""
+        keys = self._host_adb_public_keys()
+        if not keys:
+            await self._run_cmd(self._adb_cmd("start-server"), timeout=10, allow_failure=True)
+            keys = self._host_adb_public_keys()
+        if not keys:
+            logger.warning("No host ADB public key found; %s may require manual ADB authorization", name)
+            return
+        payload = base64.b64encode(("\n".join(keys) + "\n").encode("utf-8")).decode("ascii")
+        script = (
+            "set -eu; "
+            "mkdir -p /data/misc/adb; "
+            f"printf %s {shlex.quote(payload)} | base64 -d > /data/misc/adb/adb_keys; "
+            "chown system:shell /data/misc/adb /data/misc/adb/adb_keys 2>/dev/null || true; "
+            "chmod 02750 /data/misc/adb 2>/dev/null || true; "
+            "chmod 0640 /data/misc/adb/adb_keys 2>/dev/null || true; "
+            "restorecon /data/misc/adb /data/misc/adb/adb_keys 2>/dev/null || true; "
+            "setprop ctl.restart adbd 2>/dev/null || true"
+        )
+        await self._run_cmd(
+            self._docker_cmd("exec", name, "sh", "-lc", script),
+            timeout=timeout,
+            allow_failure=True,
+        )
+
+    async def _touchscreen_input_ready(self, serial: str) -> bool:
+        out = await self._run_cmd(
+            self._adb_cmd(
+                "shell",
+                "dumpsys input 2>/dev/null | grep -q 'Sources: .*TOUCHSCREEN' && echo ready",
+                serial=serial,
+            ),
+            timeout=10,
+            allow_failure=True,
+        )
+        return out.strip() == "ready"
+
+    async def _wait_for_touchscreen_input(self, serial: str, timeout: float = 30.0) -> None:
+        """Let Redroid's native uinput service register before profile warmup.
+
+        If profile hardening starts immediately after boot, Android can miss the
+        `redroid vinput` uinput node even though it later appears in
+        `/proc/bus/input/devices`. Waiting for InputReader avoids that native
+        race without patching browser-visible JavaScript.
+        """
+        if os.environ.get("DAMRU_SKIP_TOUCHSCREEN_WAIT", "").strip() in {"1", "true", "TRUE", "yes", "YES"}:
+            return
+        elapsed = 0.0
+        interval = 2.0
+        while elapsed <= timeout:
+            if await self._touchscreen_input_ready(serial):
+                logger.info("Android touchscreen input ready on %s (%.0fs)", serial, elapsed)
+                return
+            if elapsed >= timeout:
+                break
+            await asyncio.sleep(interval)
+            elapsed += interval
+        message = f"Android touchscreen input was not visible on {serial} after {timeout:.0f}s"
+        if os.environ.get("DAMRU_ALLOW_MISSING_TOUCHSCREEN_INPUT", "").strip() in {"1", "true", "TRUE", "yes", "YES"}:
+            logger.warning("%s; continuing because DAMRU_ALLOW_MISSING_TOUCHSCREEN_INPUT is set", message)
+            return
+        raise DamruError(message)
 
     async def _android_services_ready_internal(self, name: str) -> bool:
         script = " && ".join([
@@ -1751,7 +1956,10 @@ chmod 755 "$target"
         await self._wait_for_package_service(serial)
 
     async def _patch_webview_x_requested_with_header(self, serial: str) -> None:
-        if os.environ.get("DAMRU_ENABLE_INSTALLED_WEBVIEW_NATIVE_PATCH") != "1":
+        if (
+            os.environ.get("DAMRU_ENABLE_INSTALLED_WEBVIEW_NATIVE_PATCH") != "1"
+            and os.environ.get("DAMRU_ENABLE_WEBVIEW_XRW_NATIVE_PATCH") != "1"
+        ):
             logger.info("Installed WebView native library patch disabled by default")
             return
         find_command = (
@@ -2176,6 +2384,11 @@ chmod 755 "$target"
         if not await self._android_dns_usable(serial):
             raise DamruError(f"Android DNS is not usable after restarting {name}")
         await self._wait_for_package_service(serial, timeout=60)
+        try:
+            await self._wait_for_touchscreen_input(serial)
+        except DamruError as exc:
+            logger.warning("Recreating unhealthy %s after restart: %s", name, exc)
+            return await self.restart_container(index)
         if index not in self._started_indices:
             self._started_indices.append(index)
         return serial
@@ -2431,6 +2644,7 @@ chmod 755 "$target"
                 "-p", f"{port}:5555",
                 base_image,
                 "androidboot.use_memfd=true",
+                _REDROID_STREAM_BOOT_ARG,
                 f"androidboot.redroid_gpu_mode={REDROID_GPU_MODE}",
                 "androidboot.redroid_net_dns1=1.1.1.1",
                 "androidboot.redroid_net_dns2=8.8.8.8",
@@ -2451,6 +2665,12 @@ chmod 755 "$target"
             await asyncio.sleep(2)
 
         await self._wait_for_boot(serial, name=temp_name, timeout=CONTAINER_BOOT_TIMEOUT)
+
+        try:
+            logger.info("Installing boot-time input node repair into baked image")
+            await self._install_input_node_boot_repair(temp_name)
+        except Exception as exc:
+            logger.warning("Input node boot repair install skipped: %s", exc)
 
         if (os.environ.get("DAMRU_ENABLE_NATIVE_SENSOR_HAL", "1") == "1" or os.environ.get("DAMRU_EXPERIMENTAL_SENSOR_HAL", "1") == "1") and not await self._sensor_hal_present(serial):
             try:
@@ -2544,17 +2764,19 @@ chmod 755 "$target"
             # Step 9: Apply audio 48kHz fix
             await root.apply_audio_48khz()
 
-            # Step 10: Keep new Redroid containers close to retail Android at boot.
-            # (resetprop is in-memory only — build.prop survives docker commit)
-            logger.info("Setting production security props in build.prop (persistent)...")
+            # Step 10: Keep fresh workers root-manageable during warmup.
+            # Runtime profile application hardens these props again before
+            # browser navigation. This image-level baseline is only the boot
+            # state needed for native OS/WebView repairs.
+            logger.info("Setting root-manageable startup security props in build.prop (persistent)...")
             await adb.shell(
                 "su 0 mount -o remount,rw /system 2>/dev/null", allow_failure=True,
             )
             for prop_key, prop_value in (
-                ("ro.debuggable", "0"),
-                ("ro.secure", "1"),
-                # Keep fresh workers ADB-connectable; runtime setup hardens
-                # ro.adb.secure before browser navigation.
+                ("ro.debuggable", "1"),
+                ("ro.secure", "0"),
+                # Keep fresh workers ADB/root-connectable; runtime setup
+                # hardens ro.adb.secure before browser navigation.
                 ("ro.adb.secure", "0"),
                 ("ro.build.type", "user"),
             ):
@@ -2565,7 +2787,7 @@ chmod 755 "$target"
                     "else echo '%s=%s' >> /system/build.prop; fi"
                     % (prop_pattern, prop_pattern, prop_key, prop_value, prop_key, prop_value)
                 )
-            logger.info("Security props persisted: ro.debuggable=0 ro.secure=1 ro.adb.secure=0 ro.build.type=user")
+            logger.info("Startup security props persisted: ro.debuggable=1 ro.secure=0 ro.adb.secure=0 ro.build.type=user")
             await adb.shell(
                 "su 0 mount -o remount,ro /system 2>/dev/null", allow_failure=True,
             )

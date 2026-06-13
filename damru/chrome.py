@@ -170,20 +170,28 @@ class ChromeManager:
         await self.adb.shell_root(f"chmod 644 {self._command_line_path()}")
         logger.debug("Chromium command-line for %s: %s", self.package, cmd_line[:200])
 
-    async def write_webview_command_line(self, flags: List[str], user_agent: Optional[str] = None) -> None:
+    async def write_webview_command_line(
+        self,
+        flags: List[str],
+        user_agent: Optional[str] = None,
+        *,
+        remote_allow_origins: bool = True,
+    ) -> None:
         """Write WebView Shell flags, preserving a WebView-specific UA when provided."""
         final_flags: List[str] = []
         for flag in flags:
             flag = flag.strip()
             if not flag:
                 continue
-            if flag.startswith("--remote-debugging-socket-name="):
+            if flag.startswith("--remote-debugging-socket-name=") or flag.startswith("--remote-debugging-port="):
+                continue
+            if not remote_allow_origins and flag.startswith("--remote-allow-origins="):
                 continue
             final_flags.append(flag)
 
         if user_agent and not any(f.startswith("--user-agent=") for f in final_flags):
             final_flags.append(f"--user-agent={user_agent}")
-        if not any(f.startswith("--remote-allow-origins=") for f in final_flags):
+        if remote_allow_origins and not any(f.startswith("--remote-allow-origins=") for f in final_flags):
             final_flags.append("--remote-allow-origins=*")
 
         manager = ChromeManager(self.adb, package=WEBVIEW_SHELL_PACKAGE)
@@ -671,7 +679,5 @@ class ChromeManager:
     async def webview_shell_installed(self, package: str = WEBVIEW_SHELL_PACKAGE) -> bool:
         out = await self.adb.shell(f"pm list packages {package}", timeout=8, allow_failure=True)
         return f"package:{package}" in out
-
-
 
 

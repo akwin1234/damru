@@ -10,6 +10,9 @@ X_REQUESTED_WITH = b"X-Requested-With"
 LINUX_ARMV8L_TYPO = b"Linux armv81"
 LINUX_ARMV8L = b"Linux armv8l"
 WEBVIEW_NATIVE_LIBRARY_NAMES = ("libmonochrome_64.so", "libmonochrome.so")
+_REQUEST_HEADERS_LEA = b"\x48\x8d\xbb\x98\x02\x00\x00"
+_REQUEST_LAZY_INIT_SKIP_CMP = b"\x48\x3b\x83\xa0\x02\x00\x00"
+_CORS_EXEMPT_HEADERS_LEA = b"\x4c\x8d\xab\xb0\x02\x00\x00"
 
 
 class WebViewNativePatchError(RuntimeError):
@@ -41,16 +44,12 @@ def _rip_relative_lea_xrefs(data: bytes, target: int) -> list[int]:
     return sorted(set(hits))
 
 
-def patch_x_requested_with_header_block(path: str | Path) -> bool:
-    """Disable Chromium's WebView embedding-app X-Requested-With header append.
+def _patch_origin_matched_requested_with_header_block(data: bytearray) -> tuple[bool, bool]:
+    """Patch the origin-matched/custom-header XRW append path.
 
-    Returns True when bytes were modified and False when the library already
-    contains the patch. The patch is intentionally structural: find the sole
-    canonical header string, find code that loads it, then turn the preceding
-    conditional skip into an unconditional skip for that one append block.
+    Returns (changed, found). Raises when the canonical string is present but
+    the nearby append guard cannot be identified safely.
     """
-    target = Path(path)
-    data = bytearray(target.read_bytes())
     header_offset = data.find(X_REQUESTED_WITH)
     if header_offset < 0:
         raise WebViewNativePatchError("X-Requested-With string not found in WebView native library")
@@ -72,17 +71,89 @@ def patch_x_requested_with_header_block(path: str | Path) -> bool:
         # Keep the original short-jump displacement, but make the branch
         # unconditional. This skips only the header block guarded by rax.
         if data[patch_offset] == 0xEB:
-            return False
+            return False, True
         if data[patch_offset] != 0x74:
             continue
         data[patch_offset] = 0xEB
-        patched = True
-        break
+        return True, True
 
-    if not patched:
-        raise WebViewNativePatchError("could not find X-Requested-With append guard to patch")
-    target.write_bytes(data)
-    return True
+    raise WebViewNativePatchError("could not find X-Requested-With append guard to patch")
+
+
+def _patch_default_cors_exempt_requested_with_header_block(data: bytearray) -> tuple[bool, bool]:
+    """Patch WebView's default CORS-exempt XRW package-name append path.
+
+    Modern Android WebView also sets `X-Requested-With` from
+    `AwProxyingURLLoaderFactory::SetRequestedWithHeader()`, using the host app
+    package name when no origin-matched header is already present. The branch
+    below skips the package-name SetHeader block while preserving request flow.
+    """
+    changed = False
+    found = False
+    start = 0
+    while True:
+        lea_pos = data.find(_REQUEST_HEADERS_LEA, start)
+        if lea_pos < 0:
+            break
+        window_end = min(len(data), lea_pos + 160)
+        cmp_pos = data.find(_REQUEST_LAZY_INIT_SKIP_CMP, lea_pos, window_end)
+        if cmp_pos < 0:
+            start = lea_pos + 1
+            continue
+        branch_offset = cmp_pos + len(_REQUEST_LAZY_INIT_SKIP_CMP)
+        if branch_offset + 2 > len(data):
+            start = lea_pos + 1
+            continue
+        branch_byte = data[branch_offset]
+        if branch_byte not in (0x75, 0xEB):
+            start = lea_pos + 1
+            continue
+        cors_exempt_pos = data.find(
+            _CORS_EXEMPT_HEADERS_LEA,
+            branch_offset,
+            min(len(data), branch_offset + 128),
+        )
+        if cors_exempt_pos < 0:
+            start = lea_pos + 1
+            continue
+
+        found = True
+        if branch_byte == 0x75:
+            # Keep the short-jump displacement, but always take the skip over
+            # the host_package_name() SetHeader block.
+            data[branch_offset] = 0xEB
+            changed = True
+        start = lea_pos + 1
+    return changed, found
+
+
+def patch_x_requested_with_header_block(path: str | Path) -> bool:
+    """Disable Chromium's WebView embedding-app X-Requested-With appends.
+
+    Returns True when bytes were modified and False when the library already
+    contains the patch. The patch handles both known native paths:
+    origin-matched/custom-header XRW handling and the newer default
+    CORS-exempt package-name header append.
+    """
+    target = Path(path)
+    data = bytearray(target.read_bytes())
+    origin_error: WebViewNativePatchError | None = None
+    try:
+        origin_changed, origin_found = _patch_origin_matched_requested_with_header_block(data)
+    except WebViewNativePatchError as exc:
+        origin_error = exc
+        origin_changed = False
+        origin_found = False
+
+    default_changed, default_found = _patch_default_cors_exempt_requested_with_header_block(data)
+    if origin_changed or default_changed:
+        target.write_bytes(data)
+        return True
+    if origin_found or default_found:
+        return False
+    if origin_error is not None:
+        raise origin_error
+    raise WebViewNativePatchError("could not find any X-Requested-With append block to patch")
 
 
 def patch_linux_armv8l_platform_string(path: str | Path) -> bool:

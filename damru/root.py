@@ -17,6 +17,7 @@ import os
 from pathlib import Path
 import random
 import re
+import shutil
 import shlex
 import subprocess
 import sys
@@ -166,6 +167,7 @@ def _runtime_arch_deleted_props() -> tuple[str, ...]:
         "ro.boot.redroid_net_dns2",
         "ro.boot.redroid_net_ndns",
         "ro.boot.use_redroid_c2",
+        "ro.boot.use_redroid_stream",
         "ro.product.product.cpu.abi",
         "ro.product.product.cpu.abilist",
         "ro.product.product.cpu.abilist64",
@@ -585,16 +587,10 @@ class RootOps:
         Uses resetprop for ro.* props, setprop for others.
         Handles values with spaces (e.g. 'Pixel 8 Pro') via proper quoting.
         """
-        # Use double quotes to handle values with spaces
-        escaped_value = value.replace('"', '\\"')
         last_error: Exception | None = None
         for attempt in range(3):
             try:
-                if key.startswith("ro."):
-                    resetprop = await self._ensure_resetprop()
-                    await self.adb.shell_root(f'{resetprop} {key} "{escaped_value}"')
-                else:
-                    await self.adb.shell_root(f'setprop {key} "{escaped_value}"')
+                await self.set_props_batch({key: value}, timeout=15.0)
                 return
             except Exception as exc:
                 last_error = exc
@@ -602,6 +598,33 @@ class RootOps:
                     await asyncio.sleep(0.15 * (attempt + 1))
         if last_error:
             raise last_error
+
+    @staticmethod
+    def _set_prop_script_line(resetprop: str | None, key: str, value: str) -> str:
+        setter = shlex.quote(resetprop) if key.startswith("ro.") and resetprop else "setprop"
+        return f"{setter} {shlex.quote(key)} {shlex.quote(value)}"
+
+    async def set_props_batch(
+        self,
+        props: Dict[str, str],
+        *,
+        timeout: float | None = None,
+    ) -> None:
+        """Set multiple Android properties through one root shell.
+
+        Redroid can leak sleeping shell/resetprop processes when many parallel
+        `adb shell` calls time out. Batching keeps warmup native and fast while
+        avoiding a resetprop storm inside Android.
+        """
+        if not props:
+            return
+        resetprop = await self._ensure_resetprop() if any(k.startswith("ro.") for k in props) else None
+        lines = ["set -e"]
+        lines.extend(self._set_prop_script_line(resetprop, key, value) for key, value in props.items())
+        await self.adb.shell_root(
+            "\n".join(lines),
+            timeout=timeout or max(15.0, min(60.0, 5.0 + len(props) * 0.75)),
+        )
 
     async def get_prop(self, key: str) -> str:
         """Get current value of a system property."""
@@ -625,9 +648,10 @@ class RootOps:
                      len(props), device.name, safe_only, parallel)
 
         if parallel:
-            # All props are independent — run concurrently for speed.
-            # Skip saving originals (not restored on exit anyway).
-            await asyncio.gather(*(self.set_prop(k, v) for k, v in props.items()))
+            # Skip saving originals (not restored on exit anyway), but keep the
+            # Android-side work in one shell so failed warmups do not leave a
+            # herd of sleeping resetprop shells behind.
+            await self.set_props_batch(props)
         else:
             for key, value in props.items():
                 if key not in self._original_props:
@@ -655,8 +679,7 @@ class RootOps:
         props = _runtime_arch_props(device)
         if not await self.wait_for_package_manager(timeout=45.0):
             raise RootError("PackageManager not ready before runtime arch prop spoof")
-        await self._ensure_resetprop()
-        await asyncio.gather(*(self.set_prop(key, value) for key, value in props.items()))
+        await self.set_props_batch(props)
         resetprop = await self._ensure_resetprop()
         delete_script = "; ".join(
             f"{resetprop} --delete {prop} 2>/dev/null || true"
@@ -887,7 +910,7 @@ class RootOps:
             "mkdir -p /dev/input; "
             f"rm -f /dev/input/{event_name}; "
             f"mknod /dev/input/{event_name} c 13 {minor}; "
-            f"chown 0:1004 /dev/input/{event_name} 2>/dev/null || true; "
+            f"chown 0:1000 /dev/input/{event_name} 2>/dev/null || true; "
             f"chmod 660 /dev/input/{event_name}; "
             f"chcon u:object_r:input_device:s0 /dev/input/{event_name} 2>/dev/null || true",
             timeout=10,
@@ -1018,12 +1041,13 @@ echo damru_app_data_dirs_created=$created
         so Chrome picks up the new locale immediately without reboot.
         """
         language, country = _locale_language_country(locale)
-        prop_tasks = [
-            self.set_prop("persist.sys.locale", locale),
-            self.set_prop("persist.sys.language", language),
-            self.set_prop("persist.sys.country", country),
-        ]
-        await asyncio.gather(*prop_tasks)
+        await self.set_props_batch(
+            {
+                "persist.sys.locale": locale,
+                "persist.sys.language": language,
+                "persist.sys.country": country,
+            }
+        )
         # Android settings locale takes effect immediately for apps
         await self.adb.shell(
             f"settings put system system_locales {locale}",
@@ -1920,16 +1944,8 @@ echo damru_app_data_dirs_created=$created
         target_device_id: int | None,
         gpu_family: str,
     ) -> bool:
-        raw = await self.adb.shell(
-            f"cat {_GPU_BINARY_MARKER} 2>/dev/null || true",
-            timeout=5,
-            allow_failure=True,
-        )
-        if not raw.strip():
-            return False
-        try:
-            marker = json.loads(raw)
-        except json.JSONDecodeError:
+        marker = await self._read_gpu_binary_marker()
+        if not marker:
             return False
         expected = {
             "renderer": target_renderer,
@@ -1939,6 +1955,20 @@ echo damru_app_data_dirs_created=$created
             "gpu_family": gpu_family,
         }
         return all(marker.get(key) == value for key, value in expected.items())
+
+    async def _read_gpu_binary_marker(self) -> dict | None:
+        raw = await self.adb.shell(
+            f"cat {_GPU_BINARY_MARKER} 2>/dev/null || true",
+            timeout=5,
+            allow_failure=True,
+        )
+        if not raw.strip():
+            return None
+        try:
+            marker = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+        return marker if isinstance(marker, dict) else None
 
     async def _write_gpu_binary_marker(
         self,
@@ -2042,6 +2072,15 @@ echo damru_app_data_dirs_created=$created
             vendor_key = family_vendor_map.get(family, "")
             target_vendor_id = self._VULKAN_VENDOR_IDS.get(vendor_key)
         target_device_id = self._VULKAN_DEVICE_IDS.get(device.gpu_family)
+
+        marker = await self._read_gpu_binary_marker()
+        marker_family = str(marker.get("gpu_family") or "") if marker else ""
+        if marker_family and marker_family != device.gpu_family:
+            raise RootError(
+                "GPU binary spoof is already patched for "
+                f"{marker_family}; recreate the Redroid worker before switching "
+                f"to {device.gpu_family}."
+            )
 
         if await self._gpu_binary_marker_matches(
             target_renderer=target_renderer,
@@ -2411,22 +2450,29 @@ echo damru_app_data_dirs_created=$created
         repo_native_dir = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "native"
         )
-        c_path = os.path.join(repo_native_dir, "libfakemem.c")
-        build_dir = repo_native_dir
+        source_c_path = os.path.join(repo_native_dir, "libfakemem.c")
+        build_dir = os.environ.get("DAMRU_NATIVE_BUILD_DIR") or os.path.join(
+            tempfile.gettempdir(), "damru-native"
+        )
+        os.makedirs(build_dir, exist_ok=True)
+        c_path = os.path.join(build_dir, "libfakemem.c")
 
-        if not os.path.isfile(c_path):
+        if os.path.isfile(source_c_path):
+            if (
+                not os.path.isfile(c_path)
+                or os.path.getmtime(c_path) < os.path.getmtime(source_c_path)
+                or os.path.getsize(c_path) != os.path.getsize(source_c_path)
+            ):
+                shutil.copy2(source_c_path, c_path)
+        elif not os.path.isfile(c_path):
             try:
                 asset = resources.files("damru.assets").joinpath("libfakemem.c")
                 data = asset.read_bytes()
-                build_dir = os.path.join(tempfile.gettempdir(), "damru-native")
-                os.makedirs(build_dir, exist_ok=True)
-                c_path = os.path.join(build_dir, "libfakemem.c")
                 with open(c_path, "wb") as f:
                     f.write(data)
             except Exception:
                 pass
 
-        os.makedirs(build_dir, exist_ok=True)
         so_path = os.path.join(build_dir, "libfakemem_x86_64.so")
 
         if os.path.isfile(so_path) and os.path.getmtime(so_path) >= os.path.getmtime(c_path):
@@ -2492,6 +2538,14 @@ echo damru_app_data_dirs_created=$created
         logger.info("Compiled libfakemem.so (%s)", so_path)
         return so_path
 
+    @staticmethod
+    def _file_sha256(path: str) -> str:
+        digest = hashlib.sha256()
+        with open(path, "rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+
     async def apply_memory_spoof(self, target_gb: float) -> None:
         """Push libfakemem.so and write target GB file to device.
 
@@ -2516,15 +2570,23 @@ echo damru_app_data_dirs_created=$created
         does not set any ``wrap.*`` properties, so the preload remains inactive
         until profile application explicitly enables it for a package.
         """
+        so_local = self._compile_fakemem()
+        local_sha = self._file_sha256(so_local)
         out = await self.adb.shell(
-            f"test -f {_FAKEMEM_SO} && echo OK",
+            f"sha256sum {_FAKEMEM_SO} 2>/dev/null | awk '{{print $1}}'",
             timeout=5, allow_failure=True,
         )
-        if force or "OK" not in out:
-            so_local = self._compile_fakemem()
+        device_sha = out.strip().split()[0] if out.strip() else ""
+        if force or device_sha != local_sha:
             await self.adb.push(so_local, _FAKEMEM_SO)
             await self.adb.shell_root(f"chmod 755 {_FAKEMEM_SO}")
-            logger.info("Installed libfakemem.so native preload asset")
+            logger.info(
+                "Installed libfakemem.so native preload asset (%s -> %s)",
+                device_sha or "missing",
+                local_sha,
+            )
+        else:
+            logger.debug("Native preload asset already current (%s)", local_sha)
 
         commands: list[str] = []
         if target_gb is not None:
@@ -2565,20 +2627,12 @@ echo damru_app_data_dirs_created=$created
         for target in wrap_targets:
             if not re.fullmatch(r"[A-Za-z0-9_.:-]+", target):
                 raise RootError(f"Unsafe wrap target for memory preload: {target!r}")
+
+        await self.install_native_preload_assets(target_gb=None, force=False)
         active = [target for target in wrap_targets if await self.is_memory_preload_active(target)]
         if len(active) == len(wrap_targets):
             logger.debug("Memory preload already active for %s", ", ".join(wrap_targets))
             return
-
-        # Ensure .so is on device
-        out = await self.adb.shell(
-            f"test -f {_FAKEMEM_SO} && echo OK",
-            timeout=5, allow_failure=True,
-        )
-        if "OK" not in out:
-            so_local = self._compile_fakemem()
-            await self.adb.push(so_local, _FAKEMEM_SO)
-            await self.adb.shell_root(f"chmod 755 {_FAKEMEM_SO}")
 
         wrapper = (
             "#!/system/bin/sh\n"

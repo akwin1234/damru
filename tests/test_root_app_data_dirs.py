@@ -1,5 +1,7 @@
 import json
 import inspect
+import hashlib
+import shlex
 import zipfile
 
 import pytest
@@ -7,6 +9,7 @@ import pytest
 from damru.devices import get_device
 from damru.docker import RedroidManager
 from damru.root import (
+    RootError,
     RootOps,
     _build_proc_mountinfo_spoof,
     _build_proc_version_spoof,
@@ -101,7 +104,7 @@ async def test_install_native_preload_assets_pushes_library_and_proc_files(monke
         pushes: list[tuple[str, str]] = []
 
         async def shell(self, command: str, *args, **kwargs) -> str:
-            if command == "test -f /data/local/tmp/libfakemem.so && echo OK":
+            if command.startswith("sha256sum /data/local/tmp/libfakemem.so"):
                 return ""
             return ""
 
@@ -130,14 +133,15 @@ async def test_install_native_preload_assets_pushes_library_and_proc_files(monke
 async def test_install_native_preload_assets_can_write_memory_target_without_repush(monkeypatch, tmp_path) -> None:
     fake_so = tmp_path / "libfakemem_x86_64.so"
     fake_so.write_bytes(b"so")
+    fake_sha = hashlib.sha256(fake_so.read_bytes()).hexdigest()
 
     class FakeADB:
         shell_root_commands: list[str] = []
         pushes: list[tuple[str, str]] = []
 
         async def shell(self, command: str, *args, **kwargs) -> str:
-            if command == "test -f /data/local/tmp/libfakemem.so && echo OK":
-                return "OK\n"
+            if command.startswith("sha256sum /data/local/tmp/libfakemem.so"):
+                return f"{fake_sha}  /data/local/tmp/libfakemem.so\n"
             return ""
 
         async def shell_root(self, command: str, *args, **kwargs) -> str:
@@ -160,6 +164,35 @@ async def test_install_native_preload_assets_can_write_memory_target_without_rep
     assert "setprop wrap." not in joined
 
 
+@pytest.mark.unit
+async def test_install_native_preload_assets_replaces_stale_baked_library(monkeypatch, tmp_path) -> None:
+    fake_so = tmp_path / "libfakemem_x86_64.so"
+    fake_so.write_bytes(b"new-so")
+
+    class FakeADB:
+        shell_root_commands: list[str] = []
+        pushes: list[tuple[str, str]] = []
+
+        async def shell(self, command: str, *args, **kwargs) -> str:
+            if command.startswith("sha256sum /data/local/tmp/libfakemem.so"):
+                return "oldhash  /data/local/tmp/libfakemem.so\n"
+            return ""
+
+        async def shell_root(self, command: str, *args, **kwargs) -> str:
+            self.shell_root_commands.append(command)
+            return ""
+
+        async def push(self, source: str, destination: str) -> None:
+            self.pushes.append((source, destination))
+
+    monkeypatch.setattr(RootOps, "_compile_fakemem", staticmethod(lambda: str(fake_so)))
+
+    adb = FakeADB()
+    await RootOps(adb).install_native_preload_assets(force=False)
+
+    assert adb.pushes == [(str(fake_so), "/data/local/tmp/libfakemem.so")]
+
+
 def test_bake_image_installs_native_preload_assets() -> None:
     source = inspect.getsource(RedroidManager.bake_image)
 
@@ -172,6 +205,14 @@ def test_bake_image_defaults_to_redroid_base_for_custom_tags() -> None:
     assert "DAMRU_BAKE_BASE_IMAGE" in source
     assert "DAMRU_BAKE_FROM_LAUNCH_IMAGE" in source
     assert "base_image = REDROID_BASE_IMAGE" in source
+
+
+def test_bake_image_keeps_startup_root_manageable_until_runtime_hardening() -> None:
+    source = inspect.getsource(RedroidManager.bake_image)
+
+    assert '("ro.debuggable", "1")' in source
+    assert '("ro.secure", "0")' in source
+    assert '("ro.adb.secure", "0")' in source
 
 
 def test_webview_native_library_extract_accepts_libmonochrome_without_64(tmp_path) -> None:
@@ -216,15 +257,22 @@ def test_installed_webview_native_mutation_is_opt_in() -> None:
 
     assert "DAMRU_ENABLE_INSTALLED_WEBVIEW_NATIVE_PATCH" in root_source
     assert "DAMRU_ENABLE_INSTALLED_WEBVIEW_NATIVE_PATCH" in docker_source
+    assert "DAMRU_ENABLE_WEBVIEW_XRW_NATIVE_PATCH" in docker_source
 
 
 @pytest.mark.unit
-async def test_setup_memory_preload_can_wrap_webview_renderer_targets() -> None:
+async def test_setup_memory_preload_can_wrap_webview_renderer_targets(monkeypatch, tmp_path) -> None:
+    fake_so = tmp_path / "libfakemem_x86_64.so"
+    fake_so.write_bytes(b"so")
+    fake_sha = hashlib.sha256(fake_so.read_bytes()).hexdigest()
+
     class FakeADB:
         shell_root_commands: list[str] = []
         props: dict[str, str] = {}
 
         async def shell(self, command: str, *args, **kwargs) -> str:
+            if command.startswith("sha256sum /data/local/tmp/libfakemem.so"):
+                return f"{fake_sha}  /data/local/tmp/libfakemem.so\n"
             if command == "test -f /system/bin/app_process64.real && echo OK":
                 return ""
             if command == "test -f /data/local/tmp/libfakemem.so && echo OK":
@@ -240,6 +288,8 @@ async def test_setup_memory_preload_can_wrap_webview_renderer_targets() -> None:
                 _, key, value = command.split(" ", 2)
                 self.props[key] = value
             return ""
+
+    monkeypatch.setattr(RootOps, "_compile_fakemem", staticmethod(lambda: str(fake_so)))
 
     adb = FakeADB()
     await RootOps(adb).setup_memory_preload(
@@ -256,12 +306,18 @@ async def test_setup_memory_preload_can_wrap_webview_renderer_targets() -> None:
 
 
 @pytest.mark.unit
-async def test_setup_native_proc_preload_removes_memory_target_and_wraps_package() -> None:
+async def test_setup_native_proc_preload_removes_memory_target_and_wraps_package(monkeypatch, tmp_path) -> None:
+    fake_so = tmp_path / "libfakemem_x86_64.so"
+    fake_so.write_bytes(b"so")
+    fake_sha = hashlib.sha256(fake_so.read_bytes()).hexdigest()
+
     class FakeADB:
         shell_root_commands: list[str] = []
         props: dict[str, str] = {}
 
         async def shell(self, command: str, *args, **kwargs) -> str:
+            if command.startswith("sha256sum /data/local/tmp/libfakemem.so"):
+                return f"{fake_sha}  /data/local/tmp/libfakemem.so\n"
             if command == "test -f /system/bin/app_process64.real && echo OK":
                 return ""
             if command == "test -f /data/local/tmp/libfakemem.so && echo OK":
@@ -277,6 +333,8 @@ async def test_setup_native_proc_preload_removes_memory_target_and_wraps_package
                 _, key, value = command.split(" ", 2)
                 self.props[key] = value
             return ""
+
+    monkeypatch.setattr(RootOps, "_compile_fakemem", staticmethod(lambda: str(fake_so)))
 
     adb = FakeADB()
     await RootOps(adb).setup_native_proc_preload("com.android.browser")
@@ -303,9 +361,10 @@ async def test_apply_runtime_arch_props_sets_arm_values_and_deletes_leaks() -> N
 
         async def shell_root(self, command: str, *args, **kwargs) -> str:
             self.shell_root_commands.append(command)
-            if command.startswith("resetprop "):
-                _, key, value = command.split(" ", 2)
-                self.props[key] = value.strip().strip('"')
+            for line in command.splitlines():
+                parts = shlex.split(line)
+                if len(parts) >= 3 and parts[0].endswith("resetprop"):
+                    self.props[parts[1]] = parts[2]
             return ""
 
         async def get_prop(self, key: str) -> str:
@@ -325,6 +384,7 @@ async def test_apply_runtime_arch_props_sets_arm_values_and_deletes_leaks() -> N
     assert "--delete ro.dalvik.vm.isa.x86_64" in joined
     assert "--delete dalvik.vm.isa.x86_64.features" in joined
     assert "--delete ro.boot.redroid_gpu_mode" in joined
+    assert "--delete ro.boot.use_redroid_stream" in joined
     assert "--delete ro.product.product.cpu.abilist" in joined
 
 
@@ -451,6 +511,7 @@ async def test_ensure_multitouch_stack_writes_xml_and_event_node() -> None:
     joined = "\n".join(adb.shell_root_commands)
     assert "damru_multitouch.xml" in joined
     assert "mknod /dev/input/event4 c 13 68" in joined
+    assert "chown 0:1000 /dev/input/event4" in joined
     assert "setprop ctl.restart zygote" not in joined
 
 
@@ -489,3 +550,28 @@ async def test_apply_gpu_binary_spoof_skips_restart_when_renderer_already_patche
 
     assert any("damru_gpu_binary_spoof.json" in command for command in adb.shell_commands)
     assert not any("surfaceflinger" in command for command in adb.shell_root_commands)
+
+
+@pytest.mark.unit
+async def test_apply_gpu_binary_spoof_rejects_cross_family_repatch() -> None:
+    class FakeADB:
+        async def shell(self, command: str, *args, **kwargs) -> str:
+            if command.startswith("test -f /vendor/lib64/hw/vulkan.pastel.so"):
+                return "OK\n"
+            if command.startswith("cat /data/local/tmp/damru_gpu_binary_spoof.json"):
+                return json.dumps(
+                    {
+                        "renderer": "Adreno (TM) 619",
+                        "vendor": "Qualcomm",
+                        "vendor_id": 0x5143,
+                        "device_id": 0x043A,
+                        "gpu_family": "adreno",
+                    }
+                )
+            return ""
+
+        async def shell_root(self, command: str, *args, **kwargs) -> str:
+            raise AssertionError("cross-family GPU patch should fail before root writes")
+
+    with pytest.raises(RootError, match="already patched for adreno"):
+        await RootOps(FakeADB()).apply_gpu_binary_spoof(get_device("samsung_galaxy_a35"))
