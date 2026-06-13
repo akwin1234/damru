@@ -1,4 +1,4 @@
-﻿"""RedroidManager — container lifecycle for damru auto mode.
+"""RedroidManager — container lifecycle for damru auto mode.
 
 Redroid needs Linux kernel modules (binder via binderfs) so:
   - Windows: all docker commands run via WSL2 (auto-installs Docker if missing)
@@ -2550,6 +2550,10 @@ chmod 755 "$target"
                 auto_versions = [v for v in versions]
             if not auto_versions:
                 raise DamruError("No usable Chrome APK version found.")
+            matched_set = set(matched_versions)
+            webview_versions = [v for v in auto_versions if v in matched_set]
+            if webview_versions:
+                auto_versions = webview_versions
 
             picked = _random.choice(auto_versions)
             logger.info(
