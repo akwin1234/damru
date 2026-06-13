@@ -1,0 +1,18 @@
+Metadata-Version: 2.4
+Name: damru
+Version: 0.1.0
+Summary: Stealth browser automation on Android via ADB + root-level system prop spoofing
+Author: Damru Framework
+Author-email: Damru Framework <contact@damru.dev>
+Requires-Python: >=3.10
+License-File: LICENSE
+Requires-Dist: playwright<1.60,>=1.40
+Requires-Dist: requests>=2.28
+Requires-Dist: pysocks>=1.7
+Requires-Dist: websockets>=12
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: pytest-asyncio; extra == "dev"
+Requires-Dist: aiohttp; extra == "dev"
+Dynamic: author
+Dynamic: license-file

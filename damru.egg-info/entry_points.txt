@@ -1,0 +1,3 @@
+[console_scripts]
+damru = damru.cli:main
+damru-benchmark = damru.benchmark:main
