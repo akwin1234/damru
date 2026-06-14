@@ -1,4 +1,4 @@
-﻿"""AsyncDamru - async context manager for stealth Android browser automation.
+"""AsyncDamru - async context manager for stealth Android browser automation.
 
 Usage:
     async with AsyncDamru(device="pixel_8_pro", proxy="socks5://host:port") as browser:
@@ -84,6 +84,7 @@ class AsyncDamru:
         keep_chrome_on_exit: bool = False,
         force_cold_start: bool = False,
         debug: bool = False,
+        webrtc_block: bool = False,
     ):
         self._device_name = device
         self._serial = serial
@@ -92,6 +93,7 @@ class AsyncDamru:
         self._timezone = timezone
         self._locale = locale
         self._chrome_package = chrome_package
+        self._webrtc_block = webrtc_block
         if profile_tier is None:
             try:
                 from .config import PROFILE_TIER
@@ -297,6 +299,7 @@ class AsyncDamru:
             timezone=self._timezone,
             locale=self._locale,
             chrome_version=version,
+            webrtc_block=self._webrtc_block,
         )
         sensor_seed = hashlib.sha256(
             f"{target_device.model}|{self._profile.timezone}|{self._profile.locale}|{random.getrandbits(64)}".encode()

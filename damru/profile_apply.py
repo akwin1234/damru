@@ -178,6 +178,7 @@ async def force_device_profile(
     apply_proc_preload: bool = False,
     clear_proxy: bool = False,
     slot_identity_seed: str | None = None,
+    webrtc_block: bool = False,
 ) -> AppliedDeviceProfile:
     """Force a named Damru profile onto an existing rooted ADB worker.
 
@@ -218,6 +219,7 @@ async def force_device_profile(
         timezone=timezone,
         locale=locale,
         chrome_version=requested_chrome_version,
+        webrtc_block=webrtc_block,
     )
     sensor_seed = hashlib.sha256(
         f"{device.model}|{profile.timezone}|{profile.locale}|{random.getrandbits(64)}".encode()
@@ -346,6 +348,7 @@ async def force_device_profile(
             profile.timezone,
             profile.locale,
             chrome_version,
+            webrtc_block,
         )
         accept_lang = build_accept_language(profile.locale)
         await asyncio.gather(
@@ -365,7 +368,7 @@ async def force_device_profile(
             profile.locale,
             accept_lang,
         )
-        if profile.android_http_proxy:
+        if profile.android_http_proxy and webrtc_block:
             await asyncio.gather(
                 root.apply_webrtc_block(chrome.package),
                 root.apply_webrtc_block(WEBVIEW_SHELL_PACKAGE),
