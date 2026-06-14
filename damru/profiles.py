@@ -38,7 +38,6 @@ def build_profile(
     timezone: Optional[str] = None,
     locale: Optional[str] = None,
     chrome_version: Optional[str] = None,
-    webrtc_block: bool = False,
 ) -> DamruProfile:
     """Build a complete spoofing profile for the given device.
 
@@ -74,7 +73,7 @@ def build_profile(
         locale = resolve_locale(timezone)
 
     system_props = device.system_props()
-    chrome_flags = _build_chrome_flags(device, timezone, locale, chrome_version, webrtc_block)
+    chrome_flags = _build_chrome_flags(device, timezone, locale, chrome_version)
 
     # Randomize screen resolution for devices with WQHD+/FHD+ modes
     sw, sh, sdpi = pick_screen_variant(device)
@@ -102,7 +101,6 @@ def _build_chrome_flags(
     timezone: str,
     locale: str,
     chrome_version: Optional[str] = None,
-    webrtc_block: bool = False,
 ) -> List[str]:
     """Assemble Chrome command-line flags.
 
@@ -132,9 +130,9 @@ def _build_chrome_flags(
         # navigator.languages must NOT contain q-values - only lang tags.
         # Chrome auto-assigns q-weights in the HTTP Accept-Language header.
         f"--accept-lang={','.join(p.split(';')[0].strip() for p in accept_lang.split(','))}",
-        # WebRTC: keep enabled but force routing through proxy if webrtc_block is False (default).
-        # When webrtc_block is True, we use default policy (as iptables drops all UDP).
-        f"--force-webrtc-ip-handling-policy={'default_public_and_private_interfaces' if webrtc_block else 'disable_non_proxied_udp'}",
+        # WebRTC: keep enabled but hide private IPs (match Chrome Preferences).
+        # DO NOT use disable_non_proxied_udp - shows WebRTC as "disabled" (tell).
+        "--force-webrtc-ip-handling-policy=default_public_and_private_interfaces",
         "--enforce-webrtc-ip-permission-check",
         # Rendering
         "--force-color-profile=srgb",
