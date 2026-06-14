@@ -417,3 +417,31 @@ def test_force_profile_cli_wires_named_profile(monkeypatch: pytest.MonkeyPatch, 
     assert called["apply_memory"] is True
     assert called["clear_proxy"] is True
     assert "Forced profile applied on 127.0.0.1:5600" in capsys.readouterr().out
+
+
+@pytest.mark.unit
+async def test_force_device_profile_webrtc_block_option() -> None:
+    result = await profile_apply.force_device_profile(
+        "127.0.0.1:5600",
+        "xiaomi_redmi_9a",
+        proxy="socks5://1.2.3.4:5678",
+        timezone="America/New_York",
+        locale="en-US",
+    )
+    assert not any(call[0] == "root.webrtc" for call in FakeRootOps.calls)
+    assert any("disable_non_proxied_udp" in flag for flag in next(c for c in FakeChromeManager.calls if c[0] == "chrome.flags")[1])
+
+    # Reset calls
+    FakeRootOps.calls.clear()
+    FakeChromeManager.calls.clear()
+
+    await profile_apply.force_device_profile(
+        "127.0.0.1:5600",
+        "xiaomi_redmi_9a",
+        proxy="socks5://1.2.3.4:5678",
+        timezone="America/New_York",
+        locale="en-US",
+        webrtc_block=True,
+    )
+    assert ("root.webrtc", "com.android.chrome") in FakeRootOps.calls
+    assert any("default_public_and_private_interfaces" in flag for flag in next(c for c in FakeChromeManager.calls if c[0] == "chrome.flags")[1])

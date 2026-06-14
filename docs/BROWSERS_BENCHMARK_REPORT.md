@@ -39,7 +39,7 @@ Sanitized machine-readable result: [assets/benchmark/browsers-benchmark-final-cl
 | --- | --- |
 | CreepJS | Completed without benchmark error |
 | Sannysoft plugins | Android-correct empty `PluginArray` / empty `MimeTypeArray`; the legacy desktop plugin row is treated as a false positive only after those live invariants are verified |
-| WebRTC candidate IP | Blank, by design, to avoid non-proxy UDP IP leaks |
+| WebRTC candidate IP | Returns spoofed proxy IP (default), or empty list `[]` when `webrtc_block=True` is enabled. |
 | IP check | Completed through the configured residential proxy; exit IP redacted |
 
 ## reCAPTCHA Note

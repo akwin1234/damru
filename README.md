@@ -251,7 +251,7 @@ Default `device="random"` and UI random-profile actions use the premium pool: 51
 
 Download the current pre-baked image:
 
-**[Download damru-redroid-latest.tar](https://damru.dev/assets/damru-baked.tar.gz)**
+**[Download damru-redroid-latest.tar](https://github.com/akwin1234/damru/releases/download/v1.2-beta/damru-redroid-latest.tar)**
 
 Current local artifact prepared for release testing:
 

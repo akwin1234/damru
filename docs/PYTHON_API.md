@@ -48,6 +48,7 @@ Damru expects Redroid to run inside Ubuntu Linux or Ubuntu WSL2. On Windows, Doc
 | `http_proxy` | `str` | `None` | Android system HTTP proxy as `host:port` or `http://user:pass@host:port`. Use this when Android Chrome must route through an HTTP CONNECT proxy or local bridge. |
 | `timezone` | `str` | `None` | Force a specific IANA timezone. Leave unset so Damru resolves it from the active proxy exit. |
 | `locale` | `str` | `None` | Force a specific BCP-47 locale. Leave unset so Damru chooses a realistic locale for the proxy country. |
+| `webrtc_block` | `bool` | `False` | Opt-in to drop all outgoing UDP WebRTC traffic at the kernel level via `iptables`. Defaults to `False` (which enables high-performance proxy IP spoofing instead). |
 | `debug` | `bool` | `False` | Enables verbose console logging for debugging OS patches. |
 
 Proxy timezone safety:

@@ -1,4 +1,4 @@
-﻿"""AsyncDamru - async context manager for stealth Android browser automation.
+"""AsyncDamru - async context manager for stealth Android browser automation.
 
 Usage:
     async with AsyncDamru(device="pixel_8_pro", proxy="socks5://host:port") as browser:
@@ -84,6 +84,7 @@ class AsyncDamru:
         keep_chrome_on_exit: bool = False,
         force_cold_start: bool = False,
         debug: bool = False,
+        webrtc_block: bool = False,
     ):
         self._device_name = device
         self._serial = serial
@@ -92,6 +93,7 @@ class AsyncDamru:
         self._timezone = timezone
         self._locale = locale
         self._chrome_package = chrome_package
+        self._webrtc_block = webrtc_block
         if profile_tier is None:
             try:
                 from .config import PROFILE_TIER
@@ -297,6 +299,7 @@ class AsyncDamru:
             timezone=self._timezone,
             locale=self._locale,
             chrome_version=version,
+            webrtc_block=self._webrtc_block,
         )
         sensor_seed = hashlib.sha256(
             f"{target_device.model}|{self._profile.timezone}|{self._profile.locale}|{random.getrandbits(64)}".encode()
@@ -615,9 +618,15 @@ class AsyncDamru:
             logger.warning("Devtools socket not detected after retries, attempting connection anyway")
 
         async def _root_hardening() -> None:
+            webrtc_label = "WebRTC block" if self._webrtc_block else "WebRTC enable"
+            webrtc_factory = (
+                (lambda: self._root.apply_webrtc_block(self._chrome.package))
+                if self._webrtc_block
+                else (lambda: self._root.remove_webrtc_block(self._chrome.package))
+            )
             for label, factory in (
                 ("IPv6 block", self._root.apply_ipv6_block),
-                ("WebRTC enable", lambda: self._root.remove_webrtc_block(self._chrome.package)),
+                (webrtc_label, webrtc_factory),
             ):
                 last: Exception | None = None
                 for attempt in range(3):
@@ -650,6 +659,257 @@ class AsyncDamru:
                 except Exception as e:
                     logger.warning("GPU spoof cleanup on connect failure: %s", e)
             raise
+
+        # WebRTC IP Spoofing
+        if not self._webrtc_block and (self._proxy or (self._profile and self._profile.android_http_proxy)):
+            proxy_url = self._proxy or (self._profile and self._profile.android_http_proxy)
+            try:
+                from .proxy import resolve_proxy_geo
+                geo = resolve_proxy_geo(proxy_url, use_cache=True)
+                proxy_ip = geo.get("ip", "")
+                if proxy_ip:
+                    webrtc_spoof_js = f"""
+                    (function() {{
+                        const proxyIP = "{proxy_ip}";
+                        function spoofWebRTC(win) {{
+                            if (!win || win.RTCPeerConnection.__patched) return;
+                            win.RTCPeerConnection.__patched = true;
+
+                            const OrigRTCPeerConnection = win.RTCPeerConnection;
+                            if (!OrigRTCPeerConnection) return;
+
+                            function spoofSDP(sdp) {{
+                                if (typeof sdp !== 'string') return sdp;
+                                const isIPv6 = proxyIP.includes(':');
+                                const proto = isIPv6 ? 'IP6' : 'IP4';
+                                let hasCandidate = false;
+                                let lines = sdp.split('\\n').map(line => {{
+                                    if (line.startsWith('a=candidate:')) {{
+                                        hasCandidate = true;
+                                        const parts = line.split(' ');
+                                        if (parts.length > 4) {{
+                                            parts[4] = proxyIP;
+                                        }}
+                                        return parts.join(' ');
+                                    }}
+                                    if (line.startsWith('c=IN IP4 ') || line.startsWith('c=IN IP6 ')) {{
+                                        return `c=IN ${{proto}} ${{proxyIP}}`;
+                                    }}
+                                    return line;
+                                }});
+                                
+                                if (!hasCandidate) {{
+                                    const mediaStartIndex = lines.findIndex(l => l.startsWith('m='));
+                                    if (mediaStartIndex !== -1) {{
+                                        const foundation = Math.floor(Math.random() * 10000000);
+                                        const port = Math.floor(Math.random() * 55000) + 1024;
+                                        const fakeCand = `a=candidate:${{foundation}} 1 udp 2122260223 ${{proxyIP}} ${{port}} typ host`;
+                                        lines.splice(mediaStartIndex + 2, 0, fakeCand);
+                                    }}
+                                }}
+                                return lines.join('\\n');
+                            }}
+
+                            class SpoofedRTCPeerConnection extends OrigRTCPeerConnection {{
+                                constructor(config) {{
+                                    super(config);
+                                    this._listeners = [];
+                                    this._customOnIceCandidate = null;
+                                    this._fakeFired = false;
+                                }}
+
+                                _fireFakeCandidate(fn) {{
+                                    if (this._fakeFired) return;
+                                    this._fakeFired = true;
+                                    const foundation = Math.floor(Math.random() * 10000000);
+                                    const port = Math.floor(Math.random() * 55000) + 1024;
+                                    const candidateStr = `candidate:${{foundation}} 1 udp 2122260223 ${{proxyIP}} ${{port}} typ host`;
+                                    
+                                    try {{
+                                        const candObj = new win.RTCIceCandidate({{
+                                            candidate: candidateStr,
+                                            sdpMid: '0',
+                                            sdpMLineIndex: 0
+                                        }});
+                                        Object.defineProperty(candObj, 'address', {{ get: () => proxyIP }});
+                                        Object.defineProperty(candObj, 'port', {{ get: () => port }});
+                                        fn.call(this, {{ candidate: candObj }});
+                                    }} catch(e) {{}}
+                                    fn.call(this, {{ candidate: null }});
+                                }}
+
+                                addEventListener(type, listener, options) {{
+                                    if (type === 'icecandidate') {{
+                                        const pc = this;
+                                        const wrappedListener = (event) => {{
+                                            if (event && event.candidate) {{
+                                                const spoofedCandidate = new win.RTCIceCandidate({{
+                                                    candidate: spoofSDP(event.candidate.candidate),
+                                                    sdpMid: event.candidate.sdpMid,
+                                                    sdpMLineIndex: event.candidate.sdpMLineIndex,
+                                                    usernameFragment: event.candidate.usernameFragment
+                                                }});
+                                                Object.defineProperty(spoofedCandidate, 'address', {{ get: () => proxyIP }});
+                                                const mockEvent = {{}};
+                                                for (let key in event) {{
+                                                    mockEvent[key] = event[key];
+                                                }}
+                                                Object.defineProperty(mockEvent, 'candidate', {{ get: () => spoofedCandidate }});
+                                                listener.call(pc, mockEvent);
+                                            }} else {{
+                                                if (!pc._fakeFired) {{
+                                                    pc._fireFakeCandidate(listener);
+                                                }} else {{
+                                                    listener.call(pc, event);
+                                                }}
+                                            }}
+                                        }};
+                                        listener.__wrapped = wrappedListener;
+                                        pc._listeners.push(wrappedListener);
+                                        return super.addEventListener(type, wrappedListener, options);
+                                    }}
+                                    return super.addEventListener(type, listener, options);
+                                }}
+
+                                removeEventListener(type, listener, options) {{
+                                    if (type === 'icecandidate' && listener && listener.__wrapped) {{
+                                        return super.removeEventListener(type, listener.__wrapped, options);
+                                    }}
+                                    return super.removeEventListener(type, listener, options);
+                                }}
+
+                                setLocalDescription(desc) {{
+                                    const p = super.setLocalDescription(desc);
+                                    const pc = this;
+                                    setTimeout(() => {{
+                                        if (!pc._fakeFired) {{
+                                            if (pc._customOnIceCandidate) {{
+                                                pc._fireFakeCandidate(pc._customOnIceCandidate);
+                                            }}
+                                            pc._listeners.forEach(l => {{
+                                                pc._fireFakeCandidate(l);
+                                            }});
+                                        }}
+                                    }}, 250);
+                                    return p;
+                                }}
+
+                                async createOffer(options) {{
+                                    const offer = await super.createOffer(options);
+                                    if (offer && offer.sdp) {{
+                                        try {{
+                                            Object.defineProperty(offer, 'sdp', {{ get: () => spoofSDP(offer.sdp), configurable: true }});
+                                        }} catch (e) {{
+                                            return {{
+                                                type: offer.type,
+                                                sdp: spoofSDP(offer.sdp)
+                                            }};
+                                        }}
+                                    }}
+                                    return offer;
+                                }}
+
+                                async createAnswer(options) {{
+                                    const answer = await super.createAnswer(options);
+                                    if (answer && answer.sdp) {{
+                                        try {{
+                                            Object.defineProperty(answer, 'sdp', {{ get: () => spoofSDP(answer.sdp), configurable: true }});
+                                        }} catch (e) {{
+                                            return {{
+                                                type: answer.type,
+                                                sdp: spoofSDP(answer.sdp)
+                                            }};
+                                        }}
+                                    }}
+                                    return answer;
+                                }}
+
+                                get localDescription() {{
+                                    const desc = super.localDescription;
+                                    if (desc && desc.sdp) {{
+                                        return {{
+                                            type: desc.type,
+                                            sdp: spoofSDP(desc.sdp)
+                                        }};
+                                    }}
+                                    return desc;
+                                }}
+
+                                get remoteDescription() {{
+                                    const desc = super.remoteDescription;
+                                    if (desc && desc.sdp) {{
+                                        return {{
+                                            type: desc.type,
+                                            sdp: spoofSDP(desc.sdp)
+                                        }};
+                                    }}
+                                    return desc;
+                                }}
+                            }}
+
+                            win.RTCPeerConnection = SpoofedRTCPeerConnection;
+
+                            const origOnIceCandidateDescriptor = Object.getOwnPropertyDescriptor(OrigRTCPeerConnection.prototype, 'onicecandidate');
+                            if (origOnIceCandidateDescriptor) {{
+                                Object.defineProperty(SpoofedRTCPeerConnection.prototype, 'onicecandidate', {{
+                                    get() {{
+                                        return this._customOnIceCandidate;
+                                    }},
+                                    set(fn) {{
+                                        this._customOnIceCandidate = fn;
+                                        if (fn) {{
+                                            origOnIceCandidateDescriptor.set.call(this, (event) => {{
+                                                if (event && event.candidate) {{
+                                                    const spoofedCandidate = new win.RTCIceCandidate({{
+                                                        candidate: spoofSDP(event.candidate.candidate),
+                                                        sdpMid: event.candidate.sdpMid,
+                                                        sdpMLineIndex: event.candidate.sdpMLineIndex,
+                                                        usernameFragment: event.candidate.usernameFragment
+                                                    }});
+                                                    Object.defineProperty(spoofedCandidate, 'address', {{ get: () => proxyIP }});
+                                                    fn.call(this, {{ candidate: spoofedCandidate }});
+                                                }} else {{
+                                                    if (!this._fakeFired) {{
+                                                        this._fireFakeCandidate(fn);
+                                                    }} else {{
+                                                        fn.call(this, event);
+                                                    }}
+                                                }}
+                                            }});
+                                        }} else {{
+                                            origOnIceCandidateDescriptor.set.call(this, null);
+                                        }}
+                                    }},
+                                    configurable: true,
+                                    enumerable: true
+                                }});
+                            }}
+                        }}
+
+                        try {{
+                            spoofWebRTC(window);
+                        }} catch (e) {{}}
+
+                        try {{
+                            const originalContentWindow = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'contentWindow').get;
+                            Object.defineProperty(HTMLIFrameElement.prototype, 'contentWindow', {{
+                                get() {{
+                                    const win = originalContentWindow.apply(this);
+                                    if (win) {{
+                                        try {{
+                                            spoofWebRTC(win);
+                                        }} catch (e) {{}}
+                                    }}
+                                    return win;
+                                }}
+                            }});
+                        }} catch (e) {{}}
+                    }})();
+                    """
+                    await self._context.add_init_script(webrtc_spoof_js)
+                    logger.info("WebRTC IP spoofing script injected with IP: %s", proxy_ip)
+            except Exception as e:
+                logger.warning("Failed to resolve proxy IP for WebRTC spoofing: %s", e)
 
         if battery_dumpsys_enabled:
             self._start_battery_keepalive()
