@@ -1,4 +1,4 @@
-﻿"""APK asset discovery for raw/unbaked Redroid flows."""
+"""APK asset discovery for raw/unbaked Redroid flows."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -63,9 +63,9 @@ def candidate_apk_bundle_roots(explicit_chrome_apk: Optional[str] = None) -> lis
 
     pkg = _package_root()
     cwd = Path.cwd()
-    candidates.append(Path("/home/damru/chrome-apks"))
     for root in (cwd, cwd.parent, pkg, pkg.parent, pkg.parent.parent, Path.home()):
         candidates.append(root / "chrome-apks")
+    candidates.append(Path("/home/damru/chrome-apks"))
 
     seen: set[str] = set()
     unique: list[Path] = []
