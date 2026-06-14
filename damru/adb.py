@@ -226,6 +226,10 @@ class ADB:
             return await self._run(
                 ["shell", f"su 0 sh -c '{escaped}'"], timeout=timeout
             )
+        elif method == "su_root":
+            return await self._run(
+                ["shell", f"su root {command}"], timeout=timeout
+            )
 
         # Not yet detected â€” try each method
         escaped = _encoded_script(command).replace("'", "'\"'\"'")
@@ -384,6 +388,15 @@ class ADB:
             if _su0_attempt < 2:
                 import asyncio
                 await asyncio.sleep(2)
+
+        # Try su root <cmd> (AOSP/Redroid variant)
+        try:
+            out = await self.shell("su root id", timeout=5, allow_failure=True)
+            if "uid=0" in out:
+                self._root_method = "su_root"
+                return True
+        except Exception:
+            pass
 
         # Try adb root (restarts adbd as root)
         # SKIP for TCP-connected devices (Docker containers) â€” adb root

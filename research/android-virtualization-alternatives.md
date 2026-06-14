@@ -69,7 +69,7 @@ After comprehensive research into Android virtualization alternatives, **no solu
 
 #### Scalability
 - **Excellent**: Designed for multi-tenancy
-- Can run 40+ instances with adequate resources (160 cores, 320GB RAM for 40×4core/8GB instances)
+- Can run 40+ instances with adequate resources (160 cores, 320GB RAM for 40�—4core/8GB instances)
 - Each instance uses unique port (6520, 6521, 6522...)
 - Kubernetes-ready for cloud deployments
 

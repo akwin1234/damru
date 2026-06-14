@@ -547,7 +547,7 @@ class AsyncDamru:
                             await sleep(0.5)
                         out = await self._adb.shell("id", timeout=6, allow_failure=True)
                         if "uid=" in out:
-                            root_out = await self._adb.shell("su 0 id", timeout=6, allow_failure=True)
+                            root_out = await self._adb.shell_root("id", timeout=6)
                             if "uid=0" in root_out:
                                 return
                             last = root_out.strip()
