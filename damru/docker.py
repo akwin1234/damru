@@ -1566,8 +1566,7 @@ chmod 755 "$target"
             "set -eu; "
             "mkdir -p /data/misc/adb; "
             f"printf %s {shlex.quote(payload)} | base64 -d > /data/misc/adb/adb_keys; "
-            "chown system:shell /data/misc/adb 2>/dev/null || true; "
-            "chown shell:shell /data/misc/adb/adb_keys 2>/dev/null || true; "
+            "chown system:shell /data/misc/adb /data/misc/adb/adb_keys 2>/dev/null || true; "
             "chmod 02750 /data/misc/adb 2>/dev/null || true; "
             "chmod 0640 /data/misc/adb/adb_keys 2>/dev/null || true; "
             "restorecon /data/misc/adb /data/misc/adb/adb_keys 2>/dev/null || true; "
@@ -2546,12 +2545,7 @@ chmod 755 "$target"
                     f"Available: {[v.name for v in versions]}"
                 )
 
-            auto_versions = [
-                v for v in versions
-                if v.name not in _CHROME_APK_AUTO_SKIP_VERSIONS
-                and not v.name.startswith("145.")
-                and not v.name.startswith("146.")
-            ]
+            auto_versions = [v for v in versions if v.name not in _CHROME_APK_AUTO_SKIP_VERSIONS]
             if not auto_versions:
                 auto_versions = [v for v in versions]
             if not auto_versions:
@@ -2737,25 +2731,6 @@ chmod 755 "$target"
             logger.info("Installing local TTS engines...")
             await root.ensure_speech_voices()
 
-            # Bake host ADB public keys into the image
-            logger.info("Baking host ADB public keys into the image...")
-            keys = self._host_adb_public_keys()
-            if keys:
-                import base64 as _base64
-                import shlex as _shlex
-                payload = _base64.b64encode(("\n".join(keys) + "\n").encode("utf-8")).decode("ascii")
-                script = (
-                    "set -eu; "
-                    "mkdir -p /data/misc/adb; "
-                    f"printf %s {_shlex.quote(payload)} | base64 -d > /data/misc/adb/adb_keys; "
-                    "chown system:shell /data/misc/adb 2>/dev/null || true; "
-                    "chown shell:shell /data/misc/adb/adb_keys 2>/dev/null || true; "
-                    "chmod 02750 /data/misc/adb 2>/dev/null || true; "
-                    "chmod 0640 /data/misc/adb/adb_keys 2>/dev/null || true; "
-                    "restorecon /data/misc/adb /data/misc/adb/adb_keys 2>/dev/null || true"
-                )
-                await adb.shell_root(script, timeout=10)
-
             # Step 4: Push resetprop binary
             logger.info("Pushing resetprop binary...")
             await root._ensure_resetprop()
@@ -2918,8 +2893,6 @@ chmod 755 "$target"
             # Pre-commit cleanup: trim /data cache, temp files, logs to reduce image size
             logger.info("Cleaning up temp files in container before commit...")
             for clean_cmd in [
-                "rm -rf /data/data/com.android.chrome/cache/Crashpad 2>/dev/null; true",
-                "rm -rf /data/data/org.chromium.webview_shell/cache/Crashpad 2>/dev/null; true",
                 "rm -rf /data/local/tmp/*.apk /data/local/tmp/*.zip /data/local/tmp/*.tar* 2>/dev/null; true",
                 "rm -rf /data/dalvik-cache/arm64/* 2>/dev/null; true",
                 "rm -rf /data/resource-cache/* 2>/dev/null; true",

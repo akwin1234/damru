@@ -2019,12 +2019,7 @@ def _chrome_apk_version_dirs(root: Path) -> list[Path]:
 def _preferred_chrome_apk_version_dir(version_dirs: list[Path]) -> Path | None:
     if not version_dirs:
         return None
-    compatible = [
-        p for p in version_dirs
-        if p.name not in _CHROME_APK_AUTO_SKIP_VERSIONS
-        and not p.name.startswith("145.")
-        and not p.name.startswith("146.")
-    ]
+    compatible = [p for p in version_dirs if p.name not in _CHROME_APK_AUTO_SKIP_VERSIONS]
     candidates = compatible or version_dirs
     # Prefer the latest version that has a matching webview.apk inside
     _WEBVIEW_NAMES = {'webview.apk', 'trichromewebview.apk'}
