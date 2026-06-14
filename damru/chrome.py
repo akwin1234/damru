@@ -211,6 +211,20 @@ class ChromeManager:
         On warm reuse (no pm clear), Chrome starts faster (~2s).
         """
         package = self.package if self._package_detected else await self.detect_package(retries=30, delay=2.0)
+        # Ensure Crashpad cache directory exists, has correct ownership, and no stale lock files
+        try:
+            owner = await self.adb.shell(f"su 0 stat -c '%U:%G' /data/data/{package}", timeout=5, allow_failure=True)
+            owner = owner.strip()
+            if owner and ":" in owner and "stat:" not in owner:
+                await self.adb.shell_root(
+                    f"mkdir -p /data/data/{package}/cache/Crashpad && "
+                    f"rm -f /data/data/{package}/cache/Crashpad/settings.dat.__lock__ && "
+                    f"chown -R {owner} /data/data/{package}/cache && "
+                    f"chmod 700 /data/data/{package}/cache/Crashpad"
+                )
+        except Exception as exc:
+            logger.warning("Failed to configure Crashpad directory permissions for %s: %s", package, exc)
+
         await self._wait_for_android_services(timeout=90.0)
         if self._is_webview_shell():
             activities = [".WebViewBrowserActivity"]
