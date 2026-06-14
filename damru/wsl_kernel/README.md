@@ -1,4 +1,4 @@
-﻿# Bundled WSL Kernel Artifact
+# Bundled WSL Kernel Artifact
 
 This directory contains the locally verified WSL2 kernel artifact used for Damru Redroid on WSL.
 

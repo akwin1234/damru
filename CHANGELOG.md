@@ -1,4 +1,4 @@
-﻿# Changelog
+# Changelog
 ## Unreleased
 
 - Fixed stealth-open-url default mode: changed from --mode reattach (ADB intent, triggered anti-bot on Shopee, Cloudflare etc.) to --mode playwright (CDP page.goto, works with all tested sites). All four modes preserved; user can --mode reattach/

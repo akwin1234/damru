@@ -1,4 +1,4 @@
-﻿# Browsers Benchmark Report
+# Browsers Benchmark Report
 
 This report records a Damru run against the external stealth benchmark project:
 
