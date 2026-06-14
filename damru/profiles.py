@@ -1,4 +1,4 @@
-"""Profile builder for damru.
+﻿"""Profile builder for damru.
 
 Assembles system props and Chrome CLI flags from a device profile
 + user options into a complete DamruProfile. Zero JS injection.
@@ -127,11 +127,11 @@ def _build_chrome_flags(
         "--metrics-recording-only",
         # Locale
         f"--lang={locale}",
-        # navigator.languages must NOT contain q-values � only lang tags.
+        # navigator.languages must NOT contain q-values — only lang tags.
         # Chrome auto-assigns q-weights in the HTTP Accept-Language header.
         f"--accept-lang={','.join(p.split(';')[0].strip() for p in accept_lang.split(','))}",
         # WebRTC: keep enabled but hide private IPs (match Chrome Preferences).
-        # DO NOT use disable_non_proxied_udp � shows WebRTC as "disabled" (tell).
+        # DO NOT use disable_non_proxied_udp — shows WebRTC as "disabled" (tell).
         "--force-webrtc-ip-handling-policy=default_public_and_private_interfaces",
         "--enforce-webrtc-ip-permission-check",
         # Rendering
@@ -145,7 +145,6 @@ def _build_chrome_flags(
         "--disable-background-networking",
         "--disable-client-side-phishing-detection",
         "--disable-component-update",
-        "--disable-breakpad",
         "--disable-domain-reliability",
         "--no-pings",
         # Reduce V8 heap ceiling on Android to mobile-like range.
@@ -165,7 +164,7 @@ def _build_chrome_flags(
         "--disable-gl-extensions=GL_ANGLE_polygon_mode",
     ]
 
-    # -- TLS fingerprint randomization -----------------------------
+    # ── TLS fingerprint randomization ─────────────────────────────
     # Randomize Chrome's JA3/JA4 TLS fingerprint per session by:
     # 1. Blacklisting random non-essential TLS 1.2 cipher suites
     # 2. Toggling PostQuantumKyber (changes supported_groups extension)
@@ -208,10 +207,10 @@ def _effective_chrome_version(chrome_version: Optional[str]) -> str:
     return "145.0.0.0"
 
 
-# -- TLS cipher suites safe to blacklist ------------------------
+# ── TLS cipher suites safe to blacklist ────────────────────────
 # These are non-essential TLS 1.2 ciphers that Chrome 145 offers.
 # Removing 1-3 per session changes the JA3 cipher suite component
-# ? different JA3 hash per session.
+# → different JA3 hash per session.
 # All are legacy (RSA key exchange or CBC mode) or optional
 # (CHACHA20 where GCM alternatives exist). Removing any subset
 # still leaves enough ciphers for all modern sites.
@@ -246,7 +245,7 @@ def _randomize_tls_flags() -> tuple:
                 num_to_blacklist, hex_list)
 
     # 2. Randomly toggle PostQuantumKyber (X25519Kyber768 key exchange).
-    #    This changes the supported_groups TLS extension ? different JA3.
+    #    This changes the supported_groups TLS extension → different JA3.
     #    ~50% chance to disable = doubles the fingerprint space.
     if random.random() < 0.5:
         extra_disabled.append("PostQuantumKyber")
