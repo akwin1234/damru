@@ -5,7 +5,6 @@
   <p><strong>The Apex Predator of Android Browser Automation</strong></p>
   <p><em>श्री शिवाय नमस्तुभ्यं</em></p>
   <p><em>The world's first open-source framework for natively modded Android browser automation.</em></p>
-  <p>High-performance, ultra-stealth browser automation framework designed for web scraping and botting at scale.</p>
 <p>Part of <strong>Damru</strong> — the open-source, Android-native stealth browser automation framework (Redroid + Playwright + CDP) for web scraping, automation testing, and anti-bot / fingerprinting research.</p>
 <p>Damru is an open-source <strong>undetected-chromedriver alternative</strong> for <strong>stealth browser automation</strong> and <strong>web scraping</strong> — Android-native, built on Redroid + Playwright + CDP.</p>
   <p>
